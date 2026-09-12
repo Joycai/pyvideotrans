@@ -400,32 +400,57 @@ class TaskRunner {
     final stem = task.fileName.replaceAll(RegExp(r'\.[^.]*$'), '');
     final written = <String>[];
 
-    Future<void> write(Language language, SrtField field) async {
+    // 两路各按自己的语言折行：双语字幕的上下两行语种不同，用同一个上限
+    // 必然有一边难看。
+    String Function(String) wrapper(Language language) {
       final limit = language.cjk
           ? options.cjkLineLength
           : options.latinLineLength;
-      String wrap(String text) =>
-          LineWrap.wrap(text, limit: limit, cjk: language.cjk);
+      return (text) => LineWrap.wrap(text, limit: limit, cjk: language.cjk);
+    }
 
+    final wrapSource = wrapper(task.sourceLanguage);
+    final wrapTranslation = wrapper(task.targetLanguage);
+
+    Future<void> write(String tag, SrtField field) async {
       final content = switch (format) {
-        SubtitleFormat.srt =>
-          Srt.serialize(task.document.cues, field: field, wrap: wrap),
-        SubtitleFormat.vtt =>
-          Srt.serializeVtt(task.document.cues, field: field, wrap: wrap),
+        SubtitleFormat.srt => Srt.serialize(
+          task.document.cues,
+          field: field,
+          wrapSource: wrapSource,
+          wrapTranslation: wrapTranslation,
+        ),
+        SubtitleFormat.vtt => Srt.serializeVtt(
+          task.document.cues,
+          field: field,
+          wrapSource: wrapSource,
+          wrapTranslation: wrapTranslation,
+        ),
         SubtitleFormat.txt =>
           Srt.serializePlain(task.document.cues, field: field),
         SubtitleFormat.ass => '',
       };
       if (content.trim().isEmpty) return;
 
-      final path = '$dir/$stem.${_langTag(language)}.${format.extension}';
+      final path = '$dir/$stem.$tag.${format.extension}';
       await File(path).writeAsString(content);
       written.add(path);
     }
 
-    await write(task.sourceLanguage, SrtField.source);
+    // 纯翻译任务的「原文」就是用户选的那个字幕文件，再写一份只是重复；
+    // 转写任务则必须写出原文，那是识别的产物。
+    if (task.kind != TaskKind.translate) {
+      await write(_langTag(task.sourceLanguage), SrtField.source);
+    }
     if (task.kind.needsTranslation) {
-      await write(task.targetLanguage, SrtField.translation);
+      final layout = options.resolvedBilingual;
+      await write(
+        layout.isBilingual
+            // 双语产物带上两种语言，跟单语那份区分得开，也说明了里面有什么。
+            ? '${_langTag(task.sourceLanguage)}-${_langTag(task.targetLanguage)}'
+            : _langTag(task.targetLanguage),
+        layout.field,
+      );
     }
     return written;
   }

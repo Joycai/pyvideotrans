@@ -211,4 +211,47 @@ void main() {
       expect(Directory(dir).existsSync(), isTrue);
     });
   });
+
+  group('双语排版', () {
+    test('三档各自对应一路文本', () {
+      expect(BilingualLayout.targetOnly.field, SrtField.translation);
+      expect(
+        BilingualLayout.targetAbove.field,
+        SrtField.bilingualTargetAbove,
+      );
+      expect(
+        BilingualLayout.targetBelow.field,
+        SrtField.bilingualTargetBelow,
+      );
+      expect(BilingualLayout.targetOnly.isBilingual, isFalse);
+      expect(BilingualLayout.targetAbove.isBilingual, isTrue);
+    });
+
+    test('纯文本把双语抹平成仅译文', () {
+      final opts = testOptions(bilingual: BilingualLayout.targetBelow);
+      expect(opts.resolvedBilingual, BilingualLayout.targetBelow);
+      expect(
+        opts.copyWith(format: SubtitleFormat.txt).resolvedBilingual,
+        BilingualLayout.targetOnly,
+      );
+    });
+
+    // 存盘用的是枚举名，认不出来的值（旧版本写的、手改坏的）回落到默认。
+    test('读不认识的值回落到仅译文', () {
+      expect(BilingualLayout.byName('targetAbove'), BilingualLayout.targetAbove);
+      expect(BilingualLayout.byName('乱写'), BilingualLayout.targetOnly);
+    });
+
+    test('设置里存得住，并带进默认参数', () async {
+      SharedPreferences.setMockInitialValues({});
+      final settings = await AppSettings.load();
+      expect(settings.bilingual, BilingualLayout.targetOnly);
+
+      settings.bilingual = BilingualLayout.targetAbove;
+      expect(
+        (await AppSettings.load()).defaultTaskOptions().bilingual,
+        BilingualLayout.targetAbove,
+      );
+    });
+  });
 }
