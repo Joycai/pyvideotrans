@@ -3,7 +3,11 @@
 用 Flutter 重做本项目的桌面客户端（Windows / macOS / Linux）。UI 遵循 Claude Design
 项目 `a18fe120-0675-45f9-bda3-1eeb471bb364`（桌面字幕工具 · 设计系统）。
 
-本分支 `feat/flutter-rewrite` **不合并回 main**，后续可能独立成项目。
+## 分支
+
+- **`Joycai-main`** —— 主分支，所有开发合并到这里。
+- `main` —— fork 时的上游快照，仅作参考，不开发、不合并。
+- 功能分支从 `Joycai-main` 切出，再开 PR 合回 `Joycai-main`。
 
 ## 范围
 
