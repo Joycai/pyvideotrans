@@ -1,4 +1,3 @@
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
@@ -7,6 +6,7 @@ import '../../domain/media_kinds.dart';
 import '../../domain/task.dart';
 import '../../pipeline/task_queue.dart';
 import 'new_transcribe_dialog.dart';
+import 'new_translate_dialog.dart';
 import 'task_table.dart';
 import 'tasks_board.dart';
 
@@ -42,20 +42,22 @@ class TasksPageState extends State<TasksPage> {
     _ => true,
   };
 
-  /// 拖进来或选中的文件：音视频走「新建转写」对话框，字幕直接建翻译任务。
+  /// 拖进来的文件：音视频走「新建转写」，字幕走「新建翻译」。
   ///
-  /// 音视频不再用默认参数直接入队 —— 语言、服务、是否接着翻译这些事
-  /// 值得在建任务前确认一次，这正是对话框存在的理由。字幕暂时保持直通，
-  /// 「新建翻译」对话框还没做。
+  /// 不再用默认参数直接入队 —— 语言、服务、双语排版这些事值得在建任务前
+  /// 确认一次，这正是两个对话框存在的理由。
+  ///
+  /// 两类混在一起时走文件多的那一边，整把原样转过去：另一类由对话框自己
+  /// 列出并说明被忽略了。在这里就地丢掉的话，用户只会觉得文件没拖进去。
   Future<void> addFiles(List<String> paths) async {
-    final subtitles = paths.where(MediaKinds.isSubtitle).toList();
-    final media = paths.where(MediaKinds.isMedia).toList();
-
-    if (subtitles.isNotEmpty) {
-      widget.queue.enqueueAll(subtitles);
-      _selectFirst();
+    final subtitles = paths.where(MediaKinds.isSubtitle).length;
+    final media = paths.where(MediaKinds.isMedia).length;
+    if (subtitles == 0 && media == 0) return;
+    if (subtitles >= media) {
+      await newTranslate(paths: paths);
+    } else {
+      await newTranscribe(paths: paths);
     }
-    if (media.isNotEmpty) await newTranscribe(paths: media);
   }
 
   /// 顶栏的「新建转写」，也是拖入音视频后的落点。
@@ -71,15 +73,18 @@ class TasksPageState extends State<TasksPage> {
     _selectFirst();
   }
 
-  /// 顶栏的「新建翻译」。字幕任务还是老路径：选文件即入队。
-  Future<void> browseSubtitles() async {
-    final files = await openFiles(
-      acceptedTypeGroups: [
-        const XTypeGroup(label: '字幕', extensions: ['srt', 'vtt', 'ass']),
-      ],
+  /// 顶栏的「新建翻译」，也是拖入字幕后的落点。
+  Future<void> newTranslate({List<String> paths = const []}) async {
+    final result = await showNewTranslateDialog(
+      context,
+      settings: widget.queue.settings,
+      initialPaths: paths,
+      onOpenSettings: widget.onOpenSettings,
+      // 拖错了门的音视频，原样交给「新建转写」，不让用户再拖一次。
+      onSwitchToTranscribe: (media) => newTranscribe(paths: media),
     );
-    if (files.isEmpty) return;
-    widget.queue.enqueueAll(files.map((f) => f.path).toList());
+    if (result == null) return;
+    widget.queue.enqueueAll(result.paths, options: result.options);
     _selectFirst();
   }
 
