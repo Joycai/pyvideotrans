@@ -143,7 +143,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
             TasksPageActions(
               onNewTranslate: () =>
                   _tasksKey.currentState?.browseSubtitles(),
-              onNewTranscribe: () => _tasksKey.currentState?.browseMedia(),
+              onNewTranscribe: () => _tasksKey.currentState?.newTranscribe(),
             ),
           ],
         );
@@ -200,6 +200,8 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       key: _tasksKey,
       queue: widget.queue,
       onOpenEditor: _openEditor,
+      onOpenSettings: () =>
+          setState(() => _section = AppSection.settings),
     ),
     AppSection.settings => SettingsPage(settings: widget.settings),
     AppSection.editor when _editor != null => EditorPage(
