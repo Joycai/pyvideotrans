@@ -58,6 +58,7 @@ class AppSettings extends ChangeNotifier {
   static const _kCjkLineLength = 'cjkLineLength';
   static const _kLatinLineLength = 'latinLineLength';
   static const _kOutputFormat = 'outputFormat';
+  static const _kBilingual = 'bilingualLayout';
 
   Map<String, ProviderConfig> _configs = {};
 
@@ -141,7 +142,11 @@ class AppSettings extends ChangeNotifier {
       SubtitleFormat.byExtension(_prefs.getString(_kOutputFormat) ?? 'srt');
   set outputFormat(SubtitleFormat v) => _write(_kOutputFormat, v.extension);
 
-  /// 「新建转写」打开时的默认参数。用户在对话框里改动的是这份拷贝，
+  BilingualLayout get bilingual =>
+      BilingualLayout.byName(_prefs.getString(_kBilingual) ?? '');
+  set bilingual(BilingualLayout v) => _write(_kBilingual, v.name);
+
+  /// 「新建转写」「新建翻译」打开时的默认参数。用户在对话框里改动的是这份拷贝，
   /// 全局设置不会被顺手改掉。
   TaskOptions defaultTaskOptions() => TaskOptions(
     sourceLanguage: Languages.resolve(sourceLanguage),
@@ -151,6 +156,7 @@ class AppSettings extends ChangeNotifier {
     translationProviderId: translationProviderId,
     translationBatchSize: translationBatchSize,
     translationGuidance: translationGuidance,
+    bilingual: bilingual,
     cjkLineLength: cjkLineLength,
     latinLineLength: latinLineLength,
     format: outputFormat,

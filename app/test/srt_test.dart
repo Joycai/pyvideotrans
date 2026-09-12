@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/line_wrap.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 
 const _sample = '''
@@ -93,11 +94,54 @@ void main() {
       expect(out.map((c) => c.index), [1, 2]);
     });
 
-    test('双语把译文放在原文之上', () {
+    test('双语两种排版分别把译文放在上下', () {
       final cues = [
         const Cue(index: 1, startMs: 0, endMs: 1000, source: '原', translation: '译'),
       ];
-      expect(Srt.serialize(cues, field: SrtField.bilingual), contains('译\n原'));
+      expect(
+        Srt.serialize(cues, field: SrtField.bilingualTargetAbove),
+        contains('译\n原'),
+      );
+      expect(
+        Srt.serialize(cues, field: SrtField.bilingualTargetBelow),
+        contains('原\n译'),
+      );
+    });
+
+    test('双语遇到缺译文的条目只写原文，不留空行', () {
+      final cues = [
+        const Cue(index: 1, startMs: 0, endMs: 1000, source: '原'),
+      ];
+      for (final field in [
+        SrtField.bilingualTargetAbove,
+        SrtField.bilingualTargetBelow,
+      ]) {
+        final out = Srt.serialize(cues, field: field);
+        expect(Srt.parse(out).single.source, '原', reason: '$field');
+        expect(out, isNot(contains('\n\n\n')), reason: '$field');
+      }
+    });
+
+    test('双语两行各按自己的语言折行', () {
+      final cues = [
+        const Cue(
+          index: 1,
+          startMs: 0,
+          endMs: 1000,
+          source: '这是一句相当长的中文原文需要折行处理',
+          translation: 'this is a fairly long english translation line',
+        ),
+      ];
+      final out = Srt.serialize(
+        cues,
+        field: SrtField.bilingualTargetBelow,
+        wrapSource: (t) => LineWrap.wrap(t, limit: 8, cjk: true),
+        wrapTranslation: (t) => LineWrap.wrap(t, limit: 40, cjk: false),
+      );
+      final body = Srt.parse(out).single.source.split('\n');
+      // 中文按 8 字折成多行，英文 40 字以内保持一行。
+      expect(body.length, greaterThan(2));
+      expect(body.last, 'this is a fairly long english translation line');
     });
   });
 

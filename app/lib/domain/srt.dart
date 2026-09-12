@@ -79,22 +79,28 @@ abstract final class Srt {
 
   /// 序列化为 SRT。
   ///
-  /// [field] 决定写哪一路文本：原文、译文，或双语（译文在上、原文在下，
-  /// 与大多数播放器的双语习惯一致）。
-  /// 序列化为 SRT。
+  /// [field] 决定写哪一路文本：原文、译文，或双语（两行挤在同一条字幕里，
+  /// 不是两个文件）。
   ///
-  /// [wrap] 在写出前处理每条的文本，用来做单行字数折行 —— 折行只发生在
-  /// 产物里，文档本身始终保持不带硬换行的干净文本，否则用户在编辑器里
-  /// 改一个字就得重新折一遍。
+  /// [wrapSource] / [wrapTranslation] 在写出前处理文本，用来做单行字数折行 ——
+  /// 折行只发生在产物里，文档本身始终保持不带硬换行的干净文本，否则用户在
+  /// 编辑器里改一个字就得重新折一遍。两路分开传是因为双语字幕的两行往往
+  /// 语种不同，中日韩一行 15 字、拉丁语一行 40 字，用同一个上限必然有一边难看。
   static String serialize(
     List<Cue> cues, {
     SrtField field = SrtField.source,
-    String Function(String)? wrap,
+    String Function(String)? wrapSource,
+    String Function(String)? wrapTranslation,
   }) {
     final buffer = StringBuffer();
     var line = 0;
     for (final cue in cues) {
-      final text = textOf(cue, field, wrap: wrap);
+      final text = textOf(
+        cue,
+        field,
+        wrapSource: wrapSource,
+        wrapTranslation: wrapTranslation,
+      );
       if (text.trim().isEmpty) continue;
 
       line++;
@@ -113,11 +119,17 @@ abstract final class Srt {
   static String serializeVtt(
     List<Cue> cues, {
     SrtField field = SrtField.source,
-    String Function(String)? wrap,
+    String Function(String)? wrapSource,
+    String Function(String)? wrapTranslation,
   }) {
     final buffer = StringBuffer()..writeln('WEBVTT')..writeln();
     for (final cue in cues) {
-      final text = textOf(cue, field, wrap: wrap);
+      final text = textOf(
+        cue,
+        field,
+        wrapSource: wrapSource,
+        wrapTranslation: wrapTranslation,
+      );
       if (text.trim().isEmpty) continue;
       buffer
         ..writeln(
@@ -147,15 +159,28 @@ abstract final class Srt {
   static String textOf(
     Cue cue,
     SrtField field, {
-    String Function(String)? wrap,
+    String Function(String)? wrapSource,
+    String Function(String)? wrapTranslation,
   }) {
-    String apply(String text) => wrap == null ? text : wrap(text);
+    String source() =>
+        wrapSource == null ? cue.source : wrapSource(cue.source);
+    String translation() {
+      final text = cue.translation ?? '';
+      return wrapTranslation == null ? text : wrapTranslation(text);
+    }
+
     return switch (field) {
-      SrtField.source => apply(cue.source),
-      SrtField.translation => apply(cue.translation ?? ''),
-      SrtField.bilingual => [
-        if (cue.hasTranslation) apply(cue.translation!),
-        apply(cue.source),
+      SrtField.source => source(),
+      SrtField.translation => translation(),
+      // 双语里译文缺失时只写原文 —— 留一行空的会让播放器多顶一行高度，
+      // 而这条恰恰是用户最该看清原文的时候。
+      SrtField.bilingualTargetAbove => [
+        if (cue.hasTranslation) translation(),
+        source(),
+      ].join('\n'),
+      SrtField.bilingualTargetBelow => [
+        source(),
+        if (cue.hasTranslation) translation(),
       ].join('\n'),
     };
   }
@@ -172,4 +197,17 @@ abstract final class Srt {
   static String _pad(int v) => v.toString().padLeft(2, '0');
 }
 
-enum SrtField { source, translation, bilingual }
+/// 一条字幕写出哪一路文本。
+///
+/// 两个双语值的差别只是上下顺序：译文在上更适合「看译文、原文兜底」，
+/// 译文在下更适合学语言。播放器两种都认，是纯粹的口味问题，所以给两个选项
+/// 而不是替用户选一个。
+enum SrtField {
+  source,
+  translation,
+  bilingualTargetAbove,
+  bilingualTargetBelow;
+
+  bool get isBilingual =>
+      this == bilingualTargetAbove || this == bilingualTargetBelow;
+}

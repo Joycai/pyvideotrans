@@ -252,7 +252,8 @@ class EditorController extends ChangeNotifier {
       final suffix = switch (field) {
         SrtField.source => _tag(task.sourceLanguage.code),
         SrtField.translation => _tag(task.targetLanguage.code),
-        SrtField.bilingual => '双语',
+        SrtField.bilingualTargetAbove || SrtField.bilingualTargetBelow =>
+          '${_tag(task.sourceLanguage.code)}-${_tag(task.targetLanguage.code)}',
       };
       final path = '$dir/$stem.$suffix.srt';
       await File(path).writeAsString(content);

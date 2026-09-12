@@ -1,4 +1,5 @@
 import 'language.dart';
+import 'srt.dart';
 import 'task.dart';
 
 /// 产物格式。
@@ -23,6 +24,30 @@ enum SubtitleFormat {
   static SubtitleFormat byExtension(String value) => values.firstWhere(
     (f) => f.extension == value.trim().toLowerCase(),
     orElse: () => SubtitleFormat.srt,
+  );
+}
+
+/// 译文产物的排版。
+///
+/// 双语指**同一条字幕里两行文字**，不是两个文件 —— 播放器只能挂一轨字幕，
+/// 想同时看原文和译文只有这一条路。
+enum BilingualLayout {
+  targetOnly('仅译文', SrtField.translation),
+  targetAbove('双语 · 译文在上', SrtField.bilingualTargetAbove),
+  targetBelow('双语 · 译文在下', SrtField.bilingualTargetBelow);
+
+  const BilingualLayout(this.label, this.field);
+
+  final String label;
+
+  /// 写出时对应的文本路数。
+  final SrtField field;
+
+  bool get isBilingual => this != targetOnly;
+
+  static BilingualLayout byName(String value) => values.firstWhere(
+    (l) => l.name == value.trim(),
+    orElse: () => BilingualLayout.targetOnly,
   );
 }
 
@@ -56,6 +81,7 @@ class TaskOptions {
     this.translationModel,
     this.translationBatchSize = 20,
     this.translationGuidance = '',
+    this.bilingual = BilingualLayout.targetOnly,
     this.cjkLineLength = 15,
     this.latinLineLength = 40,
     this.format = SubtitleFormat.srt,
@@ -85,6 +111,9 @@ class TaskOptions {
   /// 术语表与语气要求，拼进系统提示词。
   final String translationGuidance;
 
+  /// 译文产物的排版。只影响写出，不影响文档本身。
+  final BilingualLayout bilingual;
+
   /// 单行字数上限：中日韩一档，其他语言一档。
   final int cjkLineLength;
   final int latinLineLength;
@@ -103,6 +132,11 @@ class TaskOptions {
   int get targetLineLength =>
       targetLanguage.cjk ? cjkLineLength : latinLineLength;
 
+  /// 实际生效的排版。纯文本没有「两行」的概念，选了双语也回落到仅译文 ——
+  /// 界面上这一项会跟着灰显，这里再兜一次底，免得靠界面保证数据合法。
+  BilingualLayout get resolvedBilingual =>
+      format == SubtitleFormat.txt ? BilingualLayout.targetOnly : bilingual;
+
   /// 这份参数对应的任务类型。字幕文件入队时由调用方改成 [TaskKind.translate]。
   TaskKind get kind =>
       translate ? TaskKind.transcribeAndTranslate : TaskKind.transcribe;
@@ -118,6 +152,7 @@ class TaskOptions {
     String? translationModel,
     int? translationBatchSize,
     String? translationGuidance,
+    BilingualLayout? bilingual,
     int? cjkLineLength,
     int? latinLineLength,
     SubtitleFormat? format,
@@ -135,6 +170,7 @@ class TaskOptions {
     translationModel: translationModel ?? this.translationModel,
     translationBatchSize: translationBatchSize ?? this.translationBatchSize,
     translationGuidance: translationGuidance ?? this.translationGuidance,
+    bilingual: bilingual ?? this.bilingual,
     cjkLineLength: cjkLineLength ?? this.cjkLineLength,
     latinLineLength: latinLineLength ?? this.latinLineLength,
     format: format ?? this.format,

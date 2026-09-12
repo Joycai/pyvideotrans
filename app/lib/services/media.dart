@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import '../domain/cue.dart';
 import '../domain/media_kinds.dart';
+import '../domain/srt.dart';
 import 'provider_api.dart';
 
 /// 文件列表里一行要显示的东西。
@@ -9,16 +13,26 @@ class MediaFileInfo {
     required this.path,
     required this.sizeBytes,
     this.duration,
+    this.cueCount,
     this.exists = true,
   });
 
   final String path;
   final int sizeBytes;
 
-  /// 探测不到时为 null（字幕文件、或 ffprobe 读不了）。
+  /// 音视频是媒体时长，字幕是最后一条的结束时间。探测不到时为 null。
   final Duration? duration;
 
+  /// 字幕文件解析出的条数。非字幕文件为 null。
+  ///
+  /// 0 表示这是个字幕文件但一条都没读出来 —— 空文件、编码坏、或根本不是字幕。
+  /// 这类文件跑起来必然是空任务，要在界面上先标出来。
+  final int? cueCount;
+
   final bool exists;
+
+  /// 字幕文件解析不出内容。
+  bool get isEmptySubtitle => cueCount == 0;
 
   String get fileName => path.split(RegExp(r'[/\\]')).last;
 
@@ -135,12 +149,49 @@ class Media {
     } on FileSystemException {
       size = 0;
     }
+    if (MediaKinds.isSubtitle(path)) {
+      final cues = await _readCues(file, size);
+      return MediaFileInfo(
+        path: path,
+        sizeBytes: size,
+        duration: cues.isEmpty
+            ? null
+            : Duration(milliseconds: cues.last.endMs),
+        cueCount: cues.length,
+        exists: file.existsSync(),
+      );
+    }
+
     return MediaFileInfo(
       path: path,
       sizeBytes: size,
-      duration: MediaKinds.isSubtitle(path) ? null : await probeDuration(path),
+      duration: await probeDuration(path),
       exists: file.existsSync(),
     );
+  }
+
+  /// 解析字幕文件，拿条数与时间跨度。任何失败都当作「读不出内容」。
+  ///
+  /// 不走 ffprobe：字幕就是文本，自己解析比起一个进程快得多，而且 ffprobe
+  /// 对 ASS/SSA 的时长报得并不准。
+  static Future<List<Cue>> _readCues(File file, int size) async {
+    // 正常字幕撑死几百 KB。超过这个量级多半是拖错了文件，别把整份读进内存。
+    if (size <= 0 || size > 8 * 1024 * 1024) return const [];
+    final Uint8List bytes;
+    try {
+      bytes = await file.readAsBytes();
+    } on FileSystemException {
+      return const [];
+    }
+    // 不是 UTF-8 就按 latin1 读。正文会是乱码，但时间码是 ASCII，
+    // 条数与时间跨度照样准 —— 这两项才是文件列表要显示的东西。
+    // （不能用 readAsString：dart:io 把解码失败包成 FileSystemException，
+    // 与「文件读不了」混在一起，分不开。）
+    try {
+      return Srt.parse(utf8.decode(bytes));
+    } on FormatException {
+      return Srt.parse(latin1.decode(bytes));
+    }
   }
 
   /// 抽成 16kHz 单声道 WAV。这是各家识别接口的通用输入格式。

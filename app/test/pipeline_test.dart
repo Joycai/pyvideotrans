@@ -429,6 +429,99 @@ void main() {
       expect(task.status, isNot(TaskStatus.done));
     });
   });
+
+  group('产物写出', () {
+    TaskRunner runner() => TaskRunner(
+      settings: settings,
+      workDir: work.path,
+      asrFactory: (_, _, _) => FakeAsr(),
+      translationFactory: (_, _, _) => FakeTranslator(),
+    );
+
+    SubtitleTask done({
+      required TaskKind kind,
+      BilingualLayout bilingual = BilingualLayout.targetOnly,
+      SubtitleFormat format = SubtitleFormat.srt,
+    }) {
+      final srt = File('${work.path}/demo.srt')..writeAsStringSync('x');
+      return SubtitleTask(
+        id: 'w1',
+        sourcePath: srt.path,
+        kind: kind,
+        options: testOptions(
+          source: 'zh',
+          target: 'en',
+          bilingual: bilingual,
+          format: format,
+          outputLocation: OutputLocation.custom,
+          outputDir: work.path,
+        ),
+        document: const SubtitleDocument(
+          cues: [
+            Cue(
+              index: 1,
+              startMs: 0,
+              endMs: 1000,
+              source: '第一句',
+              translation: 'Line one',
+            ),
+          ],
+        ),
+      );
+    }
+
+    List<String> names(List<String> paths) =>
+        [for (final p in paths) p.split('/').last]..sort();
+
+    // 纯翻译任务的原文就是用户选的那个文件，再写一份只是重复。
+    test('纯翻译任务只写译文，不复制一份原文', () async {
+      final written = await runner().writeOutputs(
+        done(kind: TaskKind.translate),
+      );
+      expect(names(written), ['demo.en.srt']);
+    });
+
+    test('转写并翻译时原文与译文各一份', () async {
+      final written = await runner().writeOutputs(
+        done(kind: TaskKind.transcribeAndTranslate),
+      );
+      expect(names(written), ['demo.en.srt', 'demo.zh.srt']);
+    });
+
+    test('双语产物带上两种语言，与单语那份区分得开', () async {
+      final written = await runner().writeOutputs(
+        done(
+          kind: TaskKind.translate,
+          bilingual: BilingualLayout.targetAbove,
+        ),
+      );
+      expect(names(written), ['demo.zh-en.srt']);
+      expect(File(written.single).readAsStringSync(), contains('Line one\n第一句'));
+    });
+
+    test('译文在下时上下颠倒', () async {
+      final written = await runner().writeOutputs(
+        done(
+          kind: TaskKind.translate,
+          bilingual: BilingualLayout.targetBelow,
+        ),
+      );
+      expect(File(written.single).readAsStringSync(), contains('第一句\nLine one'));
+    });
+
+    // 纯文本没有「两行」的概念，界面会灰显这一项，这里再兜一次底。
+    test('纯文本格式下双语回落到仅译文', () async {
+      final written = await runner().writeOutputs(
+        done(
+          kind: TaskKind.translate,
+          bilingual: BilingualLayout.targetAbove,
+          format: SubtitleFormat.txt,
+        ),
+      );
+      expect(names(written), ['demo.en.txt']);
+      expect(File(written.single).readAsStringSync().trim(), 'Line one');
+    });
+  });
 }
 
 /// 每批调用前执行一个钩子，用来制造「翻到一半出事」的场景。

@@ -120,6 +120,8 @@ class DropdownEntry<T> {
     required this.value,
     required this.label,
     this.description,
+    this.badge,
+    this.badgeIcon,
     this.enabled = true,
   });
 
@@ -128,6 +130,10 @@ class DropdownEntry<T> {
 
   /// 第二行小字。禁用项**必须**给出原因 —— 设计规范里写死的要求。
   final String? description;
+
+  /// 名字右侧的小标签，例如本机跑的服务标「本机」。
+  final String? badge;
+  final IconData? badgeIcon;
 
   final bool enabled;
 }
@@ -334,15 +340,31 @@ class _DropdownItem<T> extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    entry.label,
-                    style: context.texts.bodyMedium?.copyWith(
-                      color: entry.enabled
-                          ? cs.onSurface
-                          : cs.onSurface.withValues(
-                              alpha: AppStateLayer.disabledContent,
-                            ),
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          entry.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.texts.bodyMedium?.copyWith(
+                            color: entry.enabled
+                                ? cs.onSurface
+                                : cs.onSurface.withValues(
+                                    alpha: AppStateLayer.disabledContent,
+                                  ),
+                          ),
+                        ),
+                      ),
+                      if (entry.badge != null) ...[
+                        const SizedBox(width: AppSpacing.s2),
+                        _EntryBadge(
+                          label: entry.badge!,
+                          icon: entry.badgeIcon,
+                          filled: entry.enabled,
+                        ),
+                      ],
+                    ],
                   ),
                   if (entry.description != null) ...[
                     const SizedBox(height: 1),
@@ -360,6 +382,47 @@ class _DropdownItem<T> extends StatelessWidget {
               Icon(Symbols.check, size: 18, weight: 400, color: cs.primary),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 下拉项右侧的小标签。可用的用实底，未实施的用描边 —— 后者本来就是灰的，
+/// 实底会让它看起来反而更显眼。
+class _EntryBadge extends StatelessWidget {
+  const _EntryBadge({
+    required this.label,
+    required this.icon,
+    required this.filled,
+  });
+
+  final String label;
+  final IconData? icon;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.colors;
+    final fg = filled ? cs.onSecondaryContainer : cs.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: filled ? cs.secondaryContainer : null,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: filled ? null : Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, weight: 400, color: fg),
+            const SizedBox(width: 3),
+          ],
+          Text(
+            label,
+            style: context.texts.labelSmall?.copyWith(color: fg),
+          ),
+        ],
       ),
     );
   }

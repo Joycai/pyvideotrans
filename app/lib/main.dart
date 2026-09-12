@@ -142,7 +142,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
           actions: [
             TasksPageActions(
               onNewTranslate: () =>
-                  _tasksKey.currentState?.browseSubtitles(),
+                  _tasksKey.currentState?.newTranslate(),
               onNewTranscribe: () => _tasksKey.currentState?.newTranscribe(),
             ),
           ],

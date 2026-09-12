@@ -18,6 +18,7 @@ import '../../services/provider_api.dart';
 import '../../services/readiness.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
+import 'provider_fields.dart';
 
 /// 对话框确认后交出来的东西：一批文件 + 一份参数。
 class NewTranscribeResult {
@@ -84,7 +85,22 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
   @override
   void initState() {
     super.initState();
-    if (widget.initialPaths.isNotEmpty) _add(widget.initialPaths);
+    if (widget.initialPaths.isEmpty) return;
+    // 预填的一批里可能混着字幕（任务页把整把拖放原样转过来），说清楚它们去哪儿了。
+    _dropError = _rejection(widget.initialPaths);
+    _add(widget.initialPaths);
+  }
+
+  /// 这批路径里不是音视频的那些该怎么跟用户解释。全都收下时返回 null。
+  static String? _rejection(List<String> paths) {
+    final rejected = paths.where((p) => !MediaKinds.isMedia(p)).toList();
+    if (rejected.isEmpty) return null;
+    final subtitles = rejected.where(MediaKinds.isSubtitle).length;
+    if (subtitles == rejected.length) {
+      return '已忽略 $subtitles 个字幕文件，字幕请用「新建翻译」';
+    }
+    return '不认识的格式：'
+        '${rejected.map(MediaKinds.extensionOf).where((e) => e.isNotEmpty).toSet().join('、')}';
   }
 
   Future<void> _add(List<String> paths) async {
@@ -122,14 +138,9 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
   /// 给测试直接调用。
   @visibleForTesting
   void handleDrop(List<String> paths) {
-    final rejected = paths.where((p) => !MediaKinds.isMedia(p)).toList();
     setState(() {
       _dragging = false;
-      _dropError = rejected.isEmpty
-          ? null
-          : MediaKinds.isSubtitle(rejected.first)
-          ? '字幕文件请用「新建翻译」，这里只收音视频'
-          : '不认识的格式：${rejected.map(MediaKinds.extensionOf).toSet().join('、')}';
+      _dropError = _rejection(paths);
     });
     _add(paths);
   }
@@ -430,7 +441,7 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
               value: _options.asrProviderId,
               error: readiness.isBlocked,
               display: _serviceLabel(info, _options.asrModel),
-              groups: _providerGroups(
+              groups: providerGroups(
                 Registry.asr,
                 (id) => ProviderReadiness.asr(id, widget.settings),
               ),
@@ -443,9 +454,10 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
         ),
         const SizedBox(height: AppSpacing.s3),
         _twoColumn(
-          _modelField(
+          modelField(
             info: info,
             model: _options.asrModel,
+            settings: widget.settings,
             onChanged: (m) =>
                 setState(() => _options = _options.copyWith(asrModel: m)),
           ),
@@ -497,7 +509,8 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
         ),
         if (error && widget.onOpenSettings != null) ...[
           const SizedBox(width: AppSpacing.s2),
-          _SettingsLink(
+          LinkText(
+            label: '去设置',
             color: color,
             onTap: () {
               Navigator.of(context).pop();
@@ -518,7 +531,7 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
     return FormSection(
       gap: 14,
       children: [
-        _Tappable(
+        Tappable(
           onTap: () => setState(
             () => _options = _options.copyWith(translate: !on),
           ),
@@ -577,7 +590,7 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
               child: AppDropdown<String>(
                 value: _options.translationProviderId,
                 error: _translationReadiness.isBlocked,
-                groups: _providerGroups(
+                groups: providerGroups(
                   Registry.translation,
                   (id) => ProviderReadiness.translation(id, widget.settings),
                 ),
@@ -591,9 +604,10 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
             ),
           ),
           _twoColumn(
-            _modelField(
+            modelField(
               info: info,
               model: _options.translationModel,
+              settings: widget.settings,
               onChanged: (m) => setState(
                 () => _options = _options.copyWith(translationModel: m),
               ),
@@ -646,7 +660,7 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
     return FormSection(
       gap: 14,
       children: [
-        _Tappable(
+        Tappable(
           onTap: () => setState(() => _advOpen = !_advOpen),
           child: Row(
               children: [
@@ -853,80 +867,6 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
     return chosen.isEmpty ? info.name : '${info.name} · $chosen';
   }
 
-  /// 服务下拉分两组：可用的在上，未实施的在下并说明原因。
-  List<DropdownGroup<String>> _providerGroups(
-    List<ProviderInfo> all,
-    Readiness Function(String id) check,
-  ) {
-    DropdownEntry<String> entry(ProviderInfo info) {
-      final readiness = check(info.id);
-      return DropdownEntry(
-        value: info.id,
-        label: info.name,
-        enabled: info.implemented,
-        description: info.implemented
-            ? readiness.isBlocked
-                  ? readiness.message
-                  : (info.defaultBaseUrl ?? '').isEmpty
-                  ? '自行填写地址与模型名'
-                  : null
-            : readiness.hint,
-      );
-    }
-
-    final available = all.where((i) => i.implemented).map(entry).toList();
-    final pending = all.where((i) => !i.implemented).map(entry).toList();
-    return [
-      DropdownGroup(title: pending.isEmpty ? null : '可用', entries: available),
-      if (pending.isNotEmpty)
-        DropdownGroup(title: '第二期未实施', entries: pending),
-    ];
-  }
-
-  /// 模型选择。能列模型的给下拉，自定义接口给输入框，不能换模型的灰掉并说明。
-  Widget _modelField({
-    required ProviderInfo? info,
-    required String? model,
-    required ValueChanged<String?> onChanged,
-  }) {
-    if (info == null || !info.implemented) {
-      return LabeledField(
-        label: '模型',
-        enabled: false,
-        child: AppDropdown<String>(
-          value: '',
-          enabled: false,
-          display: '该服务暂不支持切换模型',
-          groups: const [],
-          onChanged: (_) {},
-        ),
-      );
-    }
-    if (info.models.isEmpty) {
-      return LabeledField(
-        label: '模型',
-        child: _ModelTextField(
-          value: model ?? widget.settings.configFor(info.id).model ?? '',
-          onChanged: onChanged,
-        ),
-      );
-    }
-    final current = model ?? info.defaultModel ?? info.models.first;
-    return LabeledField(
-      label: '模型',
-      child: AppDropdown<String>(
-        value: current,
-        groups: [
-          DropdownGroup(
-            entries: [
-              for (final m in info.models) DropdownEntry(value: m, label: m),
-            ],
-          ),
-        ],
-        onChanged: onChanged,
-      ),
-    );
-  }
 }
 
 class _FileRow extends StatelessWidget {
@@ -991,95 +931,4 @@ class _FileRow extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 自定义接口的模型名：没有候选可列，只能让用户自己写。
-class _ModelTextField extends StatefulWidget {
-  const _ModelTextField({required this.value, required this.onChanged});
-
-  final String value;
-  final ValueChanged<String?> onChanged;
-
-  @override
-  State<_ModelTextField> createState() => _ModelTextFieldState();
-}
-
-class _ModelTextFieldState extends State<_ModelTextField> {
-  late final _controller = TextEditingController(text: widget.value);
-  final _focus = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => ControlSurface(
-    focused: _focus.hasFocus,
-    padding: const EdgeInsets.symmetric(horizontal: 12),
-    child: TextField(
-      controller: _controller,
-      focusNode: _focus,
-      style: context.texts.bodyMedium,
-      decoration: InputDecoration(
-        isCollapsed: true,
-        border: InputBorder.none,
-        hintText: '自行填写模型名',
-        hintStyle: context.texts.bodyMedium?.copyWith(
-          color: context.colors.onSurfaceVariant,
-        ),
-      ),
-      onChanged: (v) => widget.onChanged(v.trim().isEmpty ? null : v.trim()),
-    ),
-  );
-}
-
-/// 整行可点：设计稿里开关和「高级」标题的热区都是一整行，不是那个小控件。
-class _Tappable extends StatelessWidget {
-  const _Tappable({required this.onTap, required this.child});
-
-  final VoidCallback onTap;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => MouseRegion(
-    cursor: SystemMouseCursors.click,
-    child: GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: child,
-    ),
-  );
-}
-
-/// 「去设置」。设计稿里它就是一条链接，不是按钮。
-class _SettingsLink extends StatelessWidget {
-  const _SettingsLink({required this.color, required this.onTap});
-
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => MouseRegion(
-    cursor: SystemMouseCursors.click,
-    child: GestureDetector(
-      onTap: onTap,
-      child: Text(
-        '去设置',
-        style: context.texts.labelMedium?.copyWith(
-          color: color,
-          decoration: TextDecoration.underline,
-          decorationColor: color,
-        ),
-      ),
-    ),
-  );
 }
