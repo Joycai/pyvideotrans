@@ -14,6 +14,7 @@ import 'package:subtitle_studio/features/shell/nav_rail.dart';
 import 'package:subtitle_studio/features/shell/status_bar.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_page.dart';
+import 'package:subtitle_studio/features/settings/settings_page.dart';
 import 'package:subtitle_studio/features/tasks/tasks_board.dart';
 import 'package:subtitle_studio/features/tasks/tasks_page.dart';
 import 'package:subtitle_studio/services/settings.dart';
@@ -326,6 +327,35 @@ void main() {
 
     await expectLater(find.byType(AppShell), matchesGoldenFile('$file.png'));
   }
+
+  testWidgets('设置页 · 浅色', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final settings = await AppSettings.load();
+
+    tester.view
+      ..physicalSize = const Size(1440, 900)
+      ..devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: _readable(lightTheme),
+        home: AppShell(
+          section: AppSection.settings,
+          onSectionChanged: (_) {},
+          chrome: const PageChrome(title: '设置'),
+          status: StatusSnapshot.idle,
+          child: SettingsPage(settings: settings),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    await expectLater(
+      find.byType(AppShell),
+      matchesGoldenFile('settings_light.png'),
+    );
+  });
 
   testWidgets('编辑器 · 浅色', (tester) async {
     await pumpEditor(tester, brightness: Brightness.light, file: 'editor_light');

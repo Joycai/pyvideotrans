@@ -9,6 +9,7 @@ import 'features/shell/app_shell.dart';
 import 'features/shell/nav_rail.dart';
 import 'features/editor/editor_controller.dart';
 import 'features/editor/editor_page.dart';
+import 'features/settings/settings_page.dart';
 import 'features/shell/status_bar.dart';
 import 'features/tasks/tasks_page.dart';
 import 'pipeline/task_queue.dart';
@@ -200,6 +201,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       queue: widget.queue,
       onOpenEditor: _openEditor,
     ),
+    AppSection.settings => SettingsPage(settings: widget.settings),
     AppSection.editor when _editor != null => EditorPage(
       key: _editorKey,
       controller: _editor!,
