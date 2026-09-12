@@ -174,15 +174,7 @@ class EditorController extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool get _isCjk => const [
-    'zh',
-    'ja',
-    'ko',
-    '中',
-    '日',
-    '韩',
-    '粤',
-  ].any(task.sourceLanguage.toLowerCase().startsWith);
+  bool get _isCjk => task.sourceLanguage.cjk;
 
   /// 重新翻译某一条。失败时把错误抛给调用方去弹 SnackBar。
   Future<void> retranslate(int indexInDocument) async {
@@ -196,8 +188,8 @@ class EditorController extends ChangeNotifier {
       );
       final result = await provider.translateBatch(
         lines: [cue.source],
-        sourceLanguage: task.sourceLanguage,
-        targetLanguage: task.targetLanguage,
+        sourceLanguage: task.sourceLanguage.name,
+        targetLanguage: task.targetLanguage.name,
         token: CancellationToken(),
       );
       _push();
@@ -235,8 +227,8 @@ class EditorController extends ChangeNotifier {
       );
       final result = await provider.translateBatch(
         lines: [for (final i in slice) cues[i].source],
-        sourceLanguage: task.sourceLanguage,
-        targetLanguage: task.targetLanguage,
+        sourceLanguage: task.sourceLanguage.name,
+        targetLanguage: task.targetLanguage.name,
         token: token,
       );
       for (final (j, i) in slice.indexed) {
@@ -258,8 +250,8 @@ class EditorController extends ChangeNotifier {
       final content = Srt.serialize(document.cues, field: field);
       if (content.trim().isEmpty) continue;
       final suffix = switch (field) {
-        SrtField.source => _tag(task.sourceLanguage),
-        SrtField.translation => _tag(task.targetLanguage),
+        SrtField.source => _tag(task.sourceLanguage.code),
+        SrtField.translation => _tag(task.targetLanguage.code),
         SrtField.bilingual => '双语',
       };
       final path = '$dir/$stem.$suffix.srt';

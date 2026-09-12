@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../domain/task.dart';
+import '../../domain/task_options.dart';
 import '../../pipeline/task_queue.dart';
-import 'drop_zone.dart';
 import 'task_table.dart';
 import 'tasks_board.dart';
 
@@ -38,15 +38,11 @@ class TasksPageState extends State<TasksPage> {
   };
 
   /// 拖进来的文件按扩展名决定任务类型：音视频建转写，字幕建翻译。
-  void addFiles(List<String> paths) {
-    for (final path in paths) {
-      widget.queue.enqueue(
-        sourcePath: path,
-        kind: MediaKinds.isSubtitle(path)
-            ? TaskKind.translate
-            : TaskKind.transcribeAndTranslate,
-      );
-    }
+  ///
+  /// 参数用设置里的默认值。「新建转写」对话框做好之后，这条路径会改成
+  /// 先弹对话框、再把用户确认的 [TaskOptions] 传进来。
+  void addFiles(List<String> paths, {TaskOptions? options}) {
+    widget.queue.enqueueAll(paths, options: options);
     if (paths.isNotEmpty) {
       setState(() => _selectedId = widget.queue.tasks.first.id);
     }

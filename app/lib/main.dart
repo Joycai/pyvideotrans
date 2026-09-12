@@ -159,7 +159,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
           title: '编辑器',
           subtitle:
               '${editor.task.fileName} · ${editor.document.cues.length} 条 · '
-              '${editor.task.sourceLanguage} → ${editor.task.targetLanguage}',
+              '${editor.task.sourceLanguage.name} → ${editor.task.targetLanguage.name}',
           titleTrailing: EditorReviewBadge(
             count: editor.document.reviewCount,
           ),

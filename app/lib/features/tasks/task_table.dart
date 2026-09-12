@@ -5,10 +5,10 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/indicators.dart';
+import '../../domain/media_kinds.dart';
 import '../../domain/srt.dart';
 import '../../domain/task.dart';
 import '../../services/registry.dart';
-import 'drop_zone.dart';
 import 'stage_bar.dart';
 
 /// 列宽与设计稿一致：文件占剩余宽度，其余固定。
@@ -258,7 +258,7 @@ class _FileCell extends StatelessWidget {
               const SizedBox(width: AppSpacing.s2),
               Expanded(
                 child: Text(
-                  '${task.sourceLanguage} → ${task.targetLanguage}',
+                  '${task.sourceLanguage.name} → ${task.targetLanguage.name}',
                   overflow: TextOverflow.ellipsis,
                   style: context.texts.bodySmall?.copyWith(
                     color: cs.onSurfaceVariant,
@@ -289,7 +289,7 @@ class _ServiceCell extends StatelessWidget {
         ? '→ ${mt?.name ?? ''} 翻译'
         : task.kind == TaskKind.translate
         ? (mt?.defaultModel ?? '')
-        : task.sourceLanguage;
+        : task.sourceLanguage.name;
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,

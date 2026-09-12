@@ -1,6 +1,41 @@
 import 'dart:io';
 
+import '../domain/media_kinds.dart';
 import 'provider_api.dart';
+
+/// 文件列表里一行要显示的东西。
+class MediaFileInfo {
+  const MediaFileInfo({
+    required this.path,
+    required this.sizeBytes,
+    this.duration,
+    this.exists = true,
+  });
+
+  final String path;
+  final int sizeBytes;
+
+  /// 探测不到时为 null（字幕文件、或 ffprobe 读不了）。
+  final Duration? duration;
+
+  final bool exists;
+
+  String get fileName => path.split(RegExp(r'[/\\]')).last;
+
+  /// 「1.2 GB」「734 MB」这样的人类可读大小。
+  String get sizeLabel {
+    if (sizeBytes <= 0) return '—';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var value = sizeBytes.toDouble();
+    var unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+      value /= 1024;
+      unit++;
+    }
+    final digits = value >= 100 || unit == 0 ? 0 : 1;
+    return '${value.toStringAsFixed(digits)} ${units[unit]}';
+  }
+}
 
 /// ffmpeg / ffprobe 的定位与调用。
 ///
@@ -86,6 +121,26 @@ class Media {
     } on ProcessException {
       return null;
     }
+  }
+
+  /// 选完文件后要在列表里显示的那点信息：大小与时长。
+  ///
+  /// 探测失败不抛异常 —— 文件列表显示不出时长，不该拦着用户建任务；
+  /// 真正读不了的文件会在准备阶段报错，那里的报错信息更具体。
+  Future<MediaFileInfo> probeFile(String path) async {
+    final file = File(path);
+    var size = 0;
+    try {
+      size = await file.length();
+    } on FileSystemException {
+      size = 0;
+    }
+    return MediaFileInfo(
+      path: path,
+      sizeBytes: size,
+      duration: MediaKinds.isSubtitle(path) ? null : await probeDuration(path),
+      exists: file.existsSync(),
+    );
   }
 
   /// 抽成 16kHz 单声道 WAV。这是各家识别接口的通用输入格式。

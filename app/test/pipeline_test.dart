@@ -1,12 +1,16 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task.dart';
+import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
+import 'package:subtitle_studio/services/media.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
@@ -14,11 +18,34 @@ const _asrInfo = ProviderInfo(id: 'fake_asr', name: '假识别', vendor: '测试
 const _mtInfo = ProviderInfo(id: 'fake_mt', name: '假翻译', vendor: '测试');
 
 /// 记录调用次数的假识别服务，用来验证续跑时不会重做已完成阶段。
+/// 不碰 ffmpeg 的假实现 —— 转写链路的前两阶段只关心「有没有产出音频」。
+class FakeMedia extends Media {
+  @override
+  Future<Duration?> probeDuration(String path) async =>
+      const Duration(seconds: 42);
+
+  @override
+  Future<String> extractAudio({
+    required String sourcePath,
+    required String outputPath,
+    required CancellationToken token,
+  }) async {
+    await File(outputPath).writeAsString('not really audio');
+    return outputPath;
+  }
+}
+
 class FakeAsr implements AsrProvider {
-  FakeAsr({this.failTimes = 0});
+  FakeAsr({this.failTimes = 0, this.cues});
+
+  /// 覆盖返回的识别结果，用来构造「需要合并的短句」这类场景。
+  final List<Cue>? cues;
 
   int calls = 0;
   int failTimes;
+
+  /// 记下最后一次收到的语言，用来核对下发的是代码而不是中文名。
+  String? lastLanguage;
 
   @override
   ProviderInfo get info => _asrInfo;
@@ -31,10 +58,12 @@ class FakeAsr implements AsrProvider {
     required ProgressSink onProgress,
   }) async {
     calls++;
+    lastLanguage = language;
     if (failTimes-- > 0) {
       throw const ProviderException('识别服务挂了', hint: '稍后重试');
     }
     onProgress(1, 1, note: '完成');
+    if (cues != null) return cues!;
     return const [
       Cue(index: 1, startMs: 0, endMs: 2000, source: '第一句', confidence: 0.95),
       Cue(index: 2, startMs: 2000, endMs: 4000, source: '第二句', confidence: 0.5),
@@ -108,23 +137,27 @@ void main() {
         ]),
       );
 
-    settings.translationBatchSize = batchSize;
     final mt = translator ?? FakeTranslator();
     final runner = TaskRunner(
       settings: settings,
       workDir: work.path,
-      asrFactory: (_, _) => FakeAsr(),
-      translationFactory: (_, _) => mt,
+      asrFactory: (_, _, _) => FakeAsr(),
+      translationFactory: (_, _, _) => mt,
     );
 
     final task = SubtitleTask(
       id: 't1',
       sourcePath: srt.path,
       kind: TaskKind.translate,
-      asrProviderId: 'fake_asr',
-      translationProviderId: 'fake_mt',
-      sourceLanguage: '中文',
-      targetLanguage: '英文',
+      options: testOptions(
+        asr: 'fake_asr',
+        mt: 'fake_mt',
+        source: 'zh',
+        target: 'en',
+        batchSize: batchSize,
+        outputLocation: OutputLocation.custom,
+        outputDir: work.path,
+      ),
     );
     return (task, runner, mt);
   }
@@ -150,7 +183,7 @@ void main() {
       final (task, runner, _) = await translateTask();
       await runner.run(task, token: CancellationToken(), onChange: () {});
 
-      final out = File('${work.path}/in.英文.srt');
+      final out = File('${work.path}/in.en.srt');
       expect(out.existsSync(), isTrue);
       expect(Srt.parse(out.readAsStringSync()).first.source, 'EN:第 1 句');
     });
@@ -237,22 +270,98 @@ void main() {
       final runner = TaskRunner(
         settings: settings,
         workDir: work.path,
-        asrFactory: (_, _) => FakeAsr(),
-        translationFactory: (_, _) => FakeTranslator(),
+        asrFactory: (_, _, _) => FakeAsr(),
+        translationFactory: (_, _, _) => FakeTranslator(),
       );
       final task = SubtitleTask(
         id: 't2',
         sourcePath: empty.path,
         kind: TaskKind.translate,
-        asrProviderId: 'fake_asr',
-        translationProviderId: 'fake_mt',
-        sourceLanguage: '中文',
-        targetLanguage: '英文',
+      options: testOptions(asr: 'fake_asr', mt: 'fake_mt', source: 'zh', target: 'en'),
       );
       await runner.run(task, token: CancellationToken(), onChange: () {});
 
       expect(task.status, TaskStatus.failed);
       expect(task.error!.hint, contains('SRT'));
+    });
+  });
+
+  group('转写链路', () {
+    Future<(SubtitleTask, TaskRunner, FakeAsr)> transcribeTask({
+      String source = 'zh',
+      bool translate = false,
+      List<Cue>? cues,
+    }) async {
+      final video = File('${work.path}/demo.mp4')..writeAsStringSync('x');
+      final asr = FakeAsr(cues: cues);
+      final runner = TaskRunner(
+        settings: settings,
+        workDir: work.path,
+        media: FakeMedia(),
+        asrFactory: (_, _, _) => asr,
+        translationFactory: (_, _, _) => FakeTranslator(),
+      );
+      final task = SubtitleTask(
+        id: 'tr1',
+        sourcePath: video.path,
+        kind: translate ? TaskKind.transcribeAndTranslate : TaskKind.transcribe,
+        options: testOptions(
+          source: source,
+          translate: translate,
+          outputLocation: OutputLocation.custom,
+          outputDir: work.path,
+        ),
+      );
+      return (task, runner, asr);
+    }
+
+    // 识别接口要的是 ISO 代码；把界面上的中文名直接发过去会被服务端拒掉。
+    test('下发给识别服务的是语言代码，不是中文名', () async {
+      final (task, runner, asr) = await transcribeTask(source: 'zh');
+      await runner.run(task, token: CancellationToken(), onChange: () {});
+      expect(asr.lastLanguage, 'zh');
+    });
+
+    test('自动检测时把 auto 原样交给服务端自己判断', () async {
+      final (task, runner, asr) = await transcribeTask(source: 'auto');
+      await runner.run(task, token: CancellationToken(), onChange: () {});
+      expect(asr.lastLanguage, 'auto');
+    });
+
+    /// 两条紧邻的短句，断句阶段应当并成一条。
+    List<Cue> shortPair(String a, String b) => [
+      Cue(index: 1, startMs: 0, endMs: 300, source: a),
+      Cue(index: 2, startMs: 400, endMs: 700, source: b),
+    ];
+
+    // 之前这里拿界面上的中文名去和 'zh' 做前缀匹配，永远匹配不上，
+    // 于是中文字幕合并后中间多出一个空格。
+    test('中文合并短句不加空格', () async {
+      final (task, runner, _) = await transcribeTask(
+        source: 'zh',
+        cues: shortPair('你好', '世界'),
+      );
+      await runner.run(task, token: CancellationToken(), onChange: () {});
+      expect(task.document.cues, hasLength(1));
+      expect(task.document.cues.first.source, '你好世界');
+    });
+
+    test('西文合并短句要加空格', () async {
+      final (task, runner, _) = await transcribeTask(
+        source: 'en',
+        cues: shortPair('hello', 'world'),
+      );
+      await runner.run(task, token: CancellationToken(), onChange: () {});
+      expect(task.document.cues.first.source, 'hello world');
+    });
+
+    test('不翻译时跳过翻译阶段，只写出原文', () async {
+      final (task, runner, _) = await transcribeTask();
+      await runner.run(task, token: CancellationToken(), onChange: () {});
+      expect(task.status, TaskStatus.done);
+      expect(task.stages[TaskStage.translate]!.state, StageState.skipped);
+      expect(File('${work.path}/demo.zh.srt').existsSync(), isTrue);
+      expect(File('${work.path}/demo.en.srt').existsSync(), isFalse);
     });
   });
 
@@ -262,10 +371,7 @@ void main() {
         id: 't3',
         sourcePath: 'a.mp4',
         kind: TaskKind.transcribe,
-        asrProviderId: 'x',
-        translationProviderId: 'y',
-        sourceLanguage: '中文',
-        targetLanguage: '英文',
+      options: testOptions(asr: 'x', mt: 'y', source: 'zh', target: 'en'),
       );
       task.stages[TaskStage.queued] = const StageRecord(state: StageState.done);
       task.stages[TaskStage.prepare] = const StageRecord(state: StageState.done);
@@ -281,8 +387,8 @@ void main() {
       final runner = TaskRunner(
         settings: settings,
         workDir: work.path,
-        asrFactory: (_, _) => FakeAsr(),
-        translationFactory: (_, _) => FakeTranslator(),
+        asrFactory: (_, _, _) => FakeAsr(),
+        translationFactory: (_, _, _) => FakeTranslator(),
       );
       final queue = TaskQueue(runner: runner, settings: settings);
 
@@ -295,8 +401,7 @@ void main() {
           );
         queue.enqueue(
           sourcePath: srt.path,
-          kind: TaskKind.translate,
-          translationProviderId: 'fake_mt',
+          options: testOptions(mt: 'fake_mt'),
         );
       }
 
@@ -312,8 +417,8 @@ void main() {
       final runner = TaskRunner(
         settings: settings,
         workDir: work.path,
-        asrFactory: (_, _) => FakeAsr(),
-        translationFactory: (_, _) => FakeTranslator(),
+        asrFactory: (_, _, _) => FakeAsr(),
+        translationFactory: (_, _, _) => FakeTranslator(),
       );
       final queue = TaskQueue(runner: runner, settings: settings);
       final task = queue.enqueue(
