@@ -34,7 +34,10 @@ class GlassPanel extends StatelessWidget {
         border: Border.all(color: glass.glassBorder),
         boxShadow: context.elevation.shadow2,
       ),
+      // fit 必须是 expand：Stack 默认 loose + topStart，会把内容钉在面板顶部
+      // 而不是撑满（顶栏、状态栏这种固定高度的容器里，文字就会整体偏上）。
       child: Stack(
+        fit: StackFit.expand,
         children: [
           // 顶部 1px 高光：贴着内边框走，模拟玻璃的上缘反光。
           Positioned(
