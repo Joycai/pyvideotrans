@@ -63,3 +63,9 @@ __pycache__
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Flutter
+app/build/
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
