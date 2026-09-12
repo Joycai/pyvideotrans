@@ -12,8 +12,12 @@ import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/features/shell/app_shell.dart';
 import 'package:subtitle_studio/features/shell/nav_rail.dart';
 import 'package:subtitle_studio/features/shell/status_bar.dart';
+import 'package:subtitle_studio/features/editor/editor_controller.dart';
+import 'package:subtitle_studio/features/editor/editor_page.dart';
 import 'package:subtitle_studio/features/tasks/tasks_board.dart';
 import 'package:subtitle_studio/features/tasks/tasks_page.dart';
+import 'package:subtitle_studio/services/settings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 渲染全窗口截图，用来核对实现与设计稿是否一致。
 ///
@@ -268,6 +272,64 @@ void main() {
       matchesGoldenFile('$file.png'),
     );
   }
+
+  Future<void> pumpEditor(
+    WidgetTester tester, {
+    required Brightness brightness,
+    required String file,
+  }) async {
+    SharedPreferences.setMockInitialValues({});
+    final settings = await AppSettings.load();
+    final task = _fixtures().first;
+    final controller = EditorController(task: task, settings: settings)
+      ..select(4);
+
+    tester.view
+      ..physicalSize = const Size(1440, 900)
+      ..devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: _readable(
+          brightness == Brightness.light ? lightTheme : darkTheme,
+        ),
+        home: AppShell(
+          section: AppSection.editor,
+          onSectionChanged: (_) {},
+          chrome: PageChrome(
+            title: '编辑器',
+            subtitle:
+                '${task.fileName} · ${task.document.cues.length} 条 · 中文 → 英文',
+            titleTrailing: EditorReviewBadge(
+              count: task.document.reviewCount,
+            ),
+            actions: [
+              EditorPageActions(
+                controller: controller,
+                onTranslateMissing: () {},
+                onExport: () {},
+              ),
+            ],
+          ),
+          status: const StatusSnapshot(
+            localEngine: 'ffmpeg · 就绪',
+            cloud: (connected: true, label: 'OpenAI · 已配置'),
+            localBackend: (connected: true, label: 'DeepSeek · 已配置'),
+          ),
+          child: EditorPage(controller: controller),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+
+    await expectLater(find.byType(AppShell), matchesGoldenFile('$file.png'));
+  }
+
+  testWidgets('编辑器 · 浅色', (tester) async {
+    await pumpEditor(tester, brightness: Brightness.light, file: 'editor_light');
+  });
 
   testWidgets('任务页 · 浅色', (tester) async {
     await pumpTasks(tester, brightness: Brightness.light, file: 'tasks_light');

@@ -7,6 +7,8 @@ import 'core/theme/app_theme.dart';
 import 'domain/task.dart';
 import 'features/shell/app_shell.dart';
 import 'features/shell/nav_rail.dart';
+import 'features/editor/editor_controller.dart';
+import 'features/editor/editor_page.dart';
 import 'features/shell/status_bar.dart';
 import 'features/tasks/tasks_page.dart';
 import 'pipeline/task_queue.dart';
@@ -51,8 +53,9 @@ class SubtitleStudioApp extends StatefulWidget {
 
 class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   final _tasksKey = GlobalKey<TasksPageState>();
+  final _editorKey = GlobalKey<EditorPageState>();
   AppSection _section = AppSection.tasks;
-  SubtitleTask? _editing;
+  EditorController? _editor;
 
   @override
   void initState() {
@@ -78,10 +81,15 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     _ => ThemeMode.system,
   };
 
-  void _openEditor(SubtitleTask task) => setState(() {
-    _editing = task;
-    _section = AppSection.editor;
-  });
+  void _openEditor(SubtitleTask task) {
+    _editor?.removeListener(_refresh);
+    final controller = EditorController(task: task, settings: widget.settings)
+      ..addListener(_refresh);
+    setState(() {
+      _editor = controller;
+      _section = AppSection.editor;
+    });
+  }
 
   StatusSnapshot get _status {
     final queue = widget.queue;
@@ -139,13 +147,29 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
           ],
         );
       case AppSection.editor:
-        final doc = _editing?.document;
+        final editor = _editor;
+        if (editor == null) {
+          return const PageChrome(
+            title: '编辑器',
+            subtitle: '从任务页打开一个任务开始校对',
+          );
+        }
         return PageChrome(
           title: '编辑器',
-          subtitle: _editing == null
-              ? '从任务页选择一个已完成的任务'
-              : '${_editing!.fileName} · ${doc!.cues.length} 条 · '
-                    '${_editing!.sourceLanguage} → ${_editing!.targetLanguage}',
+          subtitle:
+              '${editor.task.fileName} · ${editor.document.cues.length} 条 · '
+              '${editor.task.sourceLanguage} → ${editor.task.targetLanguage}',
+          titleTrailing: EditorReviewBadge(
+            count: editor.document.reviewCount,
+          ),
+          actions: [
+            EditorPageActions(
+              controller: editor,
+              onTranslateMissing: () =>
+                  _editorKey.currentState?.translateMissing(),
+              onExport: () => _editorKey.currentState?.export(),
+            ),
+          ],
         );
       default:
         return PageChrome(title: _section.label);
@@ -175,6 +199,10 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       key: _tasksKey,
       queue: widget.queue,
       onOpenEditor: _openEditor,
+    ),
+    AppSection.editor when _editor != null => EditorPage(
+      key: _editorKey,
+      controller: _editor!,
     ),
     _ => _Placeholder(section: _section),
   };
