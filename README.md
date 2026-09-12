@@ -19,6 +19,7 @@ UI 遵循 Claude Design 项目「桌面字幕工具 · 设计系统」。第一�
 |------|------|
 | [`app/`](app/) | Flutter 客户端 —— **主要代码在这里**，跑起来与架构见 [app/README.md](app/README.md) |
 | [`docs/local-backend.md`](docs/local-backend.md) | 本地模型后端方案（第二期） |
+| [`docs/archive-codemap.md`](docs/archive-codemap.md) | 归档 Python 代码索引 —— 按功能找到原实现的位置 |
 | [`PLAN.md`](PLAN.md) | 分阶段重构计划 |
 | [`archive/python/`](archive/python/) | 原 Python 实现，仅作功能参考，后续可能删除 |
 
