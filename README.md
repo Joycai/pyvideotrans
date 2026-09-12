@@ -1,7 +1,9 @@
 # 字幕工具（Flutter 重构）
 
-> 本分支 `feat/flutter-rewrite` 用 Flutter 重做 [pyVideoTrans](archive/python/README.md)
-> 的桌面客户端。**不合并回 main**，后续可能独立成项目。
+> 用 Flutter 重做 [pyVideoTrans](archive/python/README.md) 的桌面客户端。
+>
+> **主分支是 `Joycai-main`**，所有开发都合并到这里。仓库里的 `main` 只是
+> fork 时留下的上游快照，仅供参考，不在上面开发、也不往它合并。
 
 保留原项目的两项核心能力：
 
