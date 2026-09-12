@@ -1,217 +1,48 @@
-﻿> Sponsors:
-> - **[Recall.ai](https://www.recall.ai/product/meeting-transcription-api?utm_source=github&utm_medium=sponsorship&utm_campaign=jianchang512-pyvideotrans) -  Meeting Transcription API**:  If you’re looking for a transcription API for meetings, consider checking out **[Recall.ai](https://www.recall.ai/product/meeting-transcription-api?utm_source=github&utm_medium=sponsorship&utm_campaign=jianchang512-pyvideotrans)** , an API that works with Zoom, Google Meet, Microsoft Teams, and more
+# 字幕工具（Flutter 重构）
 
+> 本分支 `feat/flutter-rewrite` 用 Flutter 重做 [pyVideoTrans](archive/python/README.md)
+> 的桌面客户端。**不合并回 main**，后续可能独立成项目。
 
----
+保留原项目的两项核心能力：
 
-# pyVideoTrans
+1. **音视频语音生成字幕**（ASR）
+2. **字幕翻译**（大模型）
 
-<div align="center">
+UI 遵循 Claude Design 项目「桌面字幕工具 · 设计系统」。第一期只对接在线 API，
+本地模型的接口已留好（见下）。
 
-**A Powerful Open Source Video Translation / Audio Transcription / AI Dubbing / Subtitle Translation Tool**
+## 目录
 
-[中文](docs/README_CN.md) | [**Documentation**](https://pyvideotrans.com) | [**Online Q&A**](https://bbs.pyvideotrans.com)
+| 路径 | 内容 |
+|------|------|
+| [`app/`](app/) | Flutter 客户端 —— **主要代码在这里**，跑起来与架构见 [app/README.md](app/README.md) |
+| [`docs/local-backend.md`](docs/local-backend.md) | 本地模型后端方案（第二期） |
+| [`PLAN.md`](PLAN.md) | 分阶段重构计划 |
+| [`archive/python/`](archive/python/) | 原 Python 实现，仅作功能参考，后续可能删除 |
 
-[![License](https://img.shields.io/badge/License-GPL_v3-blue.svg)](LICENSE) [![Python](https://img.shields.io/badge/Python-3.10%2B-green.svg)](https://www.python.org/) [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)]()
-
-</div>
-
-**pyVideoTrans** is dedicated to seamlessly converting videos from one language to another, offering a complete workflow that includes speech recognition, subtitle translation, multi-role dubbing, and audio-video synchronization. It supports both local offline deployment and a wide variety of mainstream online APIs.
-
-
-<img width="1730" height="957" alt="image" src="https://github.com/user-attachments/assets/25d78661-8b73-4f34-a3e5-205c7daba99b" />
-
----
-
-##  Core Features
-
-> [Technical Architecture and Principles](docs/architecture.md)
-
-- **Fully Automatic Video Translation**: One-click workflow: Speech Recognition (ASR) → Subtitle Translation → Speech Synthesis (TTS) → Video Synthesis.
-- **Audio Transcription / Subtitle Generation**: Batch convert audio/video to SRT subtitles, supporting **Speaker Diarization** to distinguish between different roles.
-- **️Multi-Role AI Dubbing**: Assign different AI dubbing voices to different speakers.
-- **Voice Cloning**: Integrates models like **F5-TTS, CosyVoice, GPT-SoVITS** for zero-shot voice cloning.
-- **Powerful Model Support**:
-  - **ASR**: Faster-Whisper (Local), OpenAI Whisper, Alibaba Qwen, ByteDance Volcano, Azure, Google, etc.
-  - **LLM Translation**: DeepSeek, ChatGPT, Claude, Gemini, MiniMax, Ollama (Local), Alibaba Bailian, etc.
-  - **TTS**: Edge-TTS (Free), OpenAI, Azure, Minimaxi, ChatTTS, ChatterBox, etc.
-- **️Interactive Editing**: Supports pausing and manual proofreading at each stage (recognition, translation, dubbing) to ensure accuracy.
-- **️Utility Toolkit**: Includes auxiliary tools such as vocal separation, video/subtitle merging, audio-video alignment, and transcript matching.
-- **Command Line Interface (CLI)**: Supports headless operation, convenient for server deployment or batch processing.
-- **Web Interface (WebUI)**: Browser-based interface for remote access or internal network deployment.
-
-
----
-
-##  Quick Start (Windows Users)
-
-We provide a pre-packaged `.exe` version for Windows 10/11 users, requiring no Python environment configuration.
-
-1. **Download**: [Click to download the latest pre-packaged version](https://github.com/jianchang512/pyvideotrans/releases)
-2. **Unzip**: Extract the compressed file to a path without Chinese characters or spaces (e.g., `D:\pyVideoTrans`).
-3. **Run**: Double-click `sp.exe` inside the folder to launch.
-
-> **Note**:
-> * Do not run directly from within the compressed archive.
-> * To use GPU acceleration, ensure **CUDA 12.8** and **cuDNN 9.11** are installed.
-
----
-
-## ️ Source Deployment (macOS / Linux / Windows Developers)
-
-We recommend using **[`uv`](https://docs.astral.sh/uv/)** for package management for faster speed and better environment isolation.
-
-### 1. Prerequisites
-
-* **Python**: Recommended version 3.10
-* **FFmpeg**: Must be installed and configured in the environment variables.
-  * **macOS**: 
-  ```
-    brew install libsndfile  git  python@3.10
-	
-	brew uninstall --ignore-dependencies ffmpeg
-	
-	brew tap homebrew-ffmpeg/ffmpeg
-	
-	brew install homebrew-ffmpeg/ffmpeg/ffmpeg
-  ```
-  * **Linux (Ubuntu/Debian)**: `sudo apt-get install ffmpeg libsndfile1-dev`
-  * **Windows**: [Download FFmpeg](https://ffmpeg.org/download.html) and configure Path, or place `ffmpeg.exe` and `ffprobe.exe` directly in the project directory.
-
-### 2. Install uv (If not installed)
+## 快速开始
 
 ```bash
-# macOS/Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows (PowerShell)
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+brew install ffmpeg          # 抽音要用；Windows 见 app/README.md
+cd app && flutter run -d macos
 ```
 
-### 3. Clone and Install
+首次使用先去**设置**里填识别与翻译服务的地址、模型和密钥。
 
-```bash
-git clone https://github.com/jianchang512/pyvideotrans.git
-cd pyvideotrans
-uv sync
-```
+## 设计要点
 
-> By default, `whisper.net` and `WebUI` are not installed locally.
-> - To install all optional channels: `uv sync --all-extras`
-> - To install whisper.net: `uv sync --extra dotnet` 
-> - To install WebUI: `uv sync --extra webui` 
+**本地与在线不是两条代码路径。** 本地模型（第二期）由独立的 Python 后端提供
+OpenAI 兼容接口，客户端只是多一个 `baseUrl` 指向 `127.0.0.1` 的 provider ——
+流水线、进度、断点续跑、取消、日志全部复用。Ollama 与 LM Studio 说的也是这套协议，
+所以**现在就能在本机跑翻译**。
 
-### 4. Launch Software
+**失败不等于从头再来。** 任务分六个阶段，失败或取消时已完成阶段的结果全部保留，
+重试从中断处继续；翻译阶段以「这一条有没有译文」为断点，续跑只翻剩下的。
 
-**GUI**:
-```bash
-uv run sp.py
-```
+**译文条数必须与原文一一对应。** 大模型翻译字幕最常见的故障是合并或丢行，
+一旦发生后面所有字幕的时间轴就全错位。线路协议给每行打了行号，返回后逐行核对，
+对不上就减半批量重试，绝不把错位的译文写进字幕。
 
-**CLI**:
-```bash
-# Video Translation
-uv run cli.py --task vtv --name "./video.mp4" --source_language_code zh-cn --target_language_code en --voice_role "en-US-GuyNeural"
+## 许可
 
-# Audio to Subtitle
-uv run cli.py --task stt --name "./audio.wav" --model_name large-v3
-
-# Subtitle Translation
-uv run cli.py --task sts --name "./subs.srt" --target_language_code en
-
-# Text to Speech
-uv run cli.py --task tts --name "./subs.srt" --voice_role "zh-CN-YunyangNeural"
-```
-
-> [CLI documentation with all parameters](docs/cli.md)
-
-**WebUI** (for remote/internal network access):
-```bash
-uv sync --extra webui
-uv run webui.py
-```
-
-
-**Docker** (containerized deployment):
-```bash
-# Build
-docker build -t pyvideotrans-webui .
-
-# Run
-docker run -d -p 7860:7860 --name pyvideotrans pyvideotrans-webui
-
-# With persistent config and output
-docker run -d -p 7860:7860 \
-  -v ./data/output:/app/output \
-  -v ./data/config:/app/videotrans \
-  --name pyvideotrans pyvideotrans-webui
-```
-
-> [WebUI documentation](docs/webui.md)
-
-### 5. (Optional) GPU Acceleration Configuration
-
-If you have an NVIDIA graphics card, execute the following commands to install the CUDA-supported PyTorch version:
-
-```bash
-# Uninstall CPU version
-uv remove torch torchaudio
-
-# Install CUDA version (Example for CUDA 12.x)
-uv add torch==2.7 torchaudio==2.7 --index-url https://download.pytorch.org/whl/cu128
-uv add nvidia-cublas-cu12 nvidia-cudnn-cu12
-```
-
-> [AMD GPU acceleration via Whisper.NET](docs/whisper_net_setup.md)
-
----
-
-##  Supported Channels & Models (Partial)
-
-| Category | Channel/Model | Description |
-| :--- | :--- | :--- |
-| **ASR (Speech Recognition)** | **Faster-Whisper** (Local) | Recommended, fast speed, high accuracy |
-| | WhisperX / Parakeet | Supports timestamp alignment & speaker diarization |
-| | Alibaba Qwen3-ASR / ByteDance Volcano | Online API, excellent for Chinese |
-| **Translation (LLM/MT)** | **DeepSeek** / ChatGPT | Supports context understanding, more natural translation |
-| | MiniMax AI | MiniMax M3 LLM, latest flagship model, OpenAI-compatible |
-| | Google / Microsoft | Traditional machine translation, fast speed |
-| | Ollama / M2M100 | Fully local offline translation |
-| **TTS (Speech Synthesis)** | **Edge-TTS** | Microsoft free interface, natural effect |
-| | **F5-TTS / CosyVoice** | Supports **Voice Cloning**, requires local deployment |
-| | GPT-SoVITS / ChatTTS | High-quality open-source TTS |
-| | 302.AI / OpenAI / Azure | High-quality commercial API |
-
----
-
-##  Documentation & Support
-
-* **Official Documentation**: [https://pyvideotrans.com](https://pyvideotrans.com) (Includes detailed tutorials, API configuration guides, FAQ)
-* **Online Q&A Community**: [https://bbs.pyvideotrans.com](https://bbs.pyvideotrans.com) (Submit error logs for automated AI analysis and answers)
-* **GitHub Wiki**: [architecture.md](docs/architecture.md) | [cli.md](docs/cli.md) | [webui.md](docs/webui.md) | [Synchronize.md](docs/Synchronize.md) | [faq.md](docs/faq.md)
-
-##  Disclaimer
-
-This software is an open-source, free, non-commercial project. Users are solely responsible for any legal consequences arising from the use of this software (including but not limited to calling third-party APIs or processing copyrighted video content). Please comply with local laws and regulations and the terms of use of relevant service providers.
-
-## Acknowledgements
-
-This project mainly relies on the following open-source projects (partial):
-
-* [FFmpeg](https://github.com/FFmpeg/FFmpeg)
-* [PySide6](https://pypi.org/project/PySide6/)
-* [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)
-* [faster-whisper](https://github.com/SYSTRAN/faster-whisper)
-* [openai-whisper](https://github.com/openai/whisper)
-* [edge-tts](https://github.com/rany2/edge-tts)
-* [F5-TTS](https://github.com/SWivid/F5-TTS)
-* [Confucius4-TTS](https://github.com/netease-youdao/Confucius4-TTS)
-* [OmniVoice](https://github.com/k2-fsa/omnivoice)
-* [CosyVoice](https://github.com/FunAudioLLM/CosyVoice)
-* [Gradio](https://www.gradio.app/) (WebUI)
-
----
-
-*Created by [jianchang512](https://github.com/jianchang512)*
-
-
+沿用原项目的 [GPL v3](LICENSE)。
