@@ -22,11 +22,20 @@ class TaskCancelled implements Exception {
 
 /// provider 抛出的、带可行动建议的错误。
 class ProviderException implements Exception {
-  const ProviderException(this.message, {this.detail, this.hint});
+  const ProviderException(
+    this.message, {
+    this.detail,
+    this.hint,
+    this.batchTooLarge = false,
+  });
 
   final String message;
   final String? detail;
   final String? hint;
+
+  /// 这次失败是「一批给太多了」引起的（模型合并了行、上下文超长）。
+  /// 流水线看到它会减半批量重试；其他失败（网络、鉴权）减半没有意义。
+  final bool batchTooLarge;
 
   @override
   String toString() => message;

@@ -308,6 +308,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
       throw const ProviderException(
         '模型返回了空内容',
         hint: '多为内容审核拦截或上下文超长。减小每批条数后重试。',
+        batchTooLarge: true,
       );
     }
 
@@ -318,6 +319,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
         detail: '期望 ${lines.length} 条，模型返回：\n'
             '${content.length > 400 ? '${content.substring(0, 400)}…' : content}',
         hint: '模型合并或丢弃了字幕行。流水线会自动减半批量重试。',
+        batchTooLarge: true,
       );
     }
     return decoded;
