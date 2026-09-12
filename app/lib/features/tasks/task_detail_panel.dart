@@ -126,7 +126,7 @@ class _Header extends StatelessWidget {
                     Text(
                       '${task.kind.label} · '
                       '${task.mediaDuration != null ? Srt.formatDuration(task.mediaDuration!) : '${task.document.cues.length} 条'}'
-                      ' · ${task.sourceLanguage} → ${task.targetLanguage}',
+                      ' · ${task.sourceLanguage.name} → ${task.targetLanguage.name}',
                       style: context.texts.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),

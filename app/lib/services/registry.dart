@@ -137,7 +137,16 @@ abstract final class Registry {
   static ProviderInfo? translationInfo(String id) =>
       translation.where((p) => p.id == id).firstOrNull;
 
-  static AsrProvider buildAsr(String id, AppSettings settings) {
+  /// 建一个识别服务实例。
+  ///
+  /// [model] 与 [prompt] 是**任务级覆盖**：任务入队时把参数定死了，
+  /// 之后用户改设置不应该影响已经排上队的任务。传 null 表示沿用设置里的值。
+  static AsrProvider buildAsr(
+    String id,
+    AppSettings settings, {
+    String? model,
+    String? prompt,
+  }) {
     final info = asrInfo(id);
     if (info == null) {
       throw ProviderException('未知的识别服务：$id', hint: '在设置里重新选择识别服务。');
@@ -148,17 +157,20 @@ abstract final class Registry {
         hint: '第一期只对接在线 API。改选 OpenAI、Groq 或硅基流动。',
       );
     }
+    final endpoint = settings.endpointFor(info);
     return OpenAiCompatibleAsrProvider(
       info: info,
-      endpoint: settings.endpointFor(info),
-      prompt: settings.asrPrompt,
+      endpoint: _withModel(endpoint, model),
+      prompt: prompt ?? settings.asrPrompt,
     );
   }
 
   static TranslationProvider buildTranslation(
     String id,
-    AppSettings settings,
-  ) {
+    AppSettings settings, {
+    String? model,
+    String? guidance,
+  }) {
     final info = translationInfo(id);
     if (info == null) {
       throw ProviderException('未知的翻译服务：$id', hint: '在设置里重新选择翻译服务。');
@@ -169,10 +181,21 @@ abstract final class Registry {
         hint: '第一期只对接在线 API 与 Ollama / LM Studio。',
       );
     }
+    final endpoint = settings.endpointFor(info);
     return OpenAiCompatibleTranslationProvider(
       info: info,
-      endpoint: settings.endpointFor(info),
-      extraGuidance: settings.translationGuidance,
+      endpoint: _withModel(endpoint, model),
+      extraGuidance: guidance ?? settings.translationGuidance,
     );
   }
+
+  static Endpoint _withModel(Endpoint endpoint, String? model) =>
+      model == null || model.trim().isEmpty
+      ? endpoint
+      : Endpoint(
+          baseUrl: endpoint.baseUrl,
+          model: model.trim(),
+          apiKey: endpoint.apiKey,
+          timeout: endpoint.timeout,
+        );
 }

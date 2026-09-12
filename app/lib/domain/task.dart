@@ -1,4 +1,6 @@
 import 'cue.dart';
+import 'language.dart';
+import 'task_options.dart';
 
 /// 流水线的六个阶段，顺序固定。界面上的阶段条就是这六段。
 enum TaskStage {
@@ -117,10 +119,7 @@ class SubtitleTask {
     required this.id,
     required this.sourcePath,
     required this.kind,
-    required this.asrProviderId,
-    required this.translationProviderId,
-    required this.sourceLanguage,
-    required this.targetLanguage,
+    required this.options,
     this.status = TaskStatus.queued,
     this.stage = TaskStage.queued,
     Map<TaskStage, StageRecord>? stages,
@@ -137,12 +136,15 @@ class SubtitleTask {
   final String sourcePath;
   final TaskKind kind;
 
-  /// provider 的注册 id。本地后端只是其中一个 id，客户端不分「本地 / 在线」两条路径。
-  final String asrProviderId;
-  final String translationProviderId;
+  /// 入队那一刻定死的全部参数。之后用户改设置不影响已排队的任务。
+  final TaskOptions options;
 
-  final String sourceLanguage;
-  final String targetLanguage;
+  /// provider 的注册 id。本地后端只是其中一个 id，客户端不分「本地 / 在线」两条路径。
+  String get asrProviderId => options.asrProviderId;
+  String get translationProviderId => options.translationProviderId;
+
+  Language get sourceLanguage => options.sourceLanguage;
+  Language get targetLanguage => options.targetLanguage;
 
   TaskStatus status;
   TaskStage stage;

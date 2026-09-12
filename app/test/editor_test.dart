@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/task.dart';
@@ -12,10 +14,7 @@ Future<EditorController> _controller() async {
     id: 'e1',
     sourcePath: '/v/demo.mp4',
     kind: TaskKind.transcribeAndTranslate,
-    asrProviderId: 'openai',
-    translationProviderId: 'deepseek',
-    sourceLanguage: '中文',
-    targetLanguage: '英文',
+      options: testOptions(asr: 'openai', mt: 'deepseek', source: 'zh', target: 'en'),
   );
   task.document = SubtitleDocument(
     cues: [

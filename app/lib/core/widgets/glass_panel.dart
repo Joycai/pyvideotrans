@@ -14,6 +14,8 @@ class GlassPanel extends StatelessWidget {
     this.radius = AppRadius.lg,
     this.padding,
     this.strong = false,
+    this.shadow,
+    this.expand = true,
   });
 
   final Widget child;
@@ -22,6 +24,13 @@ class GlassPanel extends StatelessWidget {
 
   /// 浮层（Dialog / 菜单）用更实的一档，保证上方文字可读。
   final bool strong;
+
+  /// 覆盖默认投影。Dialog 这种真正浮起来的层用 shadow3。
+  final List<BoxShadow>? shadow;
+
+  /// 是否撑满父级给的空间。固定高度的容器（顶栏、状态栏）必须撑满，
+  /// 否则内容会被钉在顶部；由内容决定尺寸的浮层要关掉它，不然会长满屏幕。
+  final bool expand;
 
   @override
   Widget build(BuildContext context) {
@@ -32,12 +41,12 @@ class GlassPanel extends StatelessWidget {
         color: strong ? glass.glassStrong : glass.glass,
         borderRadius: borderRadius,
         border: Border.all(color: glass.glassBorder),
-        boxShadow: context.elevation.shadow2,
+        boxShadow: shadow ?? context.elevation.shadow2,
       ),
       // fit 必须是 expand：Stack 默认 loose + topStart，会把内容钉在面板顶部
       // 而不是撑满（顶栏、状态栏这种固定高度的容器里，文字就会整体偏上）。
       child: Stack(
-        fit: StackFit.expand,
+        fit: expand ? StackFit.expand : StackFit.loose,
         children: [
           // 顶部 1px 高光：贴着内边框走，模拟玻璃的上缘反光。
           Positioned(

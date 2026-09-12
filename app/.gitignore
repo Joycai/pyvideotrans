@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# 截图测试失败时的对比产物，不入库。
+test/golden/failures/

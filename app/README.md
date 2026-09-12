@@ -31,8 +31,9 @@ Windows 把 `ffmpeg.exe` 放进应用目录下的 `ffmpeg` 文件夹即可。
 lib/
   core/theme/      设计令牌 → ThemeData（ColorScheme / TextTheme / 三个 ThemeExtension）
   core/widgets/    玻璃面板、渐变按钮、状态标签、进度条…
-  domain/          Cue / SubtitleDocument / SubtitleTask，SRT 编解码
-  services/        provider 抽象 + OpenAI 兼容实现 + 登记表 + 设置
+  domain/          Cue / SubtitleDocument / SubtitleTask / TaskOptions，
+                   语言表、折行、SRT 与 VTT 编解码
+  services/        provider 抽象 + OpenAI 兼容实现 + 登记表 + 可用性检查 + 设置
   services/local/  本地后端客户端（第一期为 stub）
   pipeline/        六阶段流水线与任务队列
   features/        shell / tasks / editor / settings
@@ -48,6 +49,20 @@ Ollama 和 LM Studio 说的也是这套协议，所以**现在就能在本机跑
 装好之后在设置的「翻译服务」里选中它们即可。
 
 详见 [`../docs/local-backend.md`](../docs/local-backend.md)。
+
+### 任务参数在入队那一刻定死
+
+建任务时用的全部参数（语言、服务、模型、批大小、折行上限、产物格式与位置）
+打包在 [`TaskOptions`](lib/domain/task_options.dart) 里，随任务一起入队。
+任务是排队串行跑的，用户很可能在排队期间改设置去建下一个任务 —— 参数要是
+运行时才去读全局设置，前面排着的任务就会被后面的改动影响，这类 bug 事后
+极难复现。全局设置只作为新建任务时的默认值。
+
+### 折行发生在导出时，不在文档里
+
+单行字数上限（中日韩 15、其他 40，沿用原 Python 实现的默认值）在写出产物时
+才应用。文档里始终存不带硬换行的干净文本，用户在编辑器里改完再导出会按当前
+设置重新折，不会叠加上一次的换行。
 
 ### 断点续跑
 

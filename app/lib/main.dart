@@ -143,7 +143,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
             TasksPageActions(
               onNewTranslate: () =>
                   _tasksKey.currentState?.browseSubtitles(),
-              onNewTranscribe: () => _tasksKey.currentState?.browseMedia(),
+              onNewTranscribe: () => _tasksKey.currentState?.newTranscribe(),
             ),
           ],
         );
@@ -159,7 +159,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
           title: '编辑器',
           subtitle:
               '${editor.task.fileName} · ${editor.document.cues.length} 条 · '
-              '${editor.task.sourceLanguage} → ${editor.task.targetLanguage}',
+              '${editor.task.sourceLanguage.name} → ${editor.task.targetLanguage.name}',
           titleTrailing: EditorReviewBadge(
             count: editor.document.reviewCount,
           ),
@@ -200,6 +200,8 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       key: _tasksKey,
       queue: widget.queue,
       onOpenEditor: _openEditor,
+      onOpenSettings: () =>
+          setState(() => _section = AppSection.settings),
     ),
     AppSection.settings => SettingsPage(settings: widget.settings),
     AppSection.editor when _editor != null => EditorPage(

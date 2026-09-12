@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
+import '../../domain/media_kinds.dart';
 import '../../domain/task.dart';
 import '../../pipeline/task_queue.dart';
-import 'drop_zone.dart';
+import 'new_transcribe_dialog.dart';
 import 'task_table.dart';
 import 'tasks_board.dart';
 
@@ -15,10 +16,14 @@ class TasksPage extends StatefulWidget {
     super.key,
     required this.queue,
     required this.onOpenEditor,
+    required this.onOpenSettings,
   });
 
   final TaskQueue queue;
   final ValueChanged<SubtitleTask> onOpenEditor;
+
+  /// 对话框里发现服务没配好时，用它跳到设置页。
+  final VoidCallback onOpenSettings;
 
   @override
   State<TasksPage> createState() => TasksPageState();
@@ -37,42 +42,50 @@ class TasksPageState extends State<TasksPage> {
     _ => true,
   };
 
-  /// 拖进来的文件按扩展名决定任务类型：音视频建转写，字幕建翻译。
-  void addFiles(List<String> paths) {
-    for (final path in paths) {
-      widget.queue.enqueue(
-        sourcePath: path,
-        kind: MediaKinds.isSubtitle(path)
-            ? TaskKind.translate
-            : TaskKind.transcribeAndTranslate,
-      );
+  /// 拖进来或选中的文件：音视频走「新建转写」对话框，字幕直接建翻译任务。
+  ///
+  /// 音视频不再用默认参数直接入队 —— 语言、服务、是否接着翻译这些事
+  /// 值得在建任务前确认一次，这正是对话框存在的理由。字幕暂时保持直通，
+  /// 「新建翻译」对话框还没做。
+  Future<void> addFiles(List<String> paths) async {
+    final subtitles = paths.where(MediaKinds.isSubtitle).toList();
+    final media = paths.where(MediaKinds.isMedia).toList();
+
+    if (subtitles.isNotEmpty) {
+      widget.queue.enqueueAll(subtitles);
+      _selectFirst();
     }
-    if (paths.isNotEmpty) {
-      setState(() => _selectedId = widget.queue.tasks.first.id);
-    }
+    if (media.isNotEmpty) await newTranscribe(paths: media);
   }
 
-  /// 顶栏的「新建转写」。
-  Future<void> browseMedia() => _browse(subtitlesOnly: false);
+  /// 顶栏的「新建转写」，也是拖入音视频后的落点。
+  Future<void> newTranscribe({List<String> paths = const []}) async {
+    final result = await showNewTranscribeDialog(
+      context,
+      settings: widget.queue.settings,
+      initialPaths: paths,
+      onOpenSettings: widget.onOpenSettings,
+    );
+    if (result == null) return;
+    widget.queue.enqueueAll(result.paths, options: result.options);
+    _selectFirst();
+  }
 
-  /// 顶栏的「新建翻译」。
-  Future<void> browseSubtitles() => _browse(subtitlesOnly: true);
-
-  Future<void> _browse({bool subtitlesOnly = false}) async {
+  /// 顶栏的「新建翻译」。字幕任务还是老路径：选文件即入队。
+  Future<void> browseSubtitles() async {
     final files = await openFiles(
       acceptedTypeGroups: [
-        subtitlesOnly
-            ? const XTypeGroup(label: '字幕', extensions: ['srt', 'vtt', 'ass'])
-            : const XTypeGroup(
-                label: '音视频',
-                extensions: [
-                  'mp4', 'mov', 'mkv', 'avi', 'webm',
-                  'mp3', 'm4a', 'wav', 'flac', 'aac',
-                ],
-              ),
+        const XTypeGroup(label: '字幕', extensions: ['srt', 'vtt', 'ass']),
       ],
     );
-    if (files.isNotEmpty) addFiles(files.map((f) => f.path).toList());
+    if (files.isEmpty) return;
+    widget.queue.enqueueAll(files.map((f) => f.path).toList());
+    _selectFirst();
+  }
+
+  void _selectFirst() {
+    if (!mounted || widget.queue.tasks.isEmpty) return;
+    setState(() => _selectedId = widget.queue.tasks.first.id);
   }
 
   void _handleAction(SubtitleTask task, TaskAction action) {
@@ -107,7 +120,7 @@ class TasksPageState extends State<TasksPage> {
           setState(() => _selectedId = _selectedId == id ? null : id),
       onAction: _handleAction,
       onFiles: addFiles,
-      onBrowse: browseMedia,
+      onBrowse: newTranscribe,
     );
   }
 }

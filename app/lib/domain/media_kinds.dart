@@ -1,0 +1,22 @@
+/// 按扩展名判断一个文件是媒体还是字幕 —— 这决定了建什么类型的任务：
+/// 音视频走转写，字幕直接走翻译。
+///
+/// 放在 domain 里是因为拖放区、文件选择框和任务队列都要用它，
+/// 不该由某一个界面组件持有。
+abstract final class MediaKinds {
+  static const media = {
+    'mp4', 'mov', 'mkv', 'avi', 'webm', 'flv', 'wmv',
+    'mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus',
+  };
+  static const subtitle = {'srt', 'vtt', 'ass', 'ssa'};
+
+  static String extensionOf(String path) {
+    final name = path.split(RegExp(r'[/\\]')).last;
+    final dot = name.lastIndexOf('.');
+    return dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
+  }
+
+  static bool isMedia(String path) => media.contains(extensionOf(path));
+  static bool isSubtitle(String path) => subtitle.contains(extensionOf(path));
+  static bool isSupported(String path) => isMedia(path) || isSubtitle(path);
+}

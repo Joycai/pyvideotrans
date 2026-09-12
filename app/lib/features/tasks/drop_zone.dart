@@ -5,22 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
-
-/// 按扩展名判断拖进来的是媒体还是字幕 —— 这决定了建什么类型的任务。
-abstract final class MediaKinds {
-  static const media = {
-    'mp4', 'mov', 'mkv', 'avi', 'webm', 'flv', 'wmv',
-    'mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus',
-  };
-  static const subtitle = {'srt', 'vtt', 'ass', 'ssa'};
-
-  static String extensionOf(String path) =>
-      path.split('.').last.toLowerCase();
-
-  static bool isMedia(String path) => media.contains(extensionOf(path));
-  static bool isSubtitle(String path) => subtitle.contains(extensionOf(path));
-  static bool isSupported(String path) => isMedia(path) || isSubtitle(path);
-}
+import '../../domain/media_kinds.dart';
 
 /// 拖放区。平时是一条 40px 的提示；拖动进入时展开成 128px 的两半，
 /// 明确告诉用户「音视频建转写、SRT 建翻译」，落点不用猜。

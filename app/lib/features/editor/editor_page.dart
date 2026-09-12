@@ -169,9 +169,9 @@ class EditorPageActions extends StatelessWidget {
           value: controller.view,
           onChanged: controller.setView,
           segments: const [
-            (value: CueView.source, label: '原文'),
-            (value: CueView.translation, label: '译文'),
-            (value: CueView.both, label: '双语'),
+            (value: CueView.source, label: '原文', enabled: true),
+            (value: CueView.translation, label: '译文', enabled: true),
+            (value: CueView.both, label: '双语', enabled: true),
           ],
         ),
         const SizedBox(width: AppSpacing.s3),

@@ -299,7 +299,9 @@ class SegmentedToggle<T> extends StatelessWidget {
     required this.onChanged,
   });
 
-  final List<({T value, String label})> segments;
+  /// [enabled] 为 false 的段仍然显示 —— 灰掉但可读，理由由调用方在旁边说明。
+  /// 设计规范要求禁用项必须给出原因，不能只是消失或单纯变灰。
+  final List<({T value, String label, bool enabled})> segments;
   final T value;
   final ValueChanged<T> onChanged;
 
@@ -333,7 +335,10 @@ class SegmentedToggle<T> extends StatelessWidget {
                       ? cs.secondaryContainer
                       : Colors.transparent,
                   child: InkWell(
-                    onTap: () => onChanged(seg.value),
+                    onTap: seg.enabled ? () => onChanged(seg.value) : null,
+                    mouseCursor: seg.enabled
+                        ? SystemMouseCursors.click
+                        : SystemMouseCursors.forbidden,
                     hoverColor: cs.onSurface.withValues(
                       alpha: AppStateLayer.hover,
                     ),
@@ -342,13 +347,31 @@ class SegmentedToggle<T> extends StatelessWidget {
                       child: SizedBox(
                         height: 34,
                         child: Center(
-                          child: Text(
-                            seg.label,
-                            style: context.texts.labelLarge?.copyWith(
-                              color: seg.value == value
-                                  ? cs.onSecondaryContainer
-                                  : cs.onSurface,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (seg.value == value) ...[
+                                Icon(
+                                  Symbols.check,
+                                  size: 18,
+                                  weight: 400,
+                                  color: cs.onSecondaryContainer,
+                                ),
+                                const SizedBox(width: AppSpacing.s1 + 2),
+                              ],
+                              Text(
+                                seg.label,
+                                style: context.texts.labelLarge?.copyWith(
+                                  color: seg.value == value
+                                      ? cs.onSecondaryContainer
+                                      : seg.enabled
+                                      ? cs.onSurface
+                                      : cs.onSurface.withValues(
+                                          alpha: AppStateLayer.disabledContent,
+                                        ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),

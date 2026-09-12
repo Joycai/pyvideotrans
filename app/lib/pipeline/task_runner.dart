@@ -1,12 +1,26 @@
 import 'dart:io';
 
 import '../domain/cue.dart';
+import '../domain/language.dart';
+import '../domain/line_wrap.dart';
 import '../domain/srt.dart';
 import '../domain/task.dart';
+import '../domain/task_options.dart';
 import '../services/media.dart';
 import '../services/provider_api.dart';
 import '../services/registry.dart';
 import '../services/settings.dart';
+
+/// 识别服务的构造方式。测试注入假实现时换的就是它。
+typedef AsrFactory =
+    AsrProvider Function(String id, AppSettings settings, TaskOptions options);
+
+typedef TranslationFactory =
+    TranslationProvider Function(
+      String id,
+      AppSettings settings,
+      TaskOptions options,
+    );
 
 /// 把一个任务跑完，或者在中途安全地停下来。
 ///
@@ -17,11 +31,12 @@ class TaskRunner {
     required this.settings,
     required this.workDir,
     Media? media,
-    AsrProvider Function(String, AppSettings)? asrFactory,
-    TranslationProvider Function(String, AppSettings)? translationFactory,
+    AsrFactory? asrFactory,
+    TranslationFactory? translationFactory,
   }) : media = media ?? Media(),
-       _asrFactory = asrFactory ?? Registry.buildAsr,
-       _translationFactory = translationFactory ?? Registry.buildTranslation;
+       _asrFactory = asrFactory ?? _defaultAsrFactory,
+       _translationFactory =
+           translationFactory ?? _defaultTranslationFactory;
 
   final AppSettings settings;
 
@@ -29,8 +44,31 @@ class TaskRunner {
   final String workDir;
 
   final Media media;
-  final AsrProvider Function(String, AppSettings) _asrFactory;
-  final TranslationProvider Function(String, AppSettings) _translationFactory;
+  final AsrFactory _asrFactory;
+  final TranslationFactory _translationFactory;
+
+  /// 任务参数里的模型与提示词覆盖设置里的值 —— 参数在入队时就定死了。
+  static AsrProvider _defaultAsrFactory(
+    String id,
+    AppSettings settings,
+    TaskOptions options,
+  ) => Registry.buildAsr(
+    id,
+    settings,
+    model: options.asrModel,
+    prompt: options.asrPrompt,
+  );
+
+  static TranslationProvider _defaultTranslationFactory(
+    String id,
+    AppSettings settings,
+    TaskOptions options,
+  ) => Registry.buildTranslation(
+    id,
+    settings,
+    model: options.translationModel,
+    guidance: options.translationGuidance,
+  );
 
   /// 翻译一批失败时最多把批量减半几次。
   static const _maxBatchRetries = 3;
@@ -149,8 +187,8 @@ class TaskRunner {
       }
       task.document = SubtitleDocument(
         cues: cues,
-        sourceLanguage: task.sourceLanguage,
-        targetLanguage: task.targetLanguage,
+        sourceLanguage: task.sourceLanguage.name,
+        targetLanguage: task.targetLanguage.name,
       );
       task.note('解析字幕：${cues.length} 条');
       return;
@@ -180,10 +218,11 @@ class TaskRunner {
     skip: !task.kind.needsRecognition,
     skipNote: 'SRT 无需识别',
     () async {
-      final provider = _asrFactory(task.asrProviderId, settings);
+      final provider = _asrFactory(task.asrProviderId, settings, task.options);
       final cues = await provider.transcribe(
         audioPath: '$workDir/${task.id}.wav',
-        language: task.sourceLanguage,
+        // 下发的是语言代码（zh / en），不是界面上那个中文名。
+        language: task.sourceLanguage.code,
         token: token,
         onProgress: (done, total, {note}) {
           task.progress = total == 0 ? 0 : done / total;
@@ -195,8 +234,8 @@ class TaskRunner {
 
       task.document = SubtitleDocument(
         cues: cues,
-        sourceLanguage: task.sourceLanguage,
-        targetLanguage: task.targetLanguage,
+        sourceLanguage: task.sourceLanguage.name,
+        targetLanguage: task.targetLanguage.name,
       );
 
       final low = cues.where((c) => (c.confidence ?? 1) < Cue.lowConfidence).length;
@@ -229,7 +268,9 @@ class TaskRunner {
             cue.startMs - last.endMs < 200) {
           merged[merged.length - 1] = last.copyWith(
             endMs: cue.endMs,
-            source: '${last.source}${_join(task.sourceLanguage)}${cue.source}',
+            source: '${last.source}'
+                '${task.sourceLanguage.cjk ? '' : ' '}'
+                '${cue.source}',
           );
           joined++;
         } else {
@@ -258,6 +299,7 @@ class TaskRunner {
       final provider = _translationFactory(
         task.translationProviderId,
         settings,
+        task.options,
       );
       final cues = [...task.document.cues];
       final started = DateTime.now();
@@ -274,11 +316,11 @@ class TaskRunner {
       }
 
       task.note(
-        '翻译开始 · ${provider.info.name} · 批大小 ${settings.translationBatchSize}',
+        '翻译开始 · ${provider.info.name} · 批大小 ${task.options.translationBatchSize}',
       );
 
       var cursor = 0;
-      var batchSize = settings.translationBatchSize;
+      var batchSize = task.options.translationBatchSize;
       var halvings = 0;
 
       while (cursor < pending.length) {
@@ -294,8 +336,8 @@ class TaskRunner {
         try {
           result = await provider.translateBatch(
             lines: lines,
-            sourceLanguage: task.sourceLanguage,
-            targetLanguage: task.targetLanguage,
+            sourceLanguage: task.sourceLanguage.name,
+            targetLanguage: task.targetLanguage.name,
             token: token,
           );
         } on ProviderException catch (e) {
@@ -334,23 +376,56 @@ class TaskRunner {
         }
       });
 
-  /// 写出 SRT 产物。返回实际写出的路径。
+  /// 写出字幕产物。返回实际写出的路径。
+  ///
+  /// 折行在这里做而不是在断句阶段做：文档里存干净文本，用户在编辑器里
+  /// 改完再导出会按当前设置重新折，不会叠加上一次的硬换行。
   Future<List<String>> writeOutputs(SubtitleTask task) async {
-    final dir = settings.outputDir ?? File(task.sourcePath).parent.path;
+    final options = task.options;
+    final format = options.format;
+    if (!format.implemented) {
+      throw ProviderException(
+        '${format.label} 格式尚未实施',
+        hint: 'ASS 要带一整套样式配置，留到第二期。先导出 SRT。',
+      );
+    }
+
+    final dir = switch (options.outputLocation) {
+      OutputLocation.custom =>
+        options.outputDir ?? File(task.sourcePath).parent.path,
+      OutputLocation.besideSource => File(task.sourcePath).parent.path,
+    };
+    await Directory(dir).create(recursive: true);
+
     final stem = task.fileName.replaceAll(RegExp(r'\.[^.]*$'), '');
     final written = <String>[];
 
-    Future<void> write(String suffix, SrtField field) async {
-      final content = Srt.serialize(task.document.cues, field: field);
+    Future<void> write(Language language, SrtField field) async {
+      final limit = language.cjk
+          ? options.cjkLineLength
+          : options.latinLineLength;
+      String wrap(String text) =>
+          LineWrap.wrap(text, limit: limit, cjk: language.cjk);
+
+      final content = switch (format) {
+        SubtitleFormat.srt =>
+          Srt.serialize(task.document.cues, field: field, wrap: wrap),
+        SubtitleFormat.vtt =>
+          Srt.serializeVtt(task.document.cues, field: field, wrap: wrap),
+        SubtitleFormat.txt =>
+          Srt.serializePlain(task.document.cues, field: field),
+        SubtitleFormat.ass => '',
+      };
       if (content.trim().isEmpty) return;
-      final path = '$dir/$stem.$suffix.srt';
+
+      final path = '$dir/$stem.${_langTag(language)}.${format.extension}';
       await File(path).writeAsString(content);
       written.add(path);
     }
 
-    await write(_langTag(task.sourceLanguage), SrtField.source);
+    await write(task.sourceLanguage, SrtField.source);
     if (task.kind.needsTranslation) {
-      await write(_langTag(task.targetLanguage), SrtField.translation);
+      await write(task.targetLanguage, SrtField.translation);
     }
     return written;
   }
@@ -363,16 +438,9 @@ class TaskRunner {
     return Duration(milliseconds: (perItem * (total - done)).round());
   }
 
-  /// 中日韩等语言词间不加空格。
-  static String _join(String language) =>
-      _cjk.any(language.toLowerCase().startsWith) ? '' : ' ';
-
-  static const _cjk = ['zh', 'ja', 'ko', 'yue', 'th', 'km'];
-
-  static String _langTag(String language) {
-    final trimmed = language.trim();
-    if (trimmed.isEmpty || trimmed == 'auto') return 'src';
-    // 文件名里不要出现路径分隔符与空格。
-    return trimmed.replaceAll(RegExp(r'[\\/\s]+'), '_');
-  }
+  /// 产物文件名里的语言标签：`demo.zh.srt`。
+  ///
+  /// 用语言代码而不是中文名 —— 中文名带不进跨平台安全的文件名。
+  static String _langTag(Language language) =>
+      language.isAuto ? 'src' : language.code.replaceAll(RegExp(r'[^\w-]+'), '_');
 }

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/language.dart';
+import '../domain/task_options.dart';
 import 'openai_compatible.dart';
 import 'provider_api.dart';
 
@@ -53,6 +55,9 @@ class AppSettings extends ChangeNotifier {
   static const _kGuidance = 'translationGuidance';
   static const _kThemeMode = 'themeMode';
   static const _kOutputDir = 'outputDir';
+  static const _kCjkLineLength = 'cjkLineLength';
+  static const _kLatinLineLength = 'latinLineLength';
+  static const _kOutputFormat = 'outputFormat';
 
   Map<String, ProviderConfig> _configs = {};
 
@@ -118,6 +123,41 @@ class AppSettings extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  /// 单行字数上限。默认值沿用原 Python 实现：中日韩 15、其他 40。
+  int get cjkLineLength => _prefs.getInt(_kCjkLineLength) ?? 15;
+  set cjkLineLength(int v) {
+    _prefs.setInt(_kCjkLineLength, v.clamp(4, 60));
+    notifyListeners();
+  }
+
+  int get latinLineLength => _prefs.getInt(_kLatinLineLength) ?? 40;
+  set latinLineLength(int v) {
+    _prefs.setInt(_kLatinLineLength, v.clamp(8, 120));
+    notifyListeners();
+  }
+
+  SubtitleFormat get outputFormat =>
+      SubtitleFormat.byExtension(_prefs.getString(_kOutputFormat) ?? 'srt');
+  set outputFormat(SubtitleFormat v) => _write(_kOutputFormat, v.extension);
+
+  /// 「新建转写」打开时的默认参数。用户在对话框里改动的是这份拷贝，
+  /// 全局设置不会被顺手改掉。
+  TaskOptions defaultTaskOptions() => TaskOptions(
+    sourceLanguage: Languages.resolve(sourceLanguage),
+    asrProviderId: asrProviderId,
+    asrPrompt: asrPrompt,
+    targetLanguage: Languages.resolve(targetLanguage),
+    translationProviderId: translationProviderId,
+    translationBatchSize: translationBatchSize,
+    translationGuidance: translationGuidance,
+    cjkLineLength: cjkLineLength,
+    latinLineLength: latinLineLength,
+    format: outputFormat,
+    outputLocation:
+        outputDir == null ? OutputLocation.besideSource : OutputLocation.custom,
+    outputDir: outputDir,
+  );
 
   ProviderConfig configFor(String providerId) =>
       _configs[providerId] ?? const ProviderConfig();

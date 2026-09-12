@@ -6,6 +6,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../helpers.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/task.dart';
@@ -60,10 +62,7 @@ List<SubtitleTask> _fixtures() {
       id: id,
       sourcePath: path,
       kind: kind,
-      asrProviderId: 'openai',
-      translationProviderId: 'deepseek',
-      sourceLanguage: '中文',
-      targetLanguage: '英文',
+      options: testOptions(asr: 'openai', mt: 'deepseek', source: 'zh', target: 'en'),
       status: status,
       stage: stage,
       progress: progress,

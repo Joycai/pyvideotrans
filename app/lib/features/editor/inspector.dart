@@ -273,7 +273,7 @@ class _CueEditorState extends State<_CueEditor> {
             ],
           ),
           _Field(
-            label: '原文 · ${controller.task.sourceLanguage}',
+            label: '原文 · ${controller.task.sourceLanguage.name}',
             trailing: cue.confidence == null
                 ? null
                 : Row(
@@ -297,7 +297,7 @@ class _CueEditorState extends State<_CueEditor> {
             onSubmitted: controller.editSource,
           ),
           _Field(
-            label: '译文 · ${controller.task.targetLanguage}',
+            label: '译文 · ${controller.task.targetLanguage.name}',
             trailing: QuietButton(
               label: busy ? '翻译中…' : '重新翻译此条',
               icon: Symbols.refresh,

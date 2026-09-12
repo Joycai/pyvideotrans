@@ -81,21 +81,20 @@ abstract final class Srt {
   ///
   /// [field] 决定写哪一路文本：原文、译文，或双语（译文在上、原文在下，
   /// 与大多数播放器的双语习惯一致）。
+  /// 序列化为 SRT。
+  ///
+  /// [wrap] 在写出前处理每条的文本，用来做单行字数折行 —— 折行只发生在
+  /// 产物里，文档本身始终保持不带硬换行的干净文本，否则用户在编辑器里
+  /// 改一个字就得重新折一遍。
   static String serialize(
     List<Cue> cues, {
     SrtField field = SrtField.source,
+    String Function(String)? wrap,
   }) {
     final buffer = StringBuffer();
     var line = 0;
     for (final cue in cues) {
-      final text = switch (field) {
-        SrtField.source => cue.source,
-        SrtField.translation => cue.translation ?? '',
-        SrtField.bilingual => [
-          if (cue.hasTranslation) cue.translation!,
-          cue.source,
-        ].join('\n'),
-      };
+      final text = textOf(cue, field, wrap: wrap);
       if (text.trim().isEmpty) continue;
 
       line++;
@@ -108,6 +107,57 @@ abstract final class Srt {
         ..writeln();
     }
     return buffer.toString();
+  }
+
+  /// 序列化为 WebVTT。与 SRT 只差一个文件头和小数点分隔符。
+  static String serializeVtt(
+    List<Cue> cues, {
+    SrtField field = SrtField.source,
+    String Function(String)? wrap,
+  }) {
+    final buffer = StringBuffer()..writeln('WEBVTT')..writeln();
+    for (final cue in cues) {
+      final text = textOf(cue, field, wrap: wrap);
+      if (text.trim().isEmpty) continue;
+      buffer
+        ..writeln(
+          '${formatTimecode(cue.startMs, decimalMark: '.')} --> '
+          '${formatTimecode(cue.endMs, decimalMark: '.')}',
+        )
+        ..writeln(text)
+        ..writeln();
+    }
+    return buffer.toString();
+  }
+
+  /// 只要文字，不要时间码 —— 拿去做纪要或喂给别的工具。
+  static String serializePlain(
+    List<Cue> cues, {
+    SrtField field = SrtField.source,
+  }) {
+    final buffer = StringBuffer();
+    for (final cue in cues) {
+      final text = textOf(cue, field);
+      if (text.trim().isEmpty) continue;
+      buffer.writeln(text.replaceAll('\n', ' '));
+    }
+    return buffer.toString();
+  }
+
+  static String textOf(
+    Cue cue,
+    SrtField field, {
+    String Function(String)? wrap,
+  }) {
+    String apply(String text) => wrap == null ? text : wrap(text);
+    return switch (field) {
+      SrtField.source => apply(cue.source),
+      SrtField.translation => apply(cue.translation ?? ''),
+      SrtField.bilingual => [
+        if (cue.hasTranslation) apply(cue.translation!),
+        apply(cue.source),
+      ].join('\n'),
+    };
   }
 
   static int _toMs(RegExpMatch m, int group) {

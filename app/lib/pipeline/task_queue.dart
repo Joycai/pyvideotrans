@@ -3,7 +3,9 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../domain/media_kinds.dart';
 import '../domain/task.dart';
+import '../domain/task_options.dart';
 import '../services/provider_api.dart';
 import '../services/settings.dart';
 import 'task_runner.dart';
@@ -39,23 +41,35 @@ class TaskQueue extends ChangeNotifier {
         active.length;
   }
 
+  /// 把一批文件按同一份参数入队。「新建转写」一次选多个文件走的就是这里。
+  ///
+  /// 返回的顺序与 [paths] 一致，方便调用方选中第一个。
+  List<SubtitleTask> enqueueAll(
+    List<String> paths, {
+    TaskOptions? options,
+  }) => [
+    for (final path in paths) enqueue(sourcePath: path, options: options),
+  ];
+
+  /// 入队一个任务。
+  ///
+  /// [options] 省略时取设置里的默认值。任务类型由文件类型与
+  /// [TaskOptions.translate] 共同决定：字幕文件只能翻译，音视频则看用户
+  /// 有没有勾「转写完成后继续翻译」。
   SubtitleTask enqueue({
     required String sourcePath,
-    required TaskKind kind,
-    String? asrProviderId,
-    String? translationProviderId,
-    String? sourceLanguage,
-    String? targetLanguage,
+    TaskOptions? options,
+    TaskKind? kind,
   }) {
+    final opts = options ?? settings.defaultTaskOptions();
     final task = SubtitleTask(
       id: const Uuid().v4(),
       sourcePath: sourcePath,
-      kind: kind,
-      asrProviderId: asrProviderId ?? settings.asrProviderId,
-      translationProviderId:
-          translationProviderId ?? settings.translationProviderId,
-      sourceLanguage: sourceLanguage ?? settings.sourceLanguage,
-      targetLanguage: targetLanguage ?? settings.targetLanguage,
+      kind: kind ??
+          (MediaKinds.isSubtitle(sourcePath)
+              ? TaskKind.translate
+              : opts.kind),
+      options: opts,
     );
     task.note('任务已加入队列（位置 ${_tasks.where((t) => t.isActive).length + 1}）');
     _tasks.insert(0, task);
