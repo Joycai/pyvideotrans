@@ -1,0 +1,6 @@
+tags:
+  # 截图测试依赖宿主机的系统字体，换机器像素就会不一样，所以默认不跑。
+  # 核对界面：      flutter test --tags golden --run-skipped
+  # 重新生成截图：  flutter test --tags golden --run-skipped --update-goldens
+  golden:
+    skip: "默认跳过（依赖宿主机字体）。加 --tags golden --run-skipped 运行。"

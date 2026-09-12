@@ -274,7 +274,17 @@ class _ButtonContent extends StatelessWidget {
           Icon(icon, size: iconSize, color: color, weight: 400),
           const SizedBox(width: AppSpacing.s1 + 2),
         ],
-        Text(label, style: style?.copyWith(color: color)),
+        // 表格里的操作列很窄（「从准备阶段继续」这类长文案放不下），
+        // 让文字省略而不是溢出。
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            style: style?.copyWith(color: color),
+          ),
+        ),
       ],
     );
   }

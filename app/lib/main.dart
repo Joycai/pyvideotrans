@@ -1,21 +1,156 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'core/theme/app_theme.dart';
+import 'domain/task.dart';
 import 'features/shell/app_shell.dart';
 import 'features/shell/nav_rail.dart';
 import 'features/shell/status_bar.dart';
+import 'features/tasks/tasks_page.dart';
+import 'pipeline/task_queue.dart';
+import 'pipeline/task_runner.dart';
+import 'services/media.dart';
+import 'services/registry.dart';
+import 'services/settings.dart';
 
-void main() => runApp(const SubtitleStudioApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final settings = await AppSettings.load();
+  final workDir = '${(await getApplicationSupportDirectory()).path}/work';
+  await Directory(workDir).create(recursive: true);
+
+  final media = Media();
+  final queue = TaskQueue(
+    runner: TaskRunner(settings: settings, workDir: workDir, media: media),
+    settings: settings,
+  );
+
+  runApp(
+    SubtitleStudioApp(settings: settings, queue: queue, media: media),
+  );
+}
 
 class SubtitleStudioApp extends StatefulWidget {
-  const SubtitleStudioApp({super.key});
+  const SubtitleStudioApp({
+    super.key,
+    required this.settings,
+    required this.queue,
+    required this.media,
+  });
+
+  final AppSettings settings;
+  final TaskQueue queue;
+  final Media media;
 
   @override
   State<SubtitleStudioApp> createState() => _SubtitleStudioAppState();
 }
 
 class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
+  final _tasksKey = GlobalKey<TasksPageState>();
   AppSection _section = AppSection.tasks;
+  SubtitleTask? _editing;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.queue.addListener(_refresh);
+    widget.settings.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    widget.queue.removeListener(_refresh);
+    widget.settings.removeListener(_refresh);
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  ThemeMode get _themeMode => switch (widget.settings.themeMode) {
+    'light' => ThemeMode.light,
+    'dark' => ThemeMode.dark,
+    _ => ThemeMode.system,
+  };
+
+  void _openEditor(SubtitleTask task) => setState(() {
+    _editing = task;
+    _section = AppSection.editor;
+  });
+
+  StatusSnapshot get _status {
+    final queue = widget.queue;
+    final running = queue.countWhere(
+      (t) => t.status == TaskStatus.running || t.status == TaskStatus.queued,
+    );
+    final asr = Registry.asrInfo(widget.settings.asrProviderId);
+    final mt = Registry.translationInfo(widget.settings.translationProviderId);
+
+    return StatusSnapshot(
+      localEngine: widget.media.available
+          ? 'ffmpeg · 就绪'
+          : 'ffmpeg · 未找到',
+      cloud: (
+        connected: asr != null && widget.settings.isConfigured(asr),
+        label: asr == null
+            ? '识别 · 未选择'
+            : widget.settings.isConfigured(asr)
+            ? '${asr.name} · 已配置'
+            : '${asr.name} · 未配置',
+      ),
+      localBackend: (
+        connected: mt != null && widget.settings.isConfigured(mt),
+        label: mt == null
+            ? '翻译 · 未选择'
+            : widget.settings.isConfigured(mt)
+            ? '${mt.name} · 已配置'
+            : '${mt.name} · 未配置',
+      ),
+      runningTasks: running,
+      overallProgress: queue.overallProgress,
+      etaText: queue.running?.eta == null
+          ? null
+          : '剩余约 ${queue.running!.eta!.inMinutes} 分钟',
+    );
+  }
+
+  PageChrome get _chrome {
+    final queue = widget.queue;
+    switch (_section) {
+      case AppSection.tasks:
+        final running = queue.countWhere(
+          (t) => t.status == TaskStatus.running,
+        );
+        final failed = queue.countWhere((t) => t.status == TaskStatus.failed);
+        return PageChrome(
+          title: '任务',
+          subtitle: '${queue.tasks.length} 个任务 · $running 个进行中 · $failed 个失败',
+          actions: [
+            TasksPageActions(
+              onNewTranslate: () =>
+                  _tasksKey.currentState?.browseSubtitles(),
+              onNewTranscribe: () => _tasksKey.currentState?.browseMedia(),
+            ),
+          ],
+        );
+      case AppSection.editor:
+        final doc = _editing?.document;
+        return PageChrome(
+          title: '编辑器',
+          subtitle: _editing == null
+              ? '从任务页选择一个已完成的任务'
+              : '${_editing!.fileName} · ${doc!.cues.length} 条 · '
+                    '${_editing!.sourceLanguage} → ${_editing!.targetLanguage}',
+        );
+      default:
+        return PageChrome(title: _section.label);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,12 +159,55 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       debugShowCheckedModeBanner: false,
       theme: lightTheme,
       darkTheme: darkTheme,
+      themeMode: _themeMode,
       home: AppShell(
         section: _section,
         onSectionChanged: (s) => setState(() => _section = s),
-        chrome: PageChrome(title: _section.label),
-        status: StatusSnapshot.idle,
-        child: const SizedBox(),
+        chrome: _chrome,
+        status: _status,
+        child: _body,
+      ),
+    );
+  }
+
+  Widget get _body => switch (_section) {
+    AppSection.tasks => TasksPage(
+      key: _tasksKey,
+      queue: widget.queue,
+      onOpenEditor: _openEditor,
+    ),
+    _ => _Placeholder(section: _section),
+  };
+}
+
+class _Placeholder extends StatelessWidget {
+  const _Placeholder({required this.section});
+
+  final AppSection section;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(section.icon, size: 32, weight: 400, color: cs.outline),
+            const SizedBox(height: 12),
+            Text(
+              section.label,
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
       ),
     );
   }
