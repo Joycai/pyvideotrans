@@ -135,14 +135,7 @@ class _ModelTextFieldState extends State<ModelTextField> {
       controller: _controller,
       focusNode: _focus,
       style: context.texts.bodyMedium,
-      decoration: InputDecoration(
-        isCollapsed: true,
-        border: InputBorder.none,
-        hintText: widget.hint,
-        hintStyle: context.texts.bodyMedium?.copyWith(
-          color: context.colors.onSurfaceVariant,
-        ),
-      ),
+      decoration: bareInputDecoration(context, hint: widget.hint),
       onChanged: (v) => widget.onChanged(v.trim().isEmpty ? null : v.trim()),
     ),
   );

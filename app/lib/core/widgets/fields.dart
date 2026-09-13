@@ -154,6 +154,7 @@ class AppDropdown<T> extends StatefulWidget {
     required this.groups,
     required this.onChanged,
     this.display,
+    this.leading,
     this.enabled = true,
     this.error = false,
     this.menuWidth = 344,
@@ -166,6 +167,9 @@ class AppDropdown<T> extends StatefulWidget {
 
   /// 收起时显示的文字。默认取选中项的 label。
   final String? display;
+
+  /// 收起时文字前面的小图标（设置页的服务下拉用它区分云端 / 本机）。
+  final Widget? leading;
 
   final bool enabled;
   final bool error;
@@ -242,6 +246,10 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
             : null,
         child: Row(
           children: [
+            if (widget.leading != null) ...[
+              widget.leading!,
+              const SizedBox(width: AppSpacing.s2),
+            ],
             Expanded(
               child: Text(
                 label,
@@ -432,6 +440,25 @@ class _EntryBadge extends StatelessWidget {
   }
 }
 
+/// 放在 [ControlSurface] 里的 TextField 用的装饰：描边、底色都由外面的
+/// 控件皮负责，这里必须把主题里的 enabledBorder / focusedBorder 一并关掉，
+/// 只关 `border` 会留下第二圈描边。
+InputDecoration bareInputDecoration(BuildContext context, {String? hint}) =>
+    InputDecoration(
+      isCollapsed: true,
+      filled: false,
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      disabledBorder: InputBorder.none,
+      errorBorder: InputBorder.none,
+      focusedErrorBorder: InputBorder.none,
+      hintText: hint,
+      hintStyle: context.texts.bodyMedium?.copyWith(
+        color: context.colors.onSurfaceVariant,
+      ),
+    );
+
 /// 数字输入。等宽 tnum，免得改数字时框里的内容左右跳。
 class NumberField extends StatefulWidget {
   const NumberField({
@@ -488,10 +515,7 @@ class _NumberFieldState extends State<NumberField> {
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       style: kTimecodeStyle.copyWith(color: context.colors.onSurface),
-      decoration: const InputDecoration(
-        isCollapsed: true,
-        border: InputBorder.none,
-      ),
+      decoration: bareInputDecoration(context),
       onChanged: (raw) {
         final parsed = int.tryParse(raw);
         if (parsed != null && parsed >= widget.min && parsed <= widget.max) {
@@ -550,14 +574,7 @@ class _MultilineFieldState extends State<MultilineField> {
       maxLines: null,
       minLines: 2,
       style: context.texts.bodyMedium,
-      decoration: InputDecoration(
-        isCollapsed: true,
-        border: InputBorder.none,
-        hintText: widget.hint,
-        hintStyle: context.texts.bodyMedium?.copyWith(
-          color: context.colors.onSurfaceVariant,
-        ),
-      ),
+      decoration: bareInputDecoration(context, hint: widget.hint),
       onChanged: widget.onChanged,
     ),
   );

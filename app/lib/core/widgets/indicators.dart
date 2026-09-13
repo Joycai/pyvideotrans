@@ -17,6 +17,9 @@ enum TagTone {
   /// 更弱的描边（未翻译、待下载…）。
   quiet,
 
+  /// 灰底无边（设置页「第一期未实施」）：比描边更退后，不与「未配置」抢眼。
+  muted,
+
   error,
   success,
 }
@@ -54,6 +57,11 @@ class StatusTag extends StatelessWidget {
         cs.outlineVariant,
       ),
       TagTone.quiet => (Colors.transparent, cs.onSurfaceVariant, cs.outline),
+      TagTone.muted => (
+        cs.surfaceContainer,
+        cs.onSurfaceVariant,
+        Colors.transparent,
+      ),
       TagTone.error => (
         cs.errorContainer,
         cs.onErrorContainer,
