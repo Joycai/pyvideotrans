@@ -4,6 +4,7 @@ import 'dart:io';
 import '../domain/cue.dart';
 import '../domain/language.dart';
 import '../domain/line_wrap.dart';
+import '../domain/segmenter.dart';
 import '../domain/srt.dart';
 import '../domain/task.dart';
 import '../domain/task_options.dart';
@@ -277,44 +278,28 @@ class TaskRunner {
     },
   );
 
-  /// 断句：合并过短的分段，避免字幕闪一下就过去。
+  /// 断句：修正重叠、合并过短的分段。规则见 [Segmenter]。
   Future<void> _segment(SubtitleTask task, void Function() onChange) => _stage(
     task,
     TaskStage.segment,
     onChange,
     skip: !task.kind.needsRecognition,
     () async {
-      const minDurationMs = 500;
-      final cues = task.document.cues;
-      final merged = <Cue>[];
-      var joined = 0;
-
-      for (final cue in cues) {
-        final last = merged.isEmpty ? null : merged.last;
-        // 过短且与上一条紧邻时并进去；相隔较远说明是独立的短应答，保留。
-        // 不同说话人的不并 —— 短应答恰恰常是换人。
-        if (last != null &&
-            cue.durationMs < minDurationMs &&
-            cue.startMs - last.endMs < 200 &&
-            last.speaker == cue.speaker) {
-          merged[merged.length - 1] = last.copyWith(
-            endMs: cue.endMs,
-            source:
-                '${last.source}'
-                '${task.sourceLanguage.cjk ? '' : ' '}'
-                '${cue.source}',
-          );
-          joined++;
-        } else {
-          merged.add(cue.copyWith(index: merged.length + 1));
-        }
-      }
+      final result = Segmenter(
+        minDurationMs: task.options.minCueMs,
+        maxDurationMs: task.options.maxCueMs,
+      ).run(
+        task.document.cues,
+        cjk: task.sourceLanguage.cjk,
+      );
+      final merged = result.cues;
+      final joined = result.joined;
 
       task.document = task.document.copyWith(cues: merged);
       task.stages[TaskStage.segment] = task.stages[TaskStage.segment]!.copyWith(
         note: '${merged.length} 条',
       );
-      task.note('断句完成，合并短句 $joined 处');
+      task.note('断句完成，合并短句 $joined 处，拆分过长字幕 ${result.split} 处');
     },
   );
 
@@ -340,7 +325,8 @@ class TaskRunner {
       // 已有译文的跳过 —— 这就是翻译阶段的断点续跑。
       final pending = [
         for (final (i, c) in cues.indexed)
-          if (!c.hasTranslation) i,
+          // 原文为空的是识别被跳过的占位条，送去翻译只会浪费一次请求。
+          if (!c.hasTranslation && c.source.trim().isNotEmpty) i,
       ];
 
       if (pending.isEmpty) {
@@ -414,6 +400,18 @@ class TaskRunner {
         final outputs = await writeOutputs(task);
         for (final path in outputs) {
           task.note('已写出 $path');
+        }
+        // 空文本写不进 SRT（空块会和下一块粘在一起），产物里只能略过；
+        // 在日志里说清楚，免得用户以为那段话本来就没有字幕。
+        final blank = task.document.cues
+            .where((c) => c.source.trim().isEmpty)
+            .length;
+        if (blank > 0) {
+          task.note(
+            '有 $blank 条字幕原文为空（识别时被跳过的段），未写入产物；'
+            '在编辑器里补上文字后重新导出',
+            LogLevel.warn,
+          );
         }
       });
 

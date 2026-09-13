@@ -361,10 +361,12 @@ class _ActionsCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 失败/取消的第一操作是「从 X 阶段继续」—— 用文字按钮，因为这是
-    // 用户此刻最需要知道的事：重试不会从头再来。
+    // 失败/取消/暂停的第一操作是「从 X 阶段继续」—— 用文字按钮，因为这是
+    // 用户此刻最需要知道的事：重试不会从头再来。暂停来自应用重启时恢复的
+    // 未完成任务。
     if (task.status == TaskStatus.failed ||
-        task.status == TaskStatus.cancelled) {
+        task.status == TaskStatus.cancelled ||
+        task.status == TaskStatus.paused) {
       return Row(
         children: [
           Flexible(

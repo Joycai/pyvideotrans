@@ -57,6 +57,17 @@ class Cue {
     return CueState.ok;
   }
 
+  /// 两条字幕合并后的置信度：取较低的一方。
+  ///
+  /// 取平均会把一段低置信度的内容「稀释」掉，合并后不再标待校对；而合并后
+  /// 的字幕里确实含有可疑内容，仍该让人看一眼。编辑器与断句阶段共用这条规则。
+  static double? mergedConfidence(double? a, double? b) => switch ((a, b)) {
+    (final x?, final y?) => x < y ? x : y,
+    (final x?, null) => x,
+    (null, final y?) => y,
+    _ => null,
+  };
+
   Cue copyWith({
     int? index,
     int? startMs,
@@ -115,6 +126,22 @@ class SubtitleDocument {
 
   static const empty = SubtitleDocument(cues: []);
 
+  Map<String, Object?> toJson() => {
+    'cues': [for (final c in cues) c.toJson()],
+    if (sourceLanguage != null) 'sourceLanguage': sourceLanguage,
+    if (targetLanguage != null) 'targetLanguage': targetLanguage,
+  };
+
+  factory SubtitleDocument.fromJson(Map<String, Object?> json) =>
+      SubtitleDocument(
+        cues: [
+          for (final c in json['cues'] as List? ?? const [])
+            Cue.fromJson((c as Map).cast<String, Object?>()),
+        ],
+        sourceLanguage: json['sourceLanguage'] as String?,
+        targetLanguage: json['targetLanguage'] as String?,
+      );
+
   int get reviewCount => cues.where((c) => c.state == CueState.review).length;
   int get untranslatedCount =>
       cues.where((c) => c.state == CueState.untranslated).length;
@@ -149,8 +176,10 @@ class SubtitleDocument {
   SubtitleDocument splitAt(int position, int charOffset) {
     final cue = cues[position];
     final text = cue.source;
-    final cut = charOffset.clamp(1, text.length - 1);
+    // 先判长度：不足两个字时 clamp 的下限会大于上限，直接抛 ArgumentError。
+    // 识别被跳过的段会留下空文本的占位条，正好会走到这里。
     if (text.length < 2) return this;
+    final cut = charOffset.clamp(1, text.length - 1);
 
     final ratio = cut / text.length;
     final mid = cue.startMs + (cue.durationMs * ratio).round();
@@ -191,12 +220,7 @@ class SubtitleDocument {
           ? '${a.translation ?? ''}${cjk ? '' : ' '}${b.translation ?? ''}'
                 .trim()
           : null,
-      confidence: switch ((a.confidence, b.confidence)) {
-        (final x?, final y?) => (x + y) / 2,
-        (final x?, null) => x,
-        (null, final y?) => y,
-        _ => null,
-      },
+      confidence: Cue.mergedConfidence(a.confidence, b.confidence),
       reviewed: a.reviewed && b.reviewed,
     );
 

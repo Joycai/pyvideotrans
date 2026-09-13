@@ -39,6 +39,8 @@ void main() {
       expect(o.targetLanguage.code, 'en');
       expect(o.cjkLineLength, 15);
       expect(o.latinLineLength, 40);
+      expect(o.minCueMs, 500);
+      expect(o.maxCueMs, 10000);
       expect(o.format, SubtitleFormat.srt);
     });
 
@@ -50,6 +52,16 @@ void main() {
       );
       s.outputDir = work.path;
       expect(s.defaultTaskOptions().outputLocation, OutputLocation.custom);
+    });
+
+    test('字幕时长上下限被限制在合理区间，并带进任务参数', () async {
+      final s = await freshSettings()
+        ..minCueMs = -5
+        ..maxCueMs = 999999;
+      expect(s.minCueMs, 0);
+      expect(s.maxCueMs, 60000);
+      s.maxCueMs = 15000;
+      expect(s.defaultTaskOptions().maxCueMs, 15000);
     });
 
     test('单行字数被限制在合理区间', () async {
@@ -288,6 +300,8 @@ void _jsonTests() {
         translationBatchSize: 7,
         bilingual: BilingualLayout.targetAbove,
         cjkLineLength: 20,
+        minCueMs: 800,
+        maxCueMs: 12000,
         format: SubtitleFormat.vtt,
         outputLocation: OutputLocation.custom,
         outputDir: '/out',
@@ -314,11 +328,13 @@ void _jsonTests() {
       final o = TaskOptions.fromJson({
         'translationBatchSize': 'many',
         'cjkLineLength': 999,
+        'maxCueMs': 999999,
         'format': 'ass',
         'outputLocation': 'custom',
       }, fallback: fallback);
       expect(o.translationBatchSize, fallback.translationBatchSize);
       expect(o.cjkLineLength, 60);
+      expect(o.maxCueMs, 60000);
       expect(o.format, SubtitleFormat.ass);
       expect(o.outputLocation, OutputLocation.besideSource);
       expect(o.outputDir, isNull);

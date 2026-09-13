@@ -382,6 +382,26 @@ void main() {
       expect(task.document.cues.first.source, 'hello world');
     });
 
+    test('识别被跳过的空字幕不送去翻译，导出时在日志里提示', () async {
+      final (task, runner, _) = await transcribeTask(
+        translate: true,
+        cues: const [
+          Cue(index: 1, startMs: 0, endMs: 2000, source: '第一句'),
+          Cue(index: 2, startMs: 2000, endMs: 4000, source: '', confidence: 0),
+        ],
+      );
+      await runner.run(task, token: CancellationToken(), onChange: () {});
+      expect(task.status, TaskStatus.done);
+      expect(task.document.cues[0].translation, 'EN:第一句');
+      expect(task.document.cues[1].translation, isNull);
+      expect(
+        task.log.any(
+          (l) => l.level == LogLevel.warn && l.message.contains('有 1 条字幕原文为空'),
+        ),
+        isTrue,
+      );
+    });
+
     test('识别失败后续跑，检查点原样交回，完成后清掉', () async {
       final (task, runner, asr) = await transcribeTask();
       asr.failTimes = 1;

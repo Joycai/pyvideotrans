@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:collection';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
@@ -8,15 +10,26 @@ import '../domain/task.dart';
 import '../domain/task_options.dart';
 import '../services/provider_api.dart';
 import '../services/settings.dart';
+import '../services/task_store.dart';
 import 'task_runner.dart';
 
 /// 任务队列。串行执行 —— 识别和翻译都受服务端限流约束，并发跑只会更慢更容易被拒，
 /// 而且本地模型阶段还要抢 GPU。
 class TaskQueue extends ChangeNotifier {
-  TaskQueue({required this.runner, required this.settings});
+  TaskQueue({required this.runner, required this.settings, this.store});
 
   final TaskRunner runner;
   final AppSettings settings;
+
+  /// 持久化。null 时任务只在内存里（测试里多数这样用）。
+  final TaskStore? store;
+
+  /// 待写盘的任务 id。进度回调很密，攒一小段时间一起写。
+  final Set<String> _dirty = {};
+  final Set<String> _removed = {};
+  Timer? _saveTimer;
+  Future<void> _saving = Future.value();
+  static const _saveDelay = Duration(milliseconds: 300);
 
   final List<SubtitleTask> _tasks = [];
   final Map<String, CancellationToken> _tokens = {};
@@ -32,6 +45,77 @@ class TaskQueue extends ChangeNotifier {
   SubtitleTask? byId(String id) => _tasks.where((t) => t.id == id).firstOrNull;
 
   int countWhere(bool Function(SubtitleTask) test) => _tasks.where(test).length;
+
+  /// 从磁盘恢复任务。只在启动时调一次。
+  ///
+  /// 上次退出时还在跑或排队的任务不自动开跑 —— 用户可能正是因为它出了问题
+  /// 才退出的。标成已暂停，界面上照常给出「继续」。
+  Future<void> restore() async {
+    final s = store;
+    if (s == null) return;
+    final loaded = await s.loadAll(fallbackOptions: settings.defaultTaskOptions());
+    for (final task in loaded) {
+      if (task.status != TaskStatus.running &&
+          task.status != TaskStatus.queued) {
+        continue;
+      }
+      task.status = TaskStatus.paused;
+      task.eta = null;
+      for (final entry in task.stages.entries) {
+        if (entry.value.state == StageState.active) {
+          task.stages[entry.key] = const StageRecord();
+        }
+      }
+      task.note('应用退出时任务未完成，已暂停；可从${task.resumeStage.label}阶段继续', LogLevel.warn);
+      persist(task);
+    }
+    _tasks
+      ..clear()
+      ..addAll(loaded);
+    super.notifyListeners();
+  }
+
+  /// 标记任务需要写盘。编辑器改了文档也调这里。
+  void persist(SubtitleTask task) {
+    if (store == null) return;
+    _dirty.add(task.id);
+    _saveTimer ??= Timer(_saveDelay, flush);
+  }
+
+  /// 立即把攒着的改动写盘。退出前调一次。写盘串行进行，同一个任务不会
+  /// 两次写入交错。
+  Future<void> flush() {
+    final s = store;
+    if (s == null) return Future.value();
+    _saveTimer?.cancel();
+    _saveTimer = null;
+    final ids = [..._dirty];
+    final removed = [..._removed];
+    _dirty.clear();
+    _removed.clear();
+    return _saving = _saving.then((_) async {
+      for (final id in removed) {
+        await s.delete(id);
+      }
+      for (final id in ids) {
+        final task = byId(id);
+        if (task == null) continue;
+        try {
+          await s.save(task);
+        } on FileSystemException {
+          // 写盘失败不影响任务本身；下次状态变化会再写。
+        }
+      }
+    });
+  }
+
+  /// 进度回调走这里：顺带把正在跑的任务标记为待写盘。
+  @override
+  void notifyListeners() {
+    final running = this.running;
+    if (running != null) persist(running);
+    super.notifyListeners();
+  }
 
   /// 整体进度：进行中任务的平均值。没有进行中的任务时为 0。
   double get overallProgress {
@@ -69,6 +153,7 @@ class TaskQueue extends ChangeNotifier {
     );
     task.note('任务已加入队列（位置 ${_tasks.where((t) => t.isActive).length + 1}）');
     _tasks.insert(0, task);
+    persist(task);
     notifyListeners();
     _pump();
     return task;
@@ -81,6 +166,7 @@ class TaskQueue extends ChangeNotifier {
     if (task != null && task.status == TaskStatus.queued) {
       task.status = TaskStatus.cancelled;
       task.note('排队中被取消', LogLevel.warn);
+      persist(task);
       notifyListeners();
     }
   }
@@ -124,6 +210,7 @@ class TaskQueue extends ChangeNotifier {
           ? '从识别阶段继续：${cp.doneCount} / ${cp.total ?? cp.length} 段已完成，只重试其余'
           : '从${task.resumeStage.label}阶段继续',
     );
+    persist(task);
     notifyListeners();
     _pump();
   }
@@ -146,6 +233,11 @@ class TaskQueue extends ChangeNotifier {
     cancel(id);
     _tasks.removeWhere((t) => t.id == id);
     _tokens.remove(id);
+    if (store != null) {
+      _dirty.remove(id);
+      _removed.add(id);
+      _saveTimer ??= Timer(_saveDelay, flush);
+    }
     notifyListeners();
   }
 
@@ -165,6 +257,7 @@ class TaskQueue extends ChangeNotifier {
 
     _tokens.remove(next.id);
     _runningId = null;
+    persist(next);
     notifyListeners();
 
     // 继续下一个。

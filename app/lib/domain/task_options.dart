@@ -87,6 +87,8 @@ class TaskOptions {
     this.bilingual = BilingualLayout.targetOnly,
     this.cjkLineLength = 15,
     this.latinLineLength = 40,
+    this.minCueMs = 500,
+    this.maxCueMs = 10000,
     this.format = SubtitleFormat.srt,
     this.outputLocation = OutputLocation.besideSource,
     this.outputDir,
@@ -123,6 +125,12 @@ class TaskOptions {
   /// 单行字数上限：中日韩一档，其他语言一档。
   final int cjkLineLength;
   final int latinLineLength;
+
+  /// 断句阶段的字幕时长下限（毫秒）：短于它且紧跟上一条的并进上一条。
+  final int minCueMs;
+
+  /// 断句阶段的字幕时长上限（毫秒）：长于它的按标点拆开。
+  final int maxCueMs;
 
   final SubtitleFormat format;
   final OutputLocation outputLocation;
@@ -164,6 +172,8 @@ class TaskOptions {
     'bilingual': bilingual.name,
     'cjkLineLength': cjkLineLength,
     'latinLineLength': latinLineLength,
+    'minCueMs': minCueMs,
+    'maxCueMs': maxCueMs,
     'format': format.extension,
     'outputLocation': outputLocation.name,
     'outputDir': outputDir,
@@ -220,6 +230,8 @@ class TaskOptions {
         'latinLineLength',
         fallback.latinLineLength,
       ).clamp(8, 120),
+      minCueMs: pick('minCueMs', fallback.minCueMs).clamp(0, 3000),
+      maxCueMs: pick('maxCueMs', fallback.maxCueMs).clamp(2000, 60000),
       format: SubtitleFormat.byExtension(
         pick('format', fallback.format.extension),
       ),
@@ -246,6 +258,8 @@ class TaskOptions {
     BilingualLayout? bilingual,
     int? cjkLineLength,
     int? latinLineLength,
+    int? minCueMs,
+    int? maxCueMs,
     SubtitleFormat? format,
     OutputLocation? outputLocation,
     Object? outputDir = _unset,
@@ -266,6 +280,8 @@ class TaskOptions {
     bilingual: bilingual ?? this.bilingual,
     cjkLineLength: cjkLineLength ?? this.cjkLineLength,
     latinLineLength: latinLineLength ?? this.latinLineLength,
+    minCueMs: minCueMs ?? this.minCueMs,
+    maxCueMs: maxCueMs ?? this.maxCueMs,
     format: format ?? this.format,
     outputLocation: outputLocation ?? this.outputLocation,
     outputDir: identical(outputDir, _unset)

@@ -219,19 +219,31 @@ class Media {
   }
 
   /// 从 [sourcePath] 切出 [startMs, endMs) 到 [outputPath]，保持 16 kHz 单声道。
+  ///
+  /// [padMs] 在片段前后各补一段静音，而不是多截真实音频：多截会把相邻片段
+  /// 的半个词带进来，识别出的文字与时间码对不上，相邻两段还会重复识别同一个词。
   Future<void> cutAudio({
     required String sourcePath,
     required String outputPath,
     required int startMs,
     required int endMs,
     required CancellationToken token,
+    int padMs = 0,
   }) async {
     await File(outputPath).parent.create(recursive: true);
+    // 用 -ss + -t（时长）而不是 -to：-to 放在 -i 之前时，
+    // 不同 ffmpeg 版本里它相对的是输入起点还是 seek 之后并不一致，
+    // 切出来的长度会差出一个 startMs。wav 没有关键帧，输入端 seek 是逐样本精确的。
+    // -t 也放在输入端：只限定读多少原音频，补的静音不受它截断。
     await _runFfmpeg([
       '-y',
       '-ss', (startMs / 1000).toStringAsFixed(3),
-      '-to', (endMs / 1000).toStringAsFixed(3),
+      '-t', ((endMs - startMs) / 1000).toStringAsFixed(3),
       '-i', sourcePath,
+      if (padMs > 0) ...[
+        '-af',
+        'adelay=$padMs:all=1,apad=pad_dur=${(padMs / 1000).toStringAsFixed(3)}',
+      ],
       '-ac', '1',
       '-ar', '16000',
       '-c:a', 'pcm_s16le',

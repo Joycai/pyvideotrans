@@ -547,6 +547,47 @@ class SettingsPageState extends State<SettingsPage> {
             ],
           ),
         ),
+        SettingsRow(
+          label: '字幕时长',
+          note: '识别后断句：短于下限且紧跟上一条的并进去，长于上限的按标点拆开。',
+          stacked: stacked,
+          child: Wrap(
+            spacing: AppSpacing.s4,
+            runSpacing: AppSpacing.s3,
+            children: [
+              lineLength(
+                '最短（毫秒）',
+                NumberField(
+                  key: ValueKey('min-cue-${s.minCueMs}'),
+                  value: s.minCueMs,
+                  min: 0,
+                  max: 3000,
+                  width: 132,
+                  onChanged: (v) {
+                    if (v == s.minCueMs) return;
+                    s.minCueMs = v;
+                    _touch(SettingsSectionKey.defaults, typed: true);
+                  },
+                ),
+              ),
+              lineLength(
+                '最长（秒）',
+                NumberField(
+                  key: ValueKey('max-cue-${s.maxCueMs}'),
+                  value: s.maxCueMs ~/ 1000,
+                  min: 2,
+                  max: 60,
+                  width: 132,
+                  onChanged: (v) {
+                    if (v * 1000 == s.maxCueMs) return;
+                    s.maxCueMs = v * 1000;
+                    _touch(SettingsSectionKey.defaults, typed: true);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

@@ -41,9 +41,15 @@ void main() {
       for (final c in clips) {
         expect(File(c.path).lengthSync(), greaterThan(1000));
       }
-      // 每段带了 200ms 余量，但不会越过文件边界。
+      // 前后各补 200ms 静音：文件比语音段长 400ms，文件起点早 200ms。
+      for (final c in clips) {
+        expect(c.fileStartMs, c.startMs - 200);
+      }
       final probe = await Media().probeDuration(clips[1].path);
-      expect(probe!.inMilliseconds, closeTo(1200, 150));
+      expect(
+        probe!.inMilliseconds,
+        closeTo(clips[1].endMs - clips[1].startMs + 400, 30),
+      );
     },
     skip: hasFfmpeg ? false : '本机没有 ffmpeg',
   );
