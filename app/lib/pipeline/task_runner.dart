@@ -322,7 +322,8 @@ class TaskRunner {
       // 已有译文的跳过 —— 这就是翻译阶段的断点续跑。
       final pending = [
         for (final (i, c) in cues.indexed)
-          if (!c.hasTranslation) i,
+          // 原文为空的是识别被跳过的占位条，送去翻译只会浪费一次请求。
+          if (!c.hasTranslation && c.source.trim().isNotEmpty) i,
       ];
 
       if (pending.isEmpty) {
@@ -396,6 +397,18 @@ class TaskRunner {
         final outputs = await writeOutputs(task);
         for (final path in outputs) {
           task.note('已写出 $path');
+        }
+        // 空文本写不进 SRT（空块会和下一块粘在一起），产物里只能略过；
+        // 在日志里说清楚，免得用户以为那段话本来就没有字幕。
+        final blank = task.document.cues
+            .where((c) => c.source.trim().isEmpty)
+            .length;
+        if (blank > 0) {
+          task.note(
+            '有 $blank 条字幕原文为空（识别时被跳过的段），未写入产物；'
+            '在编辑器里补上文字后重新导出',
+            LogLevel.warn,
+          );
         }
       });
 
