@@ -25,6 +25,8 @@ Windows 把 `ffmpeg.exe` 放进应用目录下的 `ffmpeg` 文件夹即可。
 
 首次使用先去**设置**里填识别与翻译服务的地址、模型和密钥。
 
+打包 dmg / Windows 安装包以及应用图标的生成见 [packaging/README.md](packaging/README.md)。
+
 ## 架构
 
 ```
