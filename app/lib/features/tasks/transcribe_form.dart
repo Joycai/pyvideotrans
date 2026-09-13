@@ -260,6 +260,7 @@ class TranscribeFormController extends ChangeNotifier {
     settings,
     language: _options.sourceLanguage,
     model: _options.asrModel,
+    diarize: _options.diarize,
   );
 
   Readiness get translationReadiness => ProviderReadiness.translation(
@@ -409,8 +410,16 @@ class TranscribeRecognizeSection extends StatelessWidget {
           (id) => ProviderReadiness.asr(id, form.settings),
         ),
         // 换服务就把模型清掉，否则会把上一家的模型名发给下一家。
-        onChanged: (id) =>
-            form.update((o) => o.copyWith(asrProviderId: id, asrModel: null)),
+        // 新服务不支持说话人分离就把开关一并关掉，别留一个看不见的 true。
+        onChanged: (id) => form.update(
+          (o) => o.copyWith(
+            asrProviderId: id,
+            asrModel: null,
+            diarize:
+                o.diarize &&
+                (Registry.asrInfo(id)?.supportsDiarization ?? false),
+          ),
+        ),
       ),
     );
     final model = modelField(
@@ -424,6 +433,10 @@ class TranscribeRecognizeSection extends StatelessWidget {
       needsApiKey: info?.needsApiKey ?? true,
       onOpenSettings: onOpenSettings,
     );
+    // 只有支持的服务才有这个开关；不支持的连灰掉的都不给，免得用户去找原因。
+    final diarize = info != null && info.supportsDiarization
+        ? _DiarizeToggle(form: form)
+        : null;
 
     if (flat) {
       return flatSection(
@@ -444,6 +457,7 @@ class TranscribeRecognizeSection extends StatelessWidget {
           ),
           twoColumn(language, service, gap: gap),
           model,
+          ?diarize,
           status,
         ],
       );
@@ -471,9 +485,56 @@ class TranscribeRecognizeSection extends StatelessWidget {
                 )
               : const SizedBox.shrink(),
         ),
+        if (diarize != null) ...[
+          const SizedBox(height: AppSpacing.s3),
+          diarize,
+        ],
         const SizedBox(height: AppSpacing.s2),
         status,
       ],
+    );
+  }
+}
+
+/// 说话人分离开关：开关 + 一句说明。样子照「转写完成后继续翻译」那一行。
+class _DiarizeToggle extends StatelessWidget {
+  const _DiarizeToggle({required this.form});
+
+  final TranscribeFormController form;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = form.options.diarize;
+    final cs = context.colors;
+    return Tappable(
+      onTap: () => form.update((o) => o.copyWith(diarize: !on)),
+      child: Row(
+        children: [
+          AppSwitch(
+            value: on,
+            onChanged: (v) => form.update((o) => o.copyWith(diarize: v)),
+          ),
+          const SizedBox(width: AppSpacing.s3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('说话人分离', style: context.texts.titleSmall),
+                const SizedBox(height: 1),
+                Text(
+                  on
+                      ? '按说话人切开字幕并标上「说话人1：」；多人会议、访谈适用。'
+                            '需选 qwen-audio-3.0-asr-flash-filetrans 模型。'
+                      : '区分多位说话人，给每条字幕标上说话人编号',
+                  style: context.texts.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

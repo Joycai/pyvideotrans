@@ -1,5 +1,7 @@
+import '../domain/speech_segments.dart';
 import 'audio_splitter.dart';
 import 'dashscope_asr.dart';
+import 'dashscope_filetrans.dart';
 import 'media.dart';
 import 'openai_compatible.dart';
 import 'provider_api.dart';
@@ -66,7 +68,14 @@ abstract final class Registry {
         'qwen3-asr-flash',
         'qwen-audio-3.0-asr-flash',
         'fun-asr-flash-2026-06-15',
+        // 「-filetrans」结尾的是异步整文件转写：先把音频上传到百炼的临时
+        // 存储，再提交任务轮询结果；不切片，一次拿回带时间戳（和说话人）
+        // 的整份结果。见 DashScopeFileTransProvider。
+        'qwen-audio-3.0-asr-flash-filetrans',
+        'qwen3-asr-flash-filetrans',
       ],
+      // 文档：说话人分离只有 Qwen-Audio-3.0-ASR 与 Fun-ASR 两族支持。
+      supportsDiarization: true,
     ),
   ];
 
@@ -150,12 +159,16 @@ abstract final class Registry {
   /// 之后用户改设置不应该影响已经排上队的任务。传 null 表示沿用设置里的值。
   ///
   /// [media] 给需要本地切分音频的服务用（阿里百炼）；不传就临时建一个。
+  ///
+  /// [diarize] 开说话人分离：只有 [ProviderInfo.supportsDiarization] 的服务
+  /// 理会它，其余忽略。
   static AsrProvider buildAsr(
     String id,
     AppSettings settings, {
     String? model,
     String? prompt,
     Media? media,
+    bool diarize = false,
   }) {
     final info = asrInfo(id);
     if (info == null) {
@@ -169,11 +182,28 @@ abstract final class Registry {
     }
     final endpoint = settings.endpointFor(info);
     if (info.id == 'dashscope_qwen_asr') {
+      final resolved = _withModel(endpoint, model);
+      if (DashScopeFileTransProvider.isFileTransModel(resolved.model)) {
+        return DashScopeFileTransProvider(
+          info: info,
+          endpoint: resolved,
+          diarize: diarize,
+          media: media ?? Media(),
+        );
+      }
       return DashScopeAsrProvider(
         info: info,
         endpoint: _withModel(endpoint, model),
         prompt: prompt ?? settings.asrPrompt,
-        splitter: FfmpegAudioSplitter(media ?? Media()),
+        diarize: diarize,
+        // 说话人编号只在同一次请求里一致：开分离时把片段切得长一些，
+        // 跨片段对不上号的机会就少得多。
+        splitter: FfmpegAudioSplitter(
+          media ?? Media(),
+          maxMs: diarize
+              ? DashScopeAsrProvider.diarizeClipMs
+              : SpeechSegments.defaultMaxMs,
+        ),
       );
     }
     return OpenAiCompatibleAsrProvider(

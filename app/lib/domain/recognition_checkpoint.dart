@@ -1,3 +1,19 @@
+/// 一段识别结果里的一小块：带自己的时间与说话人。开说话人分离时一段
+/// 音频会回来多块（按说话人 / 句子切开），不开就只有整段一块。
+class SegmentPiece {
+  const SegmentPiece({
+    required this.startMs,
+    required this.endMs,
+    required this.text,
+    this.speaker,
+  });
+
+  final int startMs;
+  final int endMs;
+  final String text;
+  final int? speaker;
+}
+
 /// 识别检查点里的一段：按片段的时间范围记，续跑时用同样的切分点对上。
 class SegmentRecord {
   SegmentRecord({
@@ -14,6 +30,9 @@ class SegmentRecord {
 
   /// 识别出来的文本。null 表示还没成功过；空串表示这段确实没有话。
   String? text;
+
+  /// 细分结果（说话人分离时按说话人 / 句子切开的小块）。没有就整段一条。
+  List<SegmentPiece>? pieces;
 
   /// 累计失败次数，跨多次续跑累加。
   int failures;
@@ -38,6 +57,12 @@ class RecognitionCheckpoint {
   /// 切分出来的总段数。识别服务切完音频后写入；记录只覆盖跑到过的段，
   /// 所以「已完成 / 总数」要用它而不是 [length]。
   int? total;
+
+  /// 异步整文件转写（阿里百炼 filetrans）的断点：已上传的音频地址
+  /// （`oss://…`，48 小时有效）与已提交的任务号。中途停下再继续时，
+  /// 有任务号就直接查任务；只有地址就用它重新提交，不重新上传。
+  String? asyncFileUrl;
+  String? asyncTaskId;
 
   /// 一段最多失败几次，之后放弃并跳过。
   static const maxFailures = 3;
@@ -76,6 +101,8 @@ class RecognitionCheckpoint {
   void clear() {
     _segments.clear();
     total = null;
+    asyncFileUrl = null;
+    asyncTaskId = null;
   }
 
   /// 记一次失败。达到上限就放弃这一段。返回是否已放弃。

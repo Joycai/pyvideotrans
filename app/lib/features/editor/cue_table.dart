@@ -250,7 +250,9 @@ class _CueRowState extends State<_CueRow> {
                 Timecode(Srt.formatTimecode(cue.endMs)),
                 if (widget.view != CueView.translation)
                   Text(
-                    cue.source,
+                    cue.speaker == null
+                        ? cue.source
+                        : '[说话人${cue.speaker! + 1}] ${cue.source}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: context.texts.bodyMedium,

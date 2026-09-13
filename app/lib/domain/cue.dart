@@ -20,6 +20,7 @@ class Cue {
     this.translation,
     this.confidence,
     this.reviewed = false,
+    this.speaker,
   });
 
   /// 1 起的行号。
@@ -34,6 +35,10 @@ class Cue {
 
   /// 人工确认过。
   final bool reviewed;
+
+  /// 说话人编号（0 起），开了说话人分离的识别服务给出；没有则为 null。
+  /// 只是标签，不参与文本；写出产物时由写出方决定怎么显示。
+  final int? speaker;
 
   int get durationMs => endMs - startMs;
 
@@ -61,6 +66,7 @@ class Cue {
     bool clearTranslation = false,
     double? confidence,
     bool? reviewed,
+    int? speaker,
   }) => Cue(
     index: index ?? this.index,
     startMs: startMs ?? this.startMs,
@@ -69,6 +75,7 @@ class Cue {
     translation: clearTranslation ? null : (translation ?? this.translation),
     confidence: confidence ?? this.confidence,
     reviewed: reviewed ?? this.reviewed,
+    speaker: speaker ?? this.speaker,
   );
 
   Map<String, Object?> toJson() => {
@@ -79,6 +86,7 @@ class Cue {
     if (translation != null) 'translation': translation,
     if (confidence != null) 'confidence': confidence,
     if (reviewed) 'reviewed': true,
+    if (speaker != null) 'speaker': speaker,
   };
 
   factory Cue.fromJson(Map<String, Object?> json) => Cue(
@@ -89,6 +97,7 @@ class Cue {
     translation: json['translation'] as String?,
     confidence: (json['confidence'] as num?)?.toDouble(),
     reviewed: json['reviewed'] as bool? ?? false,
+    speaker: json['speaker'] as int?,
   );
 }
 

@@ -57,6 +57,7 @@ class TaskRunner {
         model: options.asrModel,
         prompt: options.asrPrompt,
         media: media,
+        diarize: options.diarize,
       );
 
   static TranslationProvider _defaultTranslationFactory(
@@ -291,9 +292,11 @@ class TaskRunner {
       for (final cue in cues) {
         final last = merged.isEmpty ? null : merged.last;
         // 过短且与上一条紧邻时并进去；相隔较远说明是独立的短应答，保留。
+        // 不同说话人的不并 —— 短应答恰恰常是换人。
         if (last != null &&
             cue.durationMs < minDurationMs &&
-            cue.startMs - last.endMs < 200) {
+            cue.startMs - last.endMs < 200 &&
+            last.speaker == cue.speaker) {
           merged[merged.length - 1] = last.copyWith(
             endMs: cue.endMs,
             source:
@@ -451,6 +454,8 @@ class TaskRunner {
 
     final wrapSource = wrapper(task.sourceLanguage);
     final wrapTranslation = wrapper(task.targetLanguage);
+    // 说话人标签跟着源语言走：中日韩「说话人1：」，其他「Speaker 1: 」。
+    final speakerLabel = speakerLabelFor(task.sourceLanguage);
 
     Future<void> write(String tag, SrtField field) async {
       final content = switch (format) {
@@ -459,16 +464,19 @@ class TaskRunner {
           field: field,
           wrapSource: wrapSource,
           wrapTranslation: wrapTranslation,
+          speakerLabel: speakerLabel,
         ),
         SubtitleFormat.vtt => Srt.serializeVtt(
           task.document.cues,
           field: field,
           wrapSource: wrapSource,
           wrapTranslation: wrapTranslation,
+          speakerLabel: speakerLabel,
         ),
         SubtitleFormat.txt => Srt.serializePlain(
           task.document.cues,
           field: field,
+          speakerLabel: speakerLabel,
         ),
         SubtitleFormat.ass => '',
       };
@@ -512,3 +520,7 @@ class TaskRunner {
       ? 'src'
       : language.code.replaceAll(RegExp(r'[^\w-]+'), '_');
 }
+
+/// 写进产物里的说话人标签。编号 0 起，显示 1 起。
+String Function(int) speakerLabelFor(Language language) =>
+    language.cjk ? (n) => '说话人${n + 1}：' : (n) => 'Speaker ${n + 1}: ';

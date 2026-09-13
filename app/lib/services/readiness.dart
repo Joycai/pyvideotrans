@@ -45,6 +45,7 @@ abstract final class ProviderReadiness {
     AppSettings settings, {
     Language? language,
     String? model,
+    bool diarize = false,
   }) {
     final info = Registry.asrInfo(id);
     if (info == null) {
@@ -65,6 +66,24 @@ abstract final class ProviderReadiness {
         message: unsupported,
         hint: '换一个模型，或把源语言留给「自动检测」。',
       );
+    }
+    if (diarize) {
+      if (!info.supportsDiarization) {
+        return Readiness(
+          ReadinessLevel.advisory,
+          message: '${info.name}不支持说话人分离',
+          hint: '这一项会被忽略；需要分离请改用阿里百炼 · Qwen3-ASR。',
+        );
+      }
+      // 实测：同步接口忽略 diarization_enabled，只有录音文件转写
+      // （-filetrans）真会给说话人编号；qwen3 族在文档里就不支持。
+      if (!chosen.endsWith('-filetrans') || chosen.startsWith('qwen3-asr')) {
+        return Readiness(
+          ReadinessLevel.advisory,
+          message: '$chosen 不支持说话人分离',
+          hint: '换 qwen-audio-3.0-asr-flash-filetrans（整段上传、异步转写）。',
+        );
+      }
     }
     return Readiness.ok;
   }

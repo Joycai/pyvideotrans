@@ -283,6 +283,7 @@ void _jsonTests() {
       final o = s.defaultTaskOptions().copyWith(
         asrModel: 'whisper-1',
         asrPrompt: '专有名词',
+        diarize: true,
         translate: false,
         translationBatchSize: 7,
         bilingual: BilingualLayout.targetAbove,
@@ -299,6 +300,12 @@ void _jsonTests() {
       expect(back.sourceLanguage.code, o.sourceLanguage.code);
       expect(back.format, SubtitleFormat.vtt);
       expect(back.outputDir, '/out');
+      expect(back.diarize, isTrue);
+      // 旧存档没有这个字段：回落到默认的关。
+      expect(
+        TaskOptions.fromJson({}, fallback: s.defaultTaskOptions()).diarize,
+        isFalse,
+      );
     });
 
     test('缺字段与坏类型回落到默认，指定目录却没目录则回到同目录', () async {

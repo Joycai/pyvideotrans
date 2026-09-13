@@ -10,11 +10,19 @@ class AudioClip {
     required this.path,
     required this.startMs,
     required this.endMs,
-  });
+    int? fileStartMs,
+  }) : fileStartMs = fileStartMs ?? startMs;
 
   final String path;
+
+  /// 这段语音在原音频里的起止（字幕时间码用它）。
   final int startMs;
   final int endMs;
+
+  /// 片段文件第 0 毫秒对应原音频的位置。切的时候前面会多带一点
+  /// （见 [FfmpegAudioSplitter.padMs]），所以通常略早于 [startMs]；
+  /// 识别服务返回的词级时间戳要用它换算回原音频。
+  final int fileStartMs;
 }
 
 /// 把整段音频切成可以逐段识别的片段。
@@ -80,14 +88,22 @@ class FfmpegAudioSplitter implements AudioSplitter {
     for (final (i, seg) in segments.indexed) {
       token.throwIfCancelled();
       final path = '${dir.path}${Platform.pathSeparator}clip_$i.wav';
+      final fileStartMs = (seg.startMs - padMs).clamp(0, totalMs);
       await media.cutAudio(
         sourcePath: audioPath,
         outputPath: path,
-        startMs: (seg.startMs - padMs).clamp(0, totalMs),
+        startMs: fileStartMs,
         endMs: (seg.endMs + padMs).clamp(0, totalMs),
         token: token,
       );
-      clips.add(AudioClip(path: path, startMs: seg.startMs, endMs: seg.endMs));
+      clips.add(
+        AudioClip(
+          path: path,
+          startMs: seg.startMs,
+          endMs: seg.endMs,
+          fileStartMs: fileStartMs,
+        ),
+      );
     }
     return clips;
   }

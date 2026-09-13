@@ -53,6 +53,64 @@ hello
     });
   });
 
+  group('说话人标签', () {
+    const cues = [
+      Cue(
+        index: 1,
+        startMs: 0,
+        endMs: 1000,
+        source: '你好',
+        translation: 'Hi',
+        speaker: 0,
+      ),
+      Cue(
+        index: 2,
+        startMs: 1000,
+        endMs: 2000,
+        source: '你好',
+        translation: 'Hi',
+        speaker: 1,
+      ),
+      Cue(
+        index: 3,
+        startMs: 2000,
+        endMs: 3000,
+        source: '再见',
+        translation: 'Bye',
+      ),
+    ];
+    String label(int n) => '说话人${n + 1}：';
+
+    test('传了标签函数才写，没说话人的条目不写', () {
+      final srt = Srt.serialize(cues, speakerLabel: label);
+      expect(srt, contains('说话人1：你好'));
+      expect(srt, contains('说话人2：你好'));
+      expect(srt, contains('\n再见\n'));
+      expect(Srt.serialize(cues), isNot(contains('说话人')));
+    });
+
+    test('双语只在第一行加标签', () {
+      final text = Srt.textOf(
+        cues.first,
+        SrtField.bilingualTargetAbove,
+        speakerLabel: label,
+      );
+      expect(text, '说话人1：Hi\n你好');
+    });
+
+    test('VTT 与纯文本同样带标签', () {
+      expect(Srt.serializeVtt(cues, speakerLabel: label), contains('说话人2：你好'));
+      expect(
+        Srt.serializePlain(
+          cues,
+          field: SrtField.translation,
+          speakerLabel: label,
+        ),
+        '说话人1：Hi\n说话人2：Hi\nBye\n',
+      );
+    });
+  });
+
   group('解析', () {
     test('标准 SRT', () {
       final cues = Srt.parse(_sample);
