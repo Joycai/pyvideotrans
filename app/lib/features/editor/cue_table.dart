@@ -149,7 +149,12 @@ class _Toolbar extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: speakers ? 188 : 240,
+            // 窄窗口收到 150，给右侧的筛选 chip 多让出位置。
+            width: isCompactEditor(context)
+                ? 150
+                : speakers
+                ? 188
+                : 240,
             height: 32,
             child: TextField(
               onChanged: controller.setSearch,
