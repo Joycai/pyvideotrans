@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=字幕工具
+Name[en]=Subtitle Studio
+Comment=音视频语音生成字幕与字幕翻译
+Comment[en]=Generate subtitles from speech and translate them
+Exec=subtitle_studio %U
+Icon=subtitle_studio
+Terminal=false
+Categories=AudioVideo;Video;Utility;
+Keywords=subtitle;srt;vtt;asr;translate;字幕;翻译;
+StartupNotify=true
+StartupWMClass=subtitle_studio
