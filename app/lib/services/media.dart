@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import '../domain/cue.dart';
+import '../domain/speech_segments.dart';
 import '../domain/media_kinds.dart';
 import '../domain/srt.dart';
 import 'provider_api.dart';
@@ -192,6 +193,81 @@ class Media {
     } on FormatException {
       return Srt.parse(latin1.decode(bytes));
     }
+  }
+
+  /// 用 silencedetect 找出静音区间。给不带时间戳的识别接口切句用。
+  ///
+  /// [noiseDb] 是判定为静音的响度阈值，[minSilenceMs] 是最短静音时长；
+  /// 默认值与原 Python 实现的 VAD 参数（600 ms）对齐。
+  Future<List<TimeRange>> detectSilences(
+    String audioPath, {
+    required CancellationToken token,
+    int noiseDb = -35,
+    int minSilenceMs = 600,
+  }) async {
+    final total = await probeDuration(audioPath);
+    final stderr = await _runFfmpeg([
+      '-i', audioPath,
+      '-af', 'silencedetect=noise=${noiseDb}dB:d=${minSilenceMs / 1000}',
+      '-f', 'null',
+      '-',
+    ], token: token, what: '静音检测');
+    return SpeechSegments.parseSilenceDetect(
+      stderr,
+      total?.inMilliseconds ?? 0,
+    );
+  }
+
+  /// 从 [sourcePath] 切出 [startMs, endMs) 到 [outputPath]，保持 16 kHz 单声道。
+  Future<void> cutAudio({
+    required String sourcePath,
+    required String outputPath,
+    required int startMs,
+    required int endMs,
+    required CancellationToken token,
+  }) async {
+    await File(outputPath).parent.create(recursive: true);
+    await _runFfmpeg([
+      '-y',
+      '-ss', (startMs / 1000).toStringAsFixed(3),
+      '-to', (endMs / 1000).toStringAsFixed(3),
+      '-i', sourcePath,
+      '-ac', '1',
+      '-ar', '16000',
+      '-c:a', 'pcm_s16le',
+      outputPath,
+    ], token: token, what: '切分音频');
+  }
+
+  /// 跑一次 ffmpeg，返回 stderr（ffmpeg 把进度与滤镜输出都写在那里）。
+  /// 取消时杀掉子进程；非零退出码报错并附上 stderr 末尾。
+  Future<String> _runFfmpeg(
+    List<String> args, {
+    required CancellationToken token,
+    required String what,
+  }) async {
+    token.throwIfCancelled();
+    final process = await Process.start(ffmpeg, args);
+    final stderr = StringBuffer();
+    final drain = process.stderr.map(String.fromCharCodes).listen(stderr.write);
+    final watchdog = Stream.periodic(const Duration(milliseconds: 200)).listen(
+      (_) {
+        if (token.isCancelled) process.kill();
+      },
+    );
+    final exitCode = await process.exitCode;
+    await drain.cancel();
+    await watchdog.cancel();
+    token.throwIfCancelled();
+    if (exitCode != 0) {
+      final tail = stderr.toString().trimRight();
+      throw ProviderException(
+        '$what失败',
+        detail: tail.length > 600 ? '…${tail.substring(tail.length - 600)}' : tail,
+        hint: '准备阶段产出的音频可能已损坏，请从准备阶段继续。',
+      );
+    }
+    return stderr.toString();
   }
 
   /// 抽成 16kHz 单声道 WAV。这是各家识别接口的通用输入格式。

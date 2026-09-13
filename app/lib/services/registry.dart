@@ -1,3 +1,6 @@
+import 'audio_splitter.dart';
+import 'dashscope_asr.dart';
+import 'media.dart';
 import 'openai_compatible.dart';
 import 'provider_api.dart';
 import 'settings.dart';
@@ -51,15 +54,19 @@ abstract final class Registry {
       defaultBaseUrl: 'http://127.0.0.1:8765/v1',
       defaultModel: 'whisper-large-v3',
     ),
-    // 阿里百炼的识别接口不是 OpenAI 兼容形态（多模态 generation + 分段 base64，
-    // 且不返回时间戳），需要先做静音切分才能对接，留到第二期。
+    // 阿里百炼的识别接口不是 OpenAI 兼容形态（多模态 generation + base64 音频，
+    // 且不返回时间戳）：走单独的实现类，先按静音切句再逐段识别。
     ProviderInfo(
       id: 'dashscope_qwen_asr',
       name: '阿里百炼 · Qwen3-ASR',
       vendor: '阿里百炼',
-      implemented: false,
       defaultBaseUrl: 'https://dashscope.aliyuncs.com/api/v1',
       defaultModel: 'qwen3-asr-flash',
+      models: [
+        'qwen3-asr-flash',
+        'qwen-audio-3.0-asr-flash',
+        'fun-asr-flash-2026-06-15',
+      ],
     ),
   ];
 
@@ -141,11 +148,14 @@ abstract final class Registry {
   ///
   /// [model] 与 [prompt] 是**任务级覆盖**：任务入队时把参数定死了，
   /// 之后用户改设置不应该影响已经排上队的任务。传 null 表示沿用设置里的值。
+  ///
+  /// [media] 给需要本地切分音频的服务用（阿里百炼）；不传就临时建一个。
   static AsrProvider buildAsr(
     String id,
     AppSettings settings, {
     String? model,
     String? prompt,
+    Media? media,
   }) {
     final info = asrInfo(id);
     if (info == null) {
@@ -158,6 +168,14 @@ abstract final class Registry {
       );
     }
     final endpoint = settings.endpointFor(info);
+    if (info.id == 'dashscope_qwen_asr') {
+      return DashScopeAsrProvider(
+        info: info,
+        endpoint: _withModel(endpoint, model),
+        prompt: prompt ?? settings.asrPrompt,
+        splitter: FfmpegAudioSplitter(media ?? Media()),
+      );
+    }
     return OpenAiCompatibleAsrProvider(
       info: info,
       endpoint: _withModel(endpoint, model),

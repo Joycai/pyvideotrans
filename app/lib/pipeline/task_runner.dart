@@ -34,7 +34,7 @@ class TaskRunner {
     AsrFactory? asrFactory,
     TranslationFactory? translationFactory,
   }) : media = media ?? Media(),
-       _asrFactory = asrFactory ?? _defaultAsrFactory,
+       _asrOverride = asrFactory,
        _translationFactory =
            translationFactory ?? _defaultTranslationFactory;
 
@@ -44,20 +44,20 @@ class TaskRunner {
   final String workDir;
 
   final Media media;
-  final AsrFactory _asrFactory;
+  final AsrFactory? _asrOverride;
   final TranslationFactory _translationFactory;
 
   /// 任务参数里的模型与提示词覆盖设置里的值 —— 参数在入队时就定死了。
-  static AsrProvider _defaultAsrFactory(
-    String id,
-    AppSettings settings,
-    TaskOptions options,
-  ) => Registry.buildAsr(
-    id,
-    settings,
-    model: options.asrModel,
-    prompt: options.asrPrompt,
-  );
+  /// 默认实现把本实例的 [media] 交给需要切分音频的服务，共用同一份 ffmpeg 定位。
+  AsrFactory get _asrFactory =>
+      _asrOverride ??
+      (id, settings, options) => Registry.buildAsr(
+        id,
+        settings,
+        model: options.asrModel,
+        prompt: options.asrPrompt,
+        media: media,
+      );
 
   static TranslationProvider _defaultTranslationFactory(
     String id,
