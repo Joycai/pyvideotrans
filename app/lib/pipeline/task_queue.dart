@@ -103,7 +103,12 @@ class TaskQueue extends ChangeNotifier {
         task.stages[entry.key] = const StageRecord();
       }
     }
-    task.note('从${task.resumeStage.label}阶段继续');
+    final cp = task.recognition;
+    task.note(
+      cp != null && cp.doneCount > 0 && task.resumeStage == TaskStage.recognize
+          ? '从识别阶段继续：${cp.doneCount} / ${cp.length} 段已完成，只重试其余'
+          : '从${task.resumeStage.label}阶段继续',
+    );
     notifyListeners();
     _pump();
   }

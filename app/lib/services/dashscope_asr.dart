@@ -38,6 +38,9 @@ class DashScopeAsrProvider implements AsrProvider {
 
   final http.Client _client;
 
+  /// 上一次 [_recognize] 返回 null 的原因，写进检查点里给用户看。
+  String? _lastFailure;
+
   static const path = '/services/aigc/multimodal-generation/generation';
 
   /// `qwen-audio-3.0` 与 `fun-asr` 两族用 OpenAI 风格的 `input_audio` 内容块，
@@ -52,6 +55,7 @@ class DashScopeAsrProvider implements AsrProvider {
     required String language,
     required CancellationToken token,
     required ProgressSink onProgress,
+    RecognitionCheckpoint? checkpoint,
   }) async {
     token.throwIfCancelled();
     if (!File(audioPath).existsSync()) {
@@ -68,39 +72,95 @@ class DashScopeAsrProvider implements AsrProvider {
     final code = language.split('-').first.toLowerCase();
     final lang = code.isEmpty || code == 'auto' ? null : code;
 
-    final cues = <Cue>[];
+    // 没给检查点就用一份临时的，逻辑不分叉。
+    final cp = checkpoint ?? RecognitionCheckpoint();
+    if (!cp.matches(clips.map((c) => (startMs: c.startMs, endMs: c.endMs)))) {
+      // 切分点对不上：音频变了，之前的记录不能用。
+      cp.clear();
+    }
+    final resumedFrom = cp.doneCount;
+
     String? lastError;
     try {
       for (final (i, clip) in clips.indexed) {
         token.throwIfCancelled();
-        onProgress(i, clips.length, note: '识别第 ${i + 1} / ${clips.length} 段');
+        final record = cp.segment(clip.startMs, clip.endMs);
+        if (record.done) continue;
 
-        final text = await _recognize(clip, lang);
+        onProgress(
+          i,
+          clips.length,
+          note: resumedFrom > 0 && i == resumedFrom
+              ? '从第 ${i + 1} 段继续，前面 $resumedFrom 段已识别'
+              : '识别第 ${i + 1} / ${clips.length} 段'
+                    '${cp.skippedCount > 0 ? '，已跳过 ${cp.skippedCount} 段' : ''}',
+        );
+
+        final String? text;
+        try {
+          text = await _recognize(clip, lang);
+        } on ProviderException catch (e) {
+          // 鉴权、限流这类错误换一段也不会好：记一次失败就停，
+          // 已识别的段留在检查点里，续跑从这一段接着来。
+          cp.fail(record, e.message);
+          rethrow;
+        }
         if (text == null) {
-          lastError ??= '第 ${i + 1} 段返回为空';
+          lastError = '第 ${i + 1} 段：${_lastFailure ?? '服务端没有返回文本'}';
+          _lastFailure = null;
+          cp.fail(record, lastError);
           continue;
         }
-        if (text.isEmpty) continue;
+        record.text = text;
+      }
+    } finally {
+      // 片段目录只是中转，识别完就删；续跑会重新切，切分点一样。
+      final dir = File(clips.first.path).parent;
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    }
+
+    final failed = cp.pending.length;
+    if (failed > 0) {
+      throw ProviderException(
+        '有 $failed 段识别失败',
+        detail: lastError,
+        hint: '从识别阶段继续只会重试失败的段；同一段失败 '
+            '${RecognitionCheckpoint.maxFailures} 次后会跳过并留下待校对的空字幕。',
+      );
+    }
+    onProgress(clips.length, clips.length, note: '解析识别结果');
+
+    final cues = <Cue>[];
+    for (final clip in clips) {
+      final record = cp.segment(clip.startMs, clip.endMs);
+      if (record.skipped) {
+        // 占位：空文本不会写进产物，置信度 0 让编辑器把它标成待校对。
         cues.add(
           Cue(
             index: cues.length + 1,
             startMs: clip.startMs,
             endMs: clip.endMs,
-            source: text,
+            source: '',
+            confidence: 0,
           ),
         );
+        continue;
       }
-    } finally {
-      // 片段目录只是中转，识别完就删；失败重试会重新切。
-      final dir = File(clips.first.path).parent;
-      if (dir.existsSync()) dir.deleteSync(recursive: true);
+      final text = record.text ?? '';
+      if (text.isEmpty) continue;
+      cues.add(
+        Cue(
+          index: cues.length + 1,
+          startMs: clip.startMs,
+          endMs: clip.endMs,
+          source: text,
+        ),
+      );
     }
-    onProgress(clips.length, clips.length, note: '解析识别结果');
 
     if (cues.isEmpty) {
-      throw ProviderException(
+      throw const ProviderException(
         '未识别到语音',
-        detail: lastError,
         hint: '确认音视频中确有人声，且所选语言与实际语言一致。',
       );
     }
@@ -144,6 +204,7 @@ class DashScopeAsrProvider implements AsrProvider {
           hint: _statusHint(response.statusCode),
         );
       }
+      _lastFailure = 'HTTP ${response.statusCode} · $body';
       return null;
     }
 

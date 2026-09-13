@@ -175,6 +175,8 @@ class TaskRunner {
     CancellationToken token,
     void Function() onChange,
   ) => _stage(task, TaskStage.prepare, onChange, () async {
+    // 音频要重新抽取，之前按旧音频切出来的识别记录作废。
+    task.recognition = null;
     if (task.kind == TaskKind.translate) {
       // 输入本来就是字幕，解析出来即可。
       final text = await File(task.sourcePath).readAsString();
@@ -219,11 +221,17 @@ class TaskRunner {
     skipNote: 'SRT 无需识别',
     () async {
       final provider = _asrFactory(task.asrProviderId, settings, task.options);
+      // 检查点挂在任务上：失败或取消后续跑，只重试没完成的段。
+      final checkpoint = task.recognition ??= RecognitionCheckpoint();
+      if (checkpoint.doneCount > 0) {
+        task.note('识别续跑：${checkpoint.doneCount} 段已完成，只重试其余');
+      }
       final cues = await provider.transcribe(
         audioPath: '$workDir/${task.id}.wav',
         // 下发的是语言代码（zh / en），不是界面上那个中文名。
         language: task.sourceLanguage.code,
         token: token,
+        checkpoint: checkpoint,
         onProgress: (done, total, {note}) {
           task.progress = total == 0 ? 0 : done / total;
           task.stages[TaskStage.recognize] =
@@ -238,10 +246,22 @@ class TaskRunner {
         targetLanguage: task.targetLanguage.name,
       );
 
+      final skipped = checkpoint.skippedCount;
+      task.recognition = null;
+
       final low = cues.where((c) => (c.confidence ?? 1) < Cue.lowConfidence).length;
       task.stages[TaskStage.recognize] = task.stages[TaskStage.recognize]!
-          .copyWith(note: '${provider.info.name} · ${cues.length} 段');
+          .copyWith(
+            note: '${provider.info.name} · ${cues.length} 段'
+                '${skipped > 0 ? ' · 已跳过 $skipped 段' : ''}',
+          );
       task.note('识别完成 ${cues.length} 段');
+      if (skipped > 0) {
+        task.note(
+          '$skipped 段反复失败已跳过，留下空字幕待校对',
+          LogLevel.warn,
+        );
+      }
       if (low > 0) {
         task.note('$low 段置信度低于 ${Cue.lowConfidence}，已标记待校对', LogLevel.warn);
       }

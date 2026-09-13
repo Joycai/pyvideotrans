@@ -61,6 +61,7 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
     required String language,
     required CancellationToken token,
     required ProgressSink onProgress,
+    RecognitionCheckpoint? checkpoint,
   }) async {
     token.throwIfCancelled();
 

@@ -1,4 +1,5 @@
 import 'cue.dart';
+import 'recognition_checkpoint.dart';
 import 'language.dart';
 import 'task_options.dart';
 
@@ -156,6 +157,10 @@ class SubtitleTask {
   SubtitleDocument document;
   final List<LogEntry> log;
   TaskError? error;
+
+  /// 识别阶段的分段检查点。失败或取消时保留，续跑只重试没完成的段；
+  /// 准备阶段重跑（音频重新抽取）或识别完成后清掉。
+  RecognitionCheckpoint? recognition;
   Duration? mediaDuration;
   Duration? eta;
 
