@@ -245,58 +245,66 @@ class _SpeakerFilterChip extends StatelessWidget {
       _ => '说话人 · ${filter.length} 位',
     };
 
+    // 窄窗口只留图标，给筛选 chip 让位；筛了人时底色变，文案进悬停提示。
+    final compact = isCompactEditor(context);
+
     return AnchoredPopover(
       width: 268,
       alignRight: true,
-      anchor: (context, toggle, open) => Container(
-        height: 32,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          color: filter.isEmpty ? null : cs.secondaryContainer,
-          border: Border.all(
-            color: filter.isEmpty ? cs.outlineVariant : Colors.transparent,
-          ),
-          gradient: filter.isEmpty
-              ? LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: context.elevation.controlGradient,
-                )
-              : null,
-          boxShadow: filter.isEmpty ? context.elevation.controlShadow : null,
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            onTap: toggle,
+      anchor: (context, toggle, open) => Tooltip(
+        message: compact ? label : '',
+        child: Container(
+          height: 32,
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadius.md),
-            child: Padding(
-              padding: const EdgeInsets.only(left: 10, right: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Symbols.record_voice_over,
-                    size: 18,
-                    weight: 400,
-                    color: cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    label,
-                    style: context.texts.labelLarge?.copyWith(
-                      color: filter.isEmpty
-                          ? cs.onSurfaceVariant
-                          : cs.onSecondaryContainer,
+            color: filter.isEmpty ? null : cs.secondaryContainer,
+            border: Border.all(
+              color: filter.isEmpty ? cs.outlineVariant : Colors.transparent,
+            ),
+            gradient: filter.isEmpty
+                ? LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: context.elevation.controlGradient,
+                  )
+                : null,
+            boxShadow: filter.isEmpty ? context.elevation.controlShadow : null,
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: toggle,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 10, right: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Symbols.record_voice_over,
+                      size: 18,
+                      weight: 400,
+                      color: cs.onSurfaceVariant,
                     ),
-                  ),
-                  Icon(
-                    open ? Symbols.expand_less : Symbols.expand_more,
-                    size: 18,
-                    weight: 400,
-                    color: cs.onSurfaceVariant,
-                  ),
-                ],
+                    if (!compact) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        label,
+                        style: context.texts.labelLarge?.copyWith(
+                          color: filter.isEmpty
+                              ? cs.onSurfaceVariant
+                              : cs.onSecondaryContainer,
+                        ),
+                      ),
+                    ],
+                    Icon(
+                      open ? Symbols.expand_less : Symbols.expand_more,
+                      size: 18,
+                      weight: 400,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

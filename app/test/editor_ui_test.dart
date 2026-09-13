@@ -121,6 +121,8 @@ void main() {
       await tester.pump();
       expect(find.text('周老师'), findsNothing);
       expect(find.text('双语'), findsNothing);
+      expect(find.text('说话人 · 全部'), findsNothing);
+      expect(find.byTooltip('说话人 · 全部'), findsOneWidget);
       await tester.tap(find.text('视图 · 双语'));
       await tester.pump();
       await tester.tap(
