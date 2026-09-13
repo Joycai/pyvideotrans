@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -25,7 +26,9 @@ class DashScopeAsrProvider implements AsrProvider {
     required this.splitter,
     this.prompt = '',
     http.Client? client,
-  }) : _client = client ?? http.Client();
+    Future<void> Function(Duration)? delay,
+  }) : _client = client ?? http.Client(),
+       _delay = delay ?? ((d) => Future<void>.delayed(d));
 
   @override
   final ProviderInfo info;
@@ -38,8 +41,17 @@ class DashScopeAsrProvider implements AsrProvider {
 
   final http.Client _client;
 
-  /// 上一次 [_recognize] 返回 null 的原因，写进检查点里给用户看。
-  String? _lastFailure;
+  /// 等待用的睡眠函数，测试里换成立即返回的。
+  final Future<void> Function(Duration) _delay;
+
+  /// 限流 / 断网时的等待阶梯。服务端给了 Retry-After 就用服务端的。
+  static const backoff = [
+    Duration(seconds: 5),
+    Duration(seconds: 10),
+    Duration(seconds: 20),
+    Duration(seconds: 40),
+    Duration(seconds: 60),
+  ];
 
   static const path = '/services/aigc/multimodal-generation/generation';
 
@@ -82,37 +94,80 @@ class DashScopeAsrProvider implements AsrProvider {
     final resumedFrom = cp.doneCount;
 
     String? lastError;
+    // 连续等待了几次（限流 / 断网），决定退避时长；一次成功就归零。
+    var waits = 0;
     try {
       for (final (i, clip) in clips.indexed) {
         token.throwIfCancelled();
         final record = cp.segment(clip.startMs, clip.endMs);
         if (record.done) continue;
 
-        onProgress(
-          i,
-          clips.length,
-          note: resumedFrom > 0 && i == resumedFrom
+        void progress(String note) => onProgress(i, clips.length, note: note);
+        progress(
+          resumedFrom > 0 && i == resumedFrom
               ? '从第 ${i + 1} 段继续，前面 $resumedFrom 段已识别'
               : '识别第 ${i + 1} / ${clips.length} 段'
                     '${cp.skippedCount > 0 ? '，已跳过 ${cp.skippedCount} 段' : ''}',
         );
 
-        final String? text;
-        try {
-          text = await _recognize(clip, lang);
-        } on ProviderException catch (e) {
-          // 鉴权、限流这类错误换一段也不会好：记一次失败就停，
-          // 已识别的段留在检查点里，续跑从这一段接着来。
-          cp.fail(record, e.message);
-          rethrow;
+        // 同一段在这一轮里最多试到放弃为止；非自动模式只试一次。
+        while (!record.done) {
+          token.throwIfCancelled();
+          final outcome = await _recognize(clip, lang);
+          switch (outcome) {
+            case _Ok(:final text):
+              record.text = text;
+              waits = 0;
+            case _Wait(:final reason, :final retryAfter):
+              // 限流与断网不是这一段的错，不计失败：非自动模式停下来
+              // 让用户稍后继续；自动模式等一等再试同一段。
+              if (!cp.autoRetry) {
+                throw ProviderException(
+                  reason.title,
+                  detail: reason.detail,
+                  hint: reason.hint,
+                );
+              }
+              final wait =
+                  retryAfter ?? backoff[waits.clamp(0, backoff.length - 1)];
+              waits++;
+              progress(
+                '${reason.title}，等待 ${wait.inSeconds} 秒后重试第 ${i + 1} 段',
+              );
+              await _sleep(wait, token);
+            case _Failed(:final error, :final fatal):
+              lastError = '第 ${i + 1} 段：${error.detail ?? error.title}';
+              final skipped = cp.fail(record, lastError);
+              // 鉴权、地址这类错误换一段也不会好；非自动模式下任何请求
+              // 错误都停下来。已识别的段留在检查点里，续跑从这段接着来。
+              if (fatal || !cp.autoRetry) {
+                throw ProviderException(
+                  error.title,
+                  detail: error.detail,
+                  hint: error.hint,
+                );
+              }
+              if (skipped) {
+                progress('第 ${i + 1} 段失败 ${record.failures} 次，已跳过');
+              } else {
+                progress('第 ${i + 1} 段失败，第 ${record.failures + 1} 次重试');
+                await _sleep(const Duration(seconds: 2), token);
+              }
+            case _Transient(:final error):
+              // 5xx / 空响应：记一次失败。非自动模式先跑完其余段，
+              // 结束时一并报告；自动模式原地重试。
+              lastError = '第 ${i + 1} 段：$error';
+              final skipped = cp.fail(record, lastError);
+              if (!cp.autoRetry) break;
+              if (skipped) {
+                progress('第 ${i + 1} 段失败 ${record.failures} 次，已跳过');
+              } else {
+                progress('第 ${i + 1} 段失败，第 ${record.failures + 1} 次重试');
+                await _sleep(const Duration(seconds: 2), token);
+              }
+          }
+          if (!cp.autoRetry) break;
         }
-        if (text == null) {
-          lastError = '第 ${i + 1} 段：${_lastFailure ?? '服务端没有返回文本'}';
-          _lastFailure = null;
-          cp.fail(record, lastError);
-          continue;
-        }
-        record.text = text;
       }
     } finally {
       // 片段目录只是中转，识别完就删；续跑会重新切，切分点一样。
@@ -168,9 +223,21 @@ class DashScopeAsrProvider implements AsrProvider {
     return cues;
   }
 
-  /// 识别一段。返回 null 表示服务端没给出文本（已记录原因），
-  /// 空串表示这段确实没有话。鉴权、参数类错误直接抛出，不再往下跑。
-  Future<String?> _recognize(AudioClip clip, String? lang) async {
+  /// 可被取消的等待：每 250ms 看一眼取消标记。
+  Future<void> _sleep(Duration d, CancellationToken token) async {
+    var left = d;
+    const tick = Duration(milliseconds: 250);
+    while (left > Duration.zero) {
+      token.throwIfCancelled();
+      final step = left < tick ? left : tick;
+      await _delay(step);
+      left -= step;
+    }
+    token.throwIfCancelled();
+  }
+
+  /// 识别一段，把请求结果归成四类，怎么处理由调用方按模式决定。
+  Future<_Outcome> _recognize(AudioClip clip, String? lang) async {
     final bytes = await File(clip.path).readAsBytes();
     final dataUri = 'data:audio/wav;base64,${base64Encode(bytes)}';
 
@@ -188,38 +255,76 @@ class DashScopeAsrProvider implements AsrProvider {
           )
           .timeout(endpoint.timeout);
     } on SocketException catch (e) {
-      throw ProviderException(
-        '无法连接到 ${info.vendor}',
-        detail: '${endpoint.baseUrl} · $e',
-        hint: '检查网络与服务地址；已完成的阶段已保留，可从识别阶段继续。',
+      return _Wait(
+        _ErrorInfo(
+          '无法连接到 ${info.vendor}',
+          detail: '${endpoint.baseUrl} · $e',
+          hint: '检查网络与服务地址；已完成的阶段已保留，可从识别阶段继续。',
+        ),
+      );
+    } on TimeoutException {
+      return _Wait(
+        _ErrorInfo(
+          '${info.vendor} 响应超时',
+          detail: '超过 ${endpoint.timeout.inSeconds} 秒没有返回',
+          hint: '检查网络；已识别的段已保留，可从识别阶段继续。',
+        ),
       );
     }
 
-    if (response.statusCode != 200) {
-      final body = _clip(_bodyText(response));
-      // 4xx 是配置问题，换一段音频也不会好，直接停。
-      if (response.statusCode < 500) {
-        throw ProviderException(
-          _statusTitle(response.statusCode, info.vendor),
-          detail: 'HTTP ${response.statusCode} · $body',
-          hint: _statusHint(response.statusCode),
+    final status = response.statusCode;
+    if (status == 200) {
+      final Map<String, Object?> json;
+      try {
+        json = jsonDecode(_bodyText(response)) as Map<String, Object?>;
+      } catch (_) {
+        return _Failed(
+          _ErrorInfo(
+            '${info.vendor} 返回了无法解析的内容',
+            detail: _clip(response.body),
+            hint: '核对服务地址是否为百炼的 API 地址（以 /api/v1 结尾）。',
+          ),
+          fatal: true,
         );
       }
-      _lastFailure = 'HTTP ${response.statusCode} · $body';
-      return null;
+      final text = extractText(json);
+      return text == null ? const _Transient('服务端没有返回文本') : _Ok(text);
     }
 
-    final Map<String, Object?> json;
-    try {
-      json = jsonDecode(_bodyText(response)) as Map<String, Object?>;
-    } catch (_) {
-      throw ProviderException(
-        '${info.vendor} 返回了无法解析的内容',
-        detail: _clip(response.body),
-        hint: '核对服务地址是否为百炼的 API 地址（以 /api/v1 结尾）。',
+    final body = _clip(_bodyText(response));
+    // 百炼对没有人声的片段返回 400 + ASR_RESPONSE_HAVE_NO_WORDS，
+    // 这不是错误，是这段确实没话。
+    if (status == 400 && body.contains('ASR_RESPONSE_HAVE_NO_WORDS')) {
+      return const _Ok('');
+    }
+    if (status == 429) {
+      return _Wait(
+        _ErrorInfo(
+          _statusTitle(status, info.vendor),
+          detail: 'HTTP $status · $body',
+          hint: _statusHint(status),
+        ),
+        retryAfter: _retryAfter(response),
       );
     }
-    return extractText(json);
+    if (status >= 500) return _Transient('HTTP $status · $body');
+    return _Failed(
+      _ErrorInfo(
+        _statusTitle(status, info.vendor),
+        detail: 'HTTP $status · $body',
+        hint: _statusHint(status),
+      ),
+      // 鉴权、地址、体积上限：换一段也不会好，任何模式下都停。
+      fatal: const {401, 403, 404, 413}.contains(status),
+    );
+  }
+
+  /// Retry-After 只认秒数形式；HTTP 日期形式极少见，交给退避阶梯。
+  static Duration? _retryAfter(http.Response r) {
+    final raw = r.headers['retry-after'];
+    final seconds = raw == null ? null : int.tryParse(raw.trim());
+    if (seconds == null || seconds <= 0) return null;
+    return Duration(seconds: seconds.clamp(1, 300));
   }
 
   Map<String, Object?> _payload(String dataUri, String? lang) {
@@ -320,4 +425,48 @@ class DashScopeAsrProvider implements AsrProvider {
     400 || 422 => '核对模型名与语言设置；该模型可能不支持所选语种。',
     _ => null,
   };
+}
+
+// —— 单段请求的四种结果 ——————————————————————————————————
+
+class _ErrorInfo {
+  const _ErrorInfo(this.title, {this.detail, this.hint});
+
+  final String title;
+  final String? detail;
+  final String? hint;
+}
+
+sealed class _Outcome {
+  const _Outcome();
+}
+
+/// 拿到文本；空串表示这段没话。
+class _Ok extends _Outcome {
+  const _Ok(this.text);
+
+  final String text;
+}
+
+/// 限流或断网：不是这一段的错，等一等再试同一段。
+class _Wait extends _Outcome {
+  const _Wait(this.reason, {this.retryAfter});
+
+  final _ErrorInfo reason;
+  final Duration? retryAfter;
+}
+
+/// 请求被拒（4xx）。[fatal] 的换一段也不会好。
+class _Failed extends _Outcome {
+  const _Failed(this.error, {this.fatal = false});
+
+  final _ErrorInfo error;
+  final bool fatal;
+}
+
+/// 服务端问题（5xx / 空响应）：记一次失败，稍后可重试。
+class _Transient extends _Outcome {
+  const _Transient(this.error);
+
+  final String error;
 }

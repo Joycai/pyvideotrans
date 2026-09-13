@@ -19,12 +19,16 @@ class TaskDetailPanel extends StatefulWidget {
     required this.onClose,
     required this.onResume,
     required this.onOpenEditor,
+    this.onResumeAuto,
   });
 
   final SubtitleTask task;
   final VoidCallback onClose;
   final VoidCallback onResume;
   final VoidCallback onOpenEditor;
+
+  /// 「自动重试并跳过失败段」。只对识别阶段有意义，为 null 就不显示。
+  final VoidCallback? onResumeAuto;
 
   @override
   State<TaskDetailPanel> createState() => _TaskDetailPanelState();
@@ -46,6 +50,7 @@ class _TaskDetailPanelState extends State<TaskDetailPanel> {
               _ErrorBlock(
                 task: task,
                 onResume: widget.onResume,
+                onResumeAuto: widget.onResumeAuto,
               ),
             _Section(
               title: '各阶段耗时',
@@ -172,10 +177,15 @@ class _Header extends StatelessWidget {
 }
 
 class _ErrorBlock extends StatelessWidget {
-  const _ErrorBlock({required this.task, required this.onResume});
+  const _ErrorBlock({
+    required this.task,
+    required this.onResume,
+    this.onResumeAuto,
+  });
 
   final SubtitleTask task;
   final VoidCallback onResume;
+  final VoidCallback? onResumeAuto;
 
   @override
   Widget build(BuildContext context) {
@@ -236,13 +246,25 @@ class _ErrorBlock extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.s3),
           // 主操作就是续跑 —— 用户最担心的是「重试是不是要从头再来」。
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _ErrorButton(
-              label: '从${task.resumeStage.label}阶段继续',
-              icon: Symbols.replay,
-              onPressed: onResume,
-            ),
+          // 识别阶段多一个「自动重试」：失败的段自动重试、到上限跳过，
+          // 限流时等待恢复，不用人盯着一次次点。
+          Wrap(
+            spacing: AppSpacing.s2,
+            runSpacing: AppSpacing.s2,
+            children: [
+              _ErrorButton(
+                label: '从${task.resumeStage.label}阶段继续',
+                icon: Symbols.replay,
+                onPressed: onResume,
+              ),
+              if (onResumeAuto != null &&
+                  task.resumeStage == TaskStage.recognize)
+                _ErrorButton(
+                  label: '自动重试并跳过失败段',
+                  icon: Symbols.autorenew,
+                  onPressed: onResumeAuto!,
+                ),
+            ],
           ),
         ],
       ),

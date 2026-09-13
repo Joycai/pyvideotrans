@@ -115,6 +115,8 @@ class TasksBoard extends StatelessWidget {
                       task: selected,
                       onClose: () => onSelect(selected.id),
                       onResume: () => onAction(selected, TaskAction.resume),
+                      onResumeAuto: () =>
+                          onAction(selected, TaskAction.resumeAuto),
                       onOpenEditor: () =>
                           onAction(selected, TaskAction.openEditor),
                     ),

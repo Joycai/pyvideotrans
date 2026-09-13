@@ -22,6 +22,9 @@ class TaskQueue extends ChangeNotifier {
   final Map<String, CancellationToken> _tokens = {};
   String? _runningId;
 
+  /// [resumeAuto] 正在调 [resume]，别把刚打开的自动模式又关掉。
+  bool _autoRequested = false;
+
   UnmodifiableListView<SubtitleTask> get tasks => UnmodifiableListView(_tasks);
 
   SubtitleTask? get running =>
@@ -89,10 +92,29 @@ class TaskQueue extends ChangeNotifier {
     }
   }
 
+  /// 自动重试并跳过失败段：识别阶段里失败的段自动重试，达到上限就跳过
+  /// 继续；限流与断网不算失败，等恢复后再试。
+  void resumeAuto(String id) {
+    final task = byId(id);
+    if (task == null || task.isActive) return;
+    (task.recognition ??= RecognitionCheckpoint()).autoRetry = true;
+    _autoRequested = true;
+    task.note(
+      '自动重试：失败的段最多重试 ${RecognitionCheckpoint.maxFailures} 次后跳过，'
+      '限流时等待恢复',
+    );
+    resume(id);
+  }
+
   /// 从中断处继续。已完成的阶段不会重做。
+  ///
+  /// 普通续跑关掉自动模式：用户每次点的是哪个按钮，就按哪个按钮的意思来。
+  /// [resumeAuto] 先打开标记再调这里，所以用 [_autoRequested] 区分。
   void resume(String id) {
     final task = byId(id);
     if (task == null || task.isActive) return;
+    if (!_autoRequested) task.recognition?.autoRetry = false;
+    _autoRequested = false;
     task.status = TaskStatus.queued;
     task.error = null;
     // 把失败/取消的那一个阶段退回待执行，之前完成的保持 done。
