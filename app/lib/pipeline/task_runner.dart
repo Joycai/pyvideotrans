@@ -4,6 +4,7 @@ import 'dart:io';
 import '../domain/cue.dart';
 import '../domain/language.dart';
 import '../domain/line_wrap.dart';
+import '../domain/segmenter.dart';
 import '../domain/srt.dart';
 import '../domain/task.dart';
 import '../domain/task_options.dart';
@@ -277,38 +278,19 @@ class TaskRunner {
     },
   );
 
-  /// 断句：合并过短的分段，避免字幕闪一下就过去。
+  /// 断句：修正重叠、合并过短的分段。规则见 [Segmenter]。
   Future<void> _segment(SubtitleTask task, void Function() onChange) => _stage(
     task,
     TaskStage.segment,
     onChange,
     skip: !task.kind.needsRecognition,
     () async {
-      const minDurationMs = 500;
-      final cues = task.document.cues;
-      final merged = <Cue>[];
-      var joined = 0;
-
-      for (final cue in cues) {
-        final last = merged.isEmpty ? null : merged.last;
-        // 过短且与上一条紧邻时并进去；相隔较远说明是独立的短应答，保留。
-        // 不同说话人的不并 —— 短应答恰恰常是换人。
-        if (last != null &&
-            cue.durationMs < minDurationMs &&
-            cue.startMs - last.endMs < 200 &&
-            last.speaker == cue.speaker) {
-          merged[merged.length - 1] = last.copyWith(
-            endMs: cue.endMs,
-            source:
-                '${last.source}'
-                '${task.sourceLanguage.cjk ? '' : ' '}'
-                '${cue.source}',
-          );
-          joined++;
-        } else {
-          merged.add(cue.copyWith(index: merged.length + 1));
-        }
-      }
+      final result = const Segmenter().run(
+        task.document.cues,
+        cjk: task.sourceLanguage.cjk,
+      );
+      final merged = result.cues;
+      final joined = result.joined;
 
       task.document = task.document.copyWith(cues: merged);
       task.stages[TaskStage.segment] = task.stages[TaskStage.segment]!.copyWith(
