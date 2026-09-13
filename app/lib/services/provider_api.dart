@@ -1,4 +1,7 @@
 import '../domain/cue.dart';
+import '../domain/recognition_checkpoint.dart';
+
+export '../domain/recognition_checkpoint.dart';
 
 /// 协作式取消。所有 provider 在每个可中断点检查 [throwIfCancelled]。
 class CancellationToken {
@@ -80,7 +83,8 @@ class ProviderInfo {
 
 /// 语音识别。
 ///
-/// 实现者只需要把音频变成 [Cue] 列表；抽音、分段、重试、断点由流水线负责。
+/// 实现者只需要把音频变成 [Cue] 列表；抽音、分段、重试由流水线负责。
+/// 逐段识别的实现可以用 [checkpoint] 记录每段结果，续跑时跳过已完成的段。
 abstract class AsrProvider {
   ProviderInfo get info;
 
@@ -90,6 +94,7 @@ abstract class AsrProvider {
     required String language,
     required CancellationToken token,
     required ProgressSink onProgress,
+    RecognitionCheckpoint? checkpoint,
   });
 }
 

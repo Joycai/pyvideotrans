@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/services/audio_splitter.dart';
 import 'package:subtitle_studio/services/dashscope_asr.dart';
 import 'package:subtitle_studio/services/openai_compatible.dart';
@@ -184,13 +186,134 @@ void main() {
       expect(body['parameters'], {'format': 'wav', 'sample_rate': '16000'});
     });
 
-    test('某段 5xx 跳过继续，全部失败才报错', () async {
+    test('某段 5xx 先记进检查点，续跑只重试它', () async {
       var n = 0;
       final client = MockClient((req) async {
         n++;
         return n == 1
             ? http.Response('busy', 503)
             : _ok(_qwen3Reply('好的'));
+      });
+      final provider = DashScopeAsrProvider(
+        info: _info,
+        endpoint: _endpoint(),
+        splitter: FakeSplitter(2),
+        client: client,
+      );
+      final cp = RecognitionCheckpoint();
+
+      await expectLater(
+        provider.transcribe(
+          audioPath: audio,
+          language: 'zh',
+          token: CancellationToken(),
+          onProgress: _noProgress,
+          checkpoint: cp,
+        ),
+        throwsA(
+          isA<ProviderException>()
+              .having((e) => e.message, 'message', '有 1 段识别失败')
+              .having((e) => e.detail, 'detail', contains('HTTP 503')),
+        ),
+      );
+      // 第一段失败、第二段成功，两段都发过请求。
+      expect(n, 2);
+      expect(cp.doneCount, 1);
+      expect(cp.pending.single.failures, 1);
+
+      final notes = <String>[];
+      final cues = await provider.transcribe(
+        audioPath: audio,
+        language: 'zh',
+        token: CancellationToken(),
+        onProgress: (_, _, {note}) => notes.add(note ?? ''),
+        checkpoint: cp,
+      );
+      // 续跑只补第一段。
+      expect(n, 3);
+      expect(cues.map((c) => c.source), ['好的', '好的']);
+      expect(cp.doneCount, 2);
+    });
+
+    test('同一段失败 3 次后跳过，留一条空文本、低置信度的占位字幕', () async {
+      final client = MockClient((req) async {
+        final body = jsonDecode(req.body) as Map<String, Object?>;
+        final audioPart =
+            ((((body['input'] as Map)['messages'] as List).last as Map)['content']
+                    as List)
+                .first as Map;
+        // clip_0 的字节是 [0,0,0]，编码后以 AAAA 开头；这一段永远 503。
+        final broken = (audioPart['audio'] as String).endsWith('AAAA');
+        return broken ? http.Response('busy', 503) : _ok(_qwen3Reply('好的'));
+      });
+      final provider = DashScopeAsrProvider(
+        info: _info,
+        endpoint: _endpoint(),
+        splitter: FakeSplitter(2),
+        client: client,
+      );
+      final cp = RecognitionCheckpoint();
+      Future<List<Cue>> run() => provider.transcribe(
+        audioPath: audio,
+        language: 'zh',
+        token: CancellationToken(),
+        onProgress: _noProgress,
+        checkpoint: cp,
+      );
+
+      await expectLater(run(), throwsA(isA<ProviderException>()));
+      await expectLater(run(), throwsA(isA<ProviderException>()));
+      final cues = await run();
+
+      expect(cp.skippedCount, 1);
+      expect(cues, hasLength(2));
+      expect(cues.first.source, '');
+      expect(cues.first.confidence, 0);
+      expect(cues.first.confidence! < Cue.lowConfidence, isTrue);
+      expect(cues.last.source, '好的');
+      // 空文本不会写进 SRT。
+      expect(Srt.serialize(cues), isNot(contains('00:00:00,000')));
+    });
+
+    test('429 立即停，已识别的段留在检查点里', () async {
+      var n = 0;
+      final client = MockClient((_) async {
+        n++;
+        return n == 1
+            ? _ok(_qwen3Reply('第一段'))
+            : http.Response('{"code":"Throttling.RateQuota"}', 429);
+      });
+      final cp = RecognitionCheckpoint();
+      await expectLater(
+        DashScopeAsrProvider(
+          info: _info,
+          endpoint: _endpoint(),
+          splitter: FakeSplitter(3),
+          client: client,
+        ).transcribe(
+          audioPath: audio,
+          language: 'zh',
+          token: CancellationToken(),
+          onProgress: _noProgress,
+          checkpoint: cp,
+        ),
+        throwsA(
+          isA<ProviderException>().having((e) => e.message, 'message', contains('限流')),
+        ),
+      );
+      // 限流后不再碰第三段。
+      expect(n, 2);
+      expect(cp.doneCount, 1);
+      expect(cp.segment(1000, 1900).failures, 1);
+      expect(cp.segment(2000, 2900).failures, 0);
+    });
+
+    test('切分点对不上时检查点作废，从头识别', () async {
+      final cp = RecognitionCheckpoint()..segment(0, 500).text = '旧的';
+      var n = 0;
+      final client = MockClient((_) async {
+        n++;
+        return _ok(_qwen3Reply('新的'));
       });
       final cues = await DashScopeAsrProvider(
         info: _info,
@@ -202,17 +325,21 @@ void main() {
         language: 'zh',
         token: CancellationToken(),
         onProgress: _noProgress,
+        checkpoint: cp,
       );
-      expect(cues.single.source, '好的');
-      expect(cues.single.startMs, 1000);
+      expect(n, 2);
+      expect(cues.map((c) => c.source), ['新的', '新的']);
+      expect(cp.length, 2);
+    });
 
-      final allFail = MockClient((_) async => http.Response('busy', 503));
+    test('全部段都没返回文本才报「未识别到语音」', () async {
+      final client = MockClient((_) async => _ok(_qwen3Reply('')));
       expect(
         () => DashScopeAsrProvider(
           info: _info,
           endpoint: _endpoint(),
           splitter: FakeSplitter(2),
-          client: allFail,
+          client: client,
         ).transcribe(
           audioPath: audio,
           language: 'zh',

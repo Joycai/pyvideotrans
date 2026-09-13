@@ -47,6 +47,9 @@ class FakeAsr implements AsrProvider {
   /// 记下最后一次收到的语言，用来核对下发的是代码而不是中文名。
   String? lastLanguage;
 
+  /// 每次收到的检查点，用来核对续跑时交回的是同一份。
+  final checkpoints = <RecognitionCheckpoint?>[];
+
   @override
   ProviderInfo get info => _asrInfo;
 
@@ -56,10 +59,14 @@ class FakeAsr implements AsrProvider {
     required String language,
     required CancellationToken token,
     required ProgressSink onProgress,
+    RecognitionCheckpoint? checkpoint,
   }) async {
     calls++;
     lastLanguage = language;
+    checkpoints.add(checkpoint);
     if (failTimes-- > 0) {
+      // 失败前已经识别了一段，记进检查点。
+      checkpoint?.segment(0, 2000).text = '第一句';
       throw const ProviderException('识别服务挂了', hint: '稍后重试');
     }
     onProgress(1, 1, note: '完成');
@@ -353,6 +360,27 @@ void main() {
       );
       await runner.run(task, token: CancellationToken(), onChange: () {});
       expect(task.document.cues.first.source, 'hello world');
+    });
+
+    test('识别失败后续跑，检查点原样交回，完成后清掉', () async {
+      final (task, runner, asr) = await transcribeTask();
+      asr.failTimes = 1;
+      await runner.run(task, token: CancellationToken(), onChange: () {});
+      expect(task.status, TaskStatus.failed);
+      expect(task.recognition, isNotNull);
+      expect(task.recognition!.doneCount, 1);
+
+      // 与队列 resume 相同的复位：失败的阶段退回待执行，检查点不动。
+      task.status = TaskStatus.queued;
+      task.error = null;
+      task.stages[TaskStage.recognize] = const StageRecord();
+      await runner.run(task, token: CancellationToken(), onChange: () {});
+
+      expect(task.status, TaskStatus.done);
+      expect(asr.checkpoints, hasLength(2));
+      expect(identical(asr.checkpoints[0], asr.checkpoints[1]), isTrue);
+      expect(task.recognition, isNull);
+      expect(task.log.any((l) => l.message.contains('识别续跑：1 段已完成')), isTrue);
     });
 
     test('不翻译时跳过翻译阶段，只写出原文', () async {
