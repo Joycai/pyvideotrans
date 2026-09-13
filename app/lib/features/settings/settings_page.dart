@@ -1,379 +1,715 @@
+import 'dart:async';
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/buttons.dart';
+import '../../core/widgets/fields.dart';
+import '../../core/widgets/glass_panel.dart';
 import '../../core/widgets/indicators.dart';
+import '../../domain/language.dart';
+import '../../domain/task_options.dart';
 import '../../services/local/local_backend.dart';
-import '../../services/provider_api.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
+import '../shell/app_shell.dart';
+import 'provider_section.dart';
+import 'section_outline.dart';
+import 'settings_section.dart';
 
-/// 设置页：外观、识别服务、翻译服务、语言、输出目录、本地服务。
+/// 顶栏内容。副标题点明「自动保存」，右侧是「恢复默认」。
+/// 放在这里而不是 main.dart，截图测试才能用同一份。
+PageChrome settingsChrome({required VoidCallback onReset}) => PageChrome(
+  title: '设置',
+  subtitle: '改动即时生效，自动保存；识别与翻译各自独立配置',
+  actions: [
+    QuietButton(label: '恢复默认', icon: Symbols.restart_alt, onPressed: onReset),
+  ],
+);
+
+/// 设置页（设计稿 M-SettingsPage）。
+///
+/// 内容面板左侧是 208px 的分区目录，右侧内容列限宽 880 靠左，七个分区
+/// 竖排、间距 32。没有「保存 / 取消」：改动即写入，只在改动的分区标题
+/// 右侧闪一下「已保存」。
+///
+/// 两个响应式断点（按窗口宽度，与设计稿一致；这里换算成面板宽）：
+/// - 窄于 1180：目录折叠成面板顶部 48px 的横向 Tab；
+/// - 窄于 1000：表单行的标签堆到控件上方。
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, required this.settings});
 
   final AppSettings settings;
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  State<SettingsPage> createState() => SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+/// 外壳占掉的宽度：12 外边距 ×2 + 72 Rail + 12 间隙。
+const _kShellWidth = 108.0;
+
+/// 目录折叠成 Tab 的面板宽度阈值（窗口 1180）。
+const _kTabsBelow = 1180 - _kShellWidth;
+
+/// 标签堆叠的面板宽度阈值（窗口 1000）。
+const _kStackBelow = 1000 - _kShellWidth;
+
+/// 跳转后分区标题距内容区顶部的留白。
+const _kScrollMargin = 16.0;
+
+class SettingsPageState extends State<SettingsPage> {
+  final _scroll = ScrollController();
+  final _viewportKey = GlobalKey();
+  final _sectionKeys = {
+    for (final k in SettingsSectionKey.values) k: GlobalKey(),
+  };
+
+  SettingsSectionKey _active = SettingsSectionKey.appearance;
+
+  /// 点击目录后的平滑滚动期间不跟着滚动位置改高亮，否则目录会先跳到
+  /// 中间几个分区再落到目标上。
+  bool _jumping = false;
+  Timer? _spyTimer;
+
+  SettingsSectionKey? _saved;
+  Timer? _savedTimer;
+  Timer? _typingTimer;
+
+  bool _asrKeyVisible = false;
+  bool _mtKeyVisible = false;
+
   AppSettings get s => widget.settings;
 
   @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+    s.addListener(_refresh);
+  }
+
+  @override
+  void didUpdateWidget(SettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings != widget.settings) {
+      oldWidget.settings.removeListener(_refresh);
+      widget.settings.addListener(_refresh);
+    }
+  }
+
+  @override
+  void dispose() {
+    _spyTimer?.cancel();
+    _savedTimer?.cancel();
+    _typingTimer?.cancel();
+    s.removeListener(_refresh);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  /// 当前高亮的分区（测试用）。
+  @visibleForTesting
+  SettingsSectionKey get active => _active;
+
+  // ── 已保存反馈 ────────────────────────────────────────────────────────
+
+  /// 某分区写入成功。下拉、分段、滑杆松手即显示；键入的要等停止输入 600ms。
+  void _touch(SettingsSectionKey key, {bool typed = false}) {
+    _typingTimer?.cancel();
+    if (typed) {
+      _typingTimer = Timer(const Duration(milliseconds: 600), () {
+        showSaved(key);
+      });
+    } else {
+      showSaved(key);
+    }
+  }
+
+  /// 在该分区标题右侧显示「已保存」，2 秒后淡出。
+  @visibleForTesting
+  void showSaved(SettingsSectionKey key) {
+    if (!mounted) return;
+    _savedTimer?.cancel();
+    setState(() => _saved = key);
+    _savedTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _saved = null);
+    });
+  }
+
+  // ── 目录：跳转与滚动高亮 ─────────────────────────────────────────────
+
+  /// 各分区标题相对内容区顶部的位置。
+  Map<SettingsSectionKey, double> _sectionTops() {
+    final viewport =
+        _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (viewport == null) return const {};
+    final tops = <SettingsSectionKey, double>{};
+    for (final entry in _sectionKeys.entries) {
+      final box = entry.value.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null) continue;
+      tops[entry.key] = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
+    }
+    return tops;
+  }
+
+  /// 点击目录：平滑滚到该分区，标题贴到内容区顶部下方 16px。
+  void jumpTo(SettingsSectionKey key) {
+    final top = _sectionTops()[key];
+    setState(() => _active = key);
+    if (top == null || !_scroll.hasClients) return;
+    final target = (_scroll.offset + top - _kScrollMargin).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
+    _jumping = true;
+    _scroll
+        .animateTo(target, duration: AppDuration.long, curve: kEasingEmphasized)
+        .whenComplete(() => _jumping = false);
+  }
+
+  /// 滚动停下 100ms 后再更新高亮，快速滚动时目录不会乱跳。
+  void _onScroll() {
+    if (_jumping) return;
+    _spyTimer?.cancel();
+    _spyTimer = Timer(AppDuration.short, _spy);
+  }
+
+  /// 「距内容区顶部最近且已越过顶部的分区」为当前项；都没越过就是第一个。
+  void _spy() {
+    if (!mounted) return;
+    final tops = _sectionTops();
+    if (tops.isEmpty) return;
+    var current = SettingsSectionKey.values.first;
+    for (final key in SettingsSectionKey.values) {
+      final top = tops[key];
+      if (top != null && top <= _kScrollMargin + AppSpacing.s2) current = key;
+    }
+    if (current != _active) setState(() => _active = current);
+  }
+
+  // ── 恢复默认 ──────────────────────────────────────────────────────────
+
+  /// 顶栏「恢复默认」：确认对话框二次确认，可以只重置当前分区，也可以全部。
+  Future<void> confirmReset() async {
+    final group = _groupOf(_active);
+    final choice = await showDialog<_ResetChoice>(
+      context: context,
+      builder: (context) =>
+          _ResetDialog(current: _active, hasGroup: group != null),
+    );
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case _ResetChoice.current:
+        if (group != null) s.reset(group);
+      case _ResetChoice.all:
+        s.resetAll();
+    }
+    showSaved(_active);
+  }
+
+  static SettingsGroup? _groupOf(SettingsSectionKey key) => switch (key) {
+    SettingsSectionKey.appearance => SettingsGroup.appearance,
+    SettingsSectionKey.asr => SettingsGroup.asr,
+    SettingsSectionKey.mt => SettingsGroup.translation,
+    SettingsSectionKey.lang => SettingsGroup.language,
+    SettingsSectionKey.defaults => SettingsGroup.defaults,
+    SettingsSectionKey.output => SettingsGroup.output,
+    SettingsSectionKey.local => null,
+  };
+
+  // ── 布局 ──────────────────────────────────────────────────────────────
+
+  Set<SettingsSectionKey> get _warnKeys {
+    final asr = Registry.asrInfo(s.asrProviderId);
+    final mt = Registry.translationInfo(s.translationProviderId);
+    return {
+      if (asr != null && asr.implemented && !s.isConfigured(asr))
+        SettingsSectionKey.asr,
+      if (mt != null && mt.implemented && !s.isConfigured(mt))
+        SettingsSectionKey.mt,
+    };
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final cs = context.colors;
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: cs.outlineVariant),
+    return ContentPanel(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final tabs = w < _kTabsBelow;
+          final stacked = w < _kStackBelow;
+          final outline = SectionOutline(
+            mode: tabs ? OutlineMode.tabs : OutlineMode.rail,
+            active: _active,
+            warn: _warnKeys,
+            onSelect: jumpTo,
+          );
+          final content = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (tabs) outline,
+              Expanded(child: _content(stacked)),
+            ],
+          );
+          if (tabs) return content;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(width: 208, child: outline),
+              Expanded(child: content),
+            ],
+          );
+        },
       ),
-      child: ListView(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.s6,
-          vertical: AppSpacing.s5,
-        ),
-        children: [
-          // 内容列限宽并靠左：设置项是一行行的表单，跨满 1440px 会让眼睛来回扫；
-          // 左边已经有导航栏了，再居中会把表单推得离视线起点太远。
-          Align(
-            alignment: Alignment.topLeft,
+    );
+  }
+
+  Widget _content(bool stacked) {
+    final padding = stacked
+        ? const EdgeInsets.fromLTRB(24, 20, 24, 32)
+        : const EdgeInsets.fromLTRB(32, 24, 32, 40);
+    return Scrollbar(
+      controller: _scroll,
+      child: SingleChildScrollView(
+        key: _viewportKey,
+        controller: _scroll,
+        padding: padding,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Align(
+            alignment: Alignment.centerLeft,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
+              constraints: const BoxConstraints(maxWidth: 880),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  _Section(
-                    title: '外观',
-                    children: [
-                      _Row(
-                        label: '主题',
-                        hint: '深色主题是单独调校的，不是浅色的反色',
-                        child: _Choice(
-                          value: s.themeMode,
-                          options: const [
-                            (value: 'system', label: '跟随系统'),
-                            (value: 'light', label: '浅色'),
-                            (value: 'dark', label: '深色'),
-                          ],
-                          onChanged: (v) => setState(() => s.themeMode = v),
-                        ),
-                      ),
-                    ],
-                  ),
-                  _ProviderSection(
-                    title: '识别服务',
-                    subtitle: '音视频转字幕',
-                    infos: Registry.asr,
-                    selectedId: s.asrProviderId,
-                    onSelect: (id) => setState(() => s.asrProviderId = id),
-                    settings: s,
-                    onChanged: () => setState(() {}),
-                    extra: _MultilineRow(
-                      label: '识别提示',
-                      hint: '专有名词、人名、术语。填了能明显提高识别准确率。',
-                      value: s.asrPrompt,
-                      onChanged: (v) => s.asrPrompt = v,
-                    ),
-                  ),
-                  _ProviderSection(
-                    title: '翻译服务',
-                    subtitle: '字幕翻译',
-                    infos: Registry.translation,
-                    selectedId: s.translationProviderId,
-                    onSelect: (id) =>
-                        setState(() => s.translationProviderId = id),
-                    settings: s,
-                    onChanged: () => setState(() {}),
-                    extra: Column(
-                      children: [
-                        _Row(
-                          label: '每批条数',
-                          hint: '一次送给模型多少条字幕。太大模型容易合并或漏掉行，'
-                              '太小则费 token。条数对不上时会自动减半重试。',
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Slider(
-                                  value: s.translationBatchSize.toDouble(),
-                                  min: 1,
-                                  max: 50,
-                                  divisions: 49,
-                                  label: '${s.translationBatchSize}',
-                                  onChanged: (v) => setState(
-                                    () => s.translationBatchSize = v.round(),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 32,
-                                child: Timecode('${s.translationBatchSize}'),
-                              ),
-                            ],
-                          ),
-                        ),
-                        _MultilineRow(
-                          label: '翻译要求',
-                          hint: '术语表、语气、人称。会作为补充要求加进提示词。',
-                          value: s.translationGuidance,
-                          onChanged: (v) => s.translationGuidance = v,
-                        ),
-                      ],
-                    ),
-                  ),
-                  _Section(
-                    title: '语言',
-                    children: [
-                      _Row(
-                        label: '源语言',
-                        hint: '填 auto 交给服务端自动判定',
-                        child: _Text(
-                          value: s.sourceLanguage,
-                          onChanged: (v) => s.sourceLanguage = v,
-                        ),
-                      ),
-                      _Row(
-                        label: '目标语言',
-                        hint: '用自然语言写，例如「英文」「日文」「简体中文」',
-                        child: _Text(
-                          value: s.targetLanguage,
-                          onChanged: (v) => s.targetLanguage = v,
-                        ),
-                      ),
-                    ],
-                  ),
-                  _Section(
-                    title: '输出',
-                    children: [
-                      _Row(
-                        label: '输出目录',
-                        hint: '留空则写到源文件所在目录',
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                s.outputDir ?? '源文件所在目录',
-                                overflow: TextOverflow.ellipsis,
-                                style: context.texts.bodyMedium?.copyWith(
-                                  color: s.outputDir == null
-                                      ? cs.onSurfaceVariant
-                                      : cs.onSurface,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.s2),
-                            TextButton(
-                              onPressed: () async {
-                                final dir = await getDirectoryPath();
-                                if (dir != null) {
-                                  setState(() => s.outputDir = dir);
-                                }
-                              },
-                              child: const Text('选择…'),
-                            ),
-                            if (s.outputDir != null)
-                              TextButton(
-                                onPressed: () =>
-                                    setState(() => s.outputDir = null),
-                                child: const Text('清除'),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const _LocalBackendSection(),
-                  const SizedBox(height: AppSpacing.s8),
+                  for (final (i, section) in _sections(stacked).indexed) ...[
+                    if (i > 0) const SizedBox(height: AppSpacing.s8),
+                    section,
+                  ],
+                  const SizedBox(height: AppSpacing.s6),
+                  const _Footer(),
                 ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
-}
 
-/// 一个服务分区：选服务 + 填地址/模型/密钥。
-class _ProviderSection extends StatelessWidget {
-  const _ProviderSection({
-    required this.title,
-    required this.subtitle,
-    required this.infos,
-    required this.selectedId,
-    required this.onSelect,
-    required this.settings,
-    required this.onChanged,
-    this.extra,
-  });
+  Widget _anchor(SettingsSectionKey key, Widget child) =>
+      KeyedSubtree(key: _sectionKeys[key], child: child);
 
-  final String title;
-  final String subtitle;
-  final List<ProviderInfo> infos;
-  final String selectedId;
-  final ValueChanged<String> onSelect;
-  final AppSettings settings;
-  final VoidCallback onChanged;
-  final Widget? extra;
+  List<Widget> _sections(bool stacked) => [
+    _anchor(SettingsSectionKey.appearance, _appearance(stacked)),
+    _anchor(
+      SettingsSectionKey.asr,
+      ProviderSection(
+        kind: ProviderKind.asr,
+        settings: s,
+        stacked: stacked,
+        saved: _saved == SettingsSectionKey.asr,
+        keyVisible: _asrKeyVisible,
+        onToggleKeyVisible: () =>
+            setState(() => _asrKeyVisible = !_asrKeyVisible),
+        onChanged: ({bool typed = false}) =>
+            _touch(SettingsSectionKey.asr, typed: typed),
+      ),
+    ),
+    _anchor(
+      SettingsSectionKey.mt,
+      ProviderSection(
+        kind: ProviderKind.mt,
+        settings: s,
+        stacked: stacked,
+        saved: _saved == SettingsSectionKey.mt,
+        keyVisible: _mtKeyVisible,
+        onToggleKeyVisible: () =>
+            setState(() => _mtKeyVisible = !_mtKeyVisible),
+        onChanged: ({bool typed = false}) =>
+            _touch(SettingsSectionKey.mt, typed: typed),
+      ),
+    ),
+    _anchor(SettingsSectionKey.lang, _language(stacked)),
+    _anchor(SettingsSectionKey.defaults, _defaults(stacked)),
+    _anchor(SettingsSectionKey.output, _output(stacked)),
+    _anchor(SettingsSectionKey.local, const _LocalBackendSection()),
+  ];
 
-  @override
-  Widget build(BuildContext context) {
-    final info = infos.where((i) => i.id == selectedId).firstOrNull ?? infos.first;
-    final config = settings.configFor(info.id);
-    final configured = settings.isConfigured(info);
-
-    return _Section(
-      title: title,
-      subtitle: subtitle,
-      trailing: info.implemented
-          ? StatusTag(
-              label: configured ? '已配置' : '未配置',
-              icon: configured ? Symbols.check_circle : Symbols.error,
-              tone: configured ? TagTone.success : TagTone.quiet,
-            )
-          : const StatusTag(label: '第一期未实施', tone: TagTone.quiet),
-      children: [
-        _Row(
-          label: '服务',
-          child: DropdownButtonFormField<String>(
-            initialValue: info.id,
-            isDense: true,
-            items: [
-              for (final i in infos)
-                DropdownMenuItem(
-                  value: i.id,
-                  child: Row(
-                    children: [
-                      Icon(
-                        i.runsLocally ? Symbols.computer : Symbols.cloud,
-                        size: 16,
-                        weight: 400,
-                        color: context.colors.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: AppSpacing.s2),
-                      Text(i.name),
-                      if (!i.implemented)
-                        Text(
-                          ' · 未实施',
-                          style: context.texts.bodySmall?.copyWith(
-                            color: context.colors.onSurfaceVariant,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+  Widget _appearance(bool stacked) => SettingsSection(
+    section: SettingsSectionKey.appearance,
+    saved: _saved == SettingsSectionKey.appearance,
+    children: [
+      SettingsRow(
+        label: '主题',
+        note: '跟随系统时随桌面的浅色 / 深色设置切换',
+        stacked: stacked,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: PillSegments<String>(
+            segments: const [
+              (value: 'system', label: '跟随系统', icon: Symbols.brightness_auto),
+              (value: 'light', label: '浅色', icon: Symbols.light_mode),
+              (value: 'dark', label: '深色', icon: Symbols.dark_mode),
             ],
+            value: s.themeMode,
             onChanged: (v) {
-              if (v != null) onSelect(v);
+              s.themeMode = v;
+              _touch(SettingsSectionKey.appearance);
             },
           ),
         ),
-        _Row(
-          label: '服务地址',
-          hint: '填到 /v1 为止',
-          child: _Text(
-            key: ValueKey('${info.id}-url'),
-            value: config.baseUrl ?? info.defaultBaseUrl ?? '',
-            onChanged: (v) {
-              settings.setConfig(info.id, config.copyWith(baseUrl: v));
-              onChanged();
-            },
-          ),
-        ),
-        _Row(
-          label: '模型',
-          hint: info.models.isEmpty ? null : '常用：${info.models.join('、')}',
-          child: _Text(
-            key: ValueKey('${info.id}-model'),
-            value: config.model ?? info.defaultModel ?? '',
-            onChanged: (v) {
-              settings.setConfig(info.id, config.copyWith(model: v));
-              onChanged();
-            },
-          ),
-        ),
-        if (info.needsApiKey)
-          _Row(
-            label: 'API 密钥',
-            hint: '目前以明文存在本机配置里，还没接系统钥匙串',
-            child: _Text(
-              key: ValueKey('${info.id}-key'),
-              value: config.apiKey ?? '',
-              obscure: true,
-              onChanged: (v) {
-                settings.setConfig(info.id, config.copyWith(apiKey: v));
-                onChanged();
+      ),
+    ],
+  );
+
+  Widget _language(bool stacked) => SettingsSection(
+    section: SettingsSectionKey.lang,
+    note: '识别与翻译共用这一组语言设置，新建任务时可以临时改。',
+    saved: _saved == SettingsSectionKey.lang,
+    children: [
+      SettingsRow(
+        label: '源语言',
+        note: '音频里说的语言。auto 让识别模型自己判断。',
+        stacked: stacked,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: AppDropdown<String>(
+              value: Languages.resolve(s.sourceLanguage).code,
+              groups: [
+                DropdownGroup(
+                  entries: [
+                    for (final l in Languages.source)
+                      DropdownEntry(
+                        value: l.code,
+                        label: l.isAuto ? '自动检测（auto）' : '${l.name}（${l.code}）',
+                      ),
+                  ],
+                ),
+              ],
+              onChanged: (code) {
+                s.sourceLanguage = code;
+                _touch(SettingsSectionKey.lang);
               },
             ),
           ),
-        ?extra,
+        ),
+      ),
+      SettingsRow(
+        label: '目标语言',
+        note: '用自然语言写，会原样交给翻译模型',
+        stacked: stacked,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: SettingsTextField(
+              value: s.targetLanguage,
+              hint: '例如「英文」「日文」「简体中文」',
+              onChanged: (v) {
+                s.targetLanguage = v;
+                _touch(SettingsSectionKey.lang, typed: true);
+              },
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  Widget _defaults(bool stacked) {
+    final cs = context.colors;
+    Widget lineLength(String label, Widget field) => SizedBox(
+      width: 132,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: context.texts.labelMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.s1),
+          field,
+        ],
+      ),
+    );
+
+    return SettingsSection(
+      section: SettingsSectionKey.defaults,
+      note: '新建转写 / 翻译时的初始参数。对话框里改动只作用于当次任务。',
+      saved: _saved == SettingsSectionKey.defaults,
+      children: [
+        SettingsRow(
+          label: '输出格式',
+          note: 'srt 兼容性最好；ass 保留样式',
+          stacked: stacked,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
+              child: AppDropdown<SubtitleFormat>(
+                value: s.outputFormat,
+                menuWidth: 240,
+                groups: [
+                  DropdownGroup(
+                    entries: [
+                      for (final f in SubtitleFormat.values)
+                        DropdownEntry(
+                          value: f,
+                          label: f.extension,
+                          enabled: f.implemented,
+                          description: f.implemented
+                              ? f.label
+                              : '${f.label} · 第二期实施',
+                        ),
+                    ],
+                  ),
+                ],
+                onChanged: (f) {
+                  s.outputFormat = f;
+                  _touch(SettingsSectionKey.defaults);
+                },
+              ),
+            ),
+          ),
+        ),
+        SettingsRow(
+          label: '双语排版',
+          note: '翻译任务里原文与译文的上下关系',
+          stacked: stacked,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: PillSegments<BilingualLayout>(
+              segments: const [
+                (value: BilingualLayout.targetOnly, label: '单语', icon: null),
+                (value: BilingualLayout.targetAbove, label: '译文在上', icon: null),
+                (value: BilingualLayout.targetBelow, label: '原文在上', icon: null),
+              ],
+              value: s.bilingual,
+              onChanged: (v) {
+                s.bilingual = v;
+                _touch(SettingsSectionKey.defaults);
+              },
+            ),
+          ),
+        ),
+        SettingsRow(
+          label: '单行字数',
+          note: '超过就断行。按文字类型分开设，中日韩按字数、拉丁按字符数。',
+          stacked: stacked,
+          child: Wrap(
+            spacing: AppSpacing.s4,
+            runSpacing: AppSpacing.s3,
+            children: [
+              lineLength(
+                '中日韩',
+                NumberField(
+                  key: ValueKey('cjk-${s.cjkLineLength}'),
+                  value: s.cjkLineLength,
+                  min: 4,
+                  max: 60,
+                  width: 132,
+                  onChanged: (v) {
+                    if (v == s.cjkLineLength) return;
+                    s.cjkLineLength = v;
+                    _touch(SettingsSectionKey.defaults, typed: true);
+                  },
+                ),
+              ),
+              lineLength(
+                '拉丁',
+                NumberField(
+                  key: ValueKey('latin-${s.latinLineLength}'),
+                  value: s.latinLineLength,
+                  min: 8,
+                  max: 120,
+                  width: 132,
+                  onChanged: (v) {
+                    if (v == s.latinLineLength) return;
+                    s.latinLineLength = v;
+                    _touch(SettingsSectionKey.defaults, typed: true);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _output(bool stacked) {
+    final cs = context.colors;
+    final dir = s.outputDir;
+    return SettingsSection(
+      section: SettingsSectionKey.output,
+      saved: _saved == SettingsSectionKey.output,
+      children: [
+        SettingsRow(
+          label: '输出目录',
+          note: '清除后字幕写回源文件所在目录',
+          stacked: stacked,
+          child: Wrap(
+            spacing: AppSpacing.s2,
+            runSpacing: AppSpacing.s2,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: 200,
+                  // 路径框吃掉一行里按钮以外的全部宽度；换行时退到 200。
+                  maxWidth: stacked
+                      ? double.infinity
+                      : 880 - 180 - 24 - 84 - 64 - 16,
+                ),
+                child: ControlSurface(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.s3,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Symbols.folder,
+                        size: 18,
+                        weight: 400,
+                        color: cs.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: AppSpacing.s2),
+                      Expanded(
+                        child: Text(
+                          dir ?? '源文件所在目录',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: kTimecodeStyle.copyWith(
+                            color: dir == null
+                                ? cs.onSurfaceVariant
+                                : cs.onSurface,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              ControlButton(
+                label: '选择…',
+                onPressed: () async {
+                  final picked = await getDirectoryPath();
+                  if (picked == null || !mounted) return;
+                  s.outputDir = picked;
+                  _touch(SettingsSectionKey.output);
+                },
+              ),
+              QuietButton(
+                label: '清除',
+                onPressed: dir == null
+                    ? null
+                    : () {
+                        s.outputDir = null;
+                        _touch(SettingsSectionKey.output);
+                      },
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
 }
 
+/// 本地模型服务：第一期未实施，用一张说明卡讲清楚「同一条链路」。
 class _LocalBackendSection extends StatelessWidget {
   const _LocalBackendSection();
 
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    return _Section(
-      title: '本地模型服务',
-      subtitle: '在自己的机器上跑识别与翻译',
-      trailing: const StatusTag(label: '第一期未实施', tone: TagTone.quiet),
+    final muted = context.texts.bodyMedium?.copyWith(
+      color: cs.onSurfaceVariant,
+    );
+    return SettingsSection(
+      section: SettingsSectionKey.local,
+      tag: const StatusTag(label: '第一期未实施', tone: TagTone.muted),
       children: [
         Container(
+          margin: const EdgeInsets.only(top: AppSpacing.s3),
           padding: const EdgeInsets.all(AppSpacing.s4),
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(AppRadius.md),
+            borderRadius: BorderRadius.circular(AppRadius.lg),
             border: Border.all(color: cs.outlineVariant),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                '本地模型由一个独立的 Python 后端提供服务，对外暴露 OpenAI 兼容接口。'
-                '客户端走的是与在线 API 完全相同的链路 —— 不存在「本地」和「在线」'
-                '两套代码，流水线、进度、断点续跑、取消、日志全部复用。',
-                style: context.texts.bodyMedium,
-              ),
-              const SizedBox(height: AppSpacing.s3),
-              Text(
-                '启用后只需把服务地址指向本地进程（默认 '
-                '${LocalBackend.asrProviderId == 'local_backend' ? 'http://127.0.0.1:8765/v1' : ''}），'
-                '再在上面两个分区里选中「本地模型服务」即可。'
-                '完整方案见 docs/local-backend.md。',
-                style: context.texts.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.s3),
-              Row(
-                children: [
-                  Icon(
-                    Symbols.info,
-                    size: 16,
-                    weight: 400,
-                    color: cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: AppSpacing.s2),
-                  Expanded(
-                    child: Text(
-                      '现在就想在本机跑翻译：装 Ollama 或 LM Studio，'
-                      '在「翻译服务」里选它们 —— 它们说的也是 OpenAI 兼容协议，已经可用。',
-                      style: context.texts.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
+              Text('本地后端与在线 API 走同一条链路', style: context.texts.titleSmall),
+              const SizedBox(height: AppSpacing.s2 + 2),
+              Text.rich(
+                TextSpan(
+                  style: muted,
+                  children: [
+                    const TextSpan(text: '后续版本会在本机启动一个 OpenAI 兼容服务，默认地址 '),
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.baseline,
+                      baseline: TextBaseline.alphabetic,
+                      child: Timecode(
+                        Registry.asrInfo(LocalBackend.asrProviderId)
+                                ?.defaultBaseUrl ??
+                            'http://127.0.0.1:8765/v1',
                       ),
                     ),
-                  ),
-                ],
+                    const TextSpan(
+                      text:
+                          '。届时在上面两个「服务」下拉里直接选「本地模型服务」，'
+                          '服务地址、模型、提示词这几行的含义完全一致，不需要另学一套设置。',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.s2 + 2),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.s3,
+                  vertical: AppSpacing.s2 + 2,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Symbols.info,
+                      size: 18,
+                      weight: 400,
+                      color: cs.onPrimaryContainer,
+                    ),
+                    const SizedBox(width: AppSpacing.s2),
+                    Expanded(
+                      child: Text(
+                        '现在就想在本机跑翻译：到「翻译服务」里选 Ollama 或 LM Studio，填本机地址，不需要密钥。',
+                        style: context.texts.bodySmall?.copyWith(
+                          color: cs.onPrimaryContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -383,169 +719,77 @@ class _LocalBackendSection extends StatelessWidget {
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({
-    required this.title,
-    required this.children,
-    this.subtitle,
-    this.trailing,
-  });
-
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-  final List<Widget> children;
+/// 页脚：一句话说明自动保存。
+class _Footer extends StatelessWidget {
+  const _Footer();
 
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.s8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(title, style: context.texts.titleLarge),
-              if (subtitle != null) ...[
-                const SizedBox(width: AppSpacing.s3),
-                Text(
-                  subtitle!,
-                  style: context.texts.bodyMedium?.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
-                ),
-              ],
-              const Spacer(),
-              ?trailing,
-            ],
-          ),
-          const SizedBox(height: AppSpacing.s2),
-          Divider(color: cs.outlineVariant),
-          const SizedBox(height: AppSpacing.s3),
-          ...children,
-        ],
+    return Container(
+      padding: const EdgeInsets.only(top: AppSpacing.s4),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: cs.outlineVariant)),
       ),
-    );
-  }
-}
-
-class _Row extends StatelessWidget {
-  const _Row({required this.label, required this.child, this.hint});
-
-  final String label;
-  final String? hint;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = context.colors;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.s4),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 180,
-            child: Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.s2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: context.texts.titleSmall),
-                  if (hint != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      hint!,
-                      style: context.texts.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
+          Icon(
+            Symbols.cloud_done,
+            size: 16,
+            weight: 400,
+            color: cs.onSurfaceVariant,
+          ),
+          const SizedBox(width: AppSpacing.s2),
+          Expanded(
+            child: Text(
+              '改动即时生效并自动保存，没有「保存 / 取消」。密钥与其他设置一起存在本机配置里。',
+              style: context.texts.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
               ),
             ),
           ),
-          const SizedBox(width: AppSpacing.s4),
-          Expanded(child: child),
         ],
       ),
     );
   }
 }
 
-class _MultilineRow extends StatelessWidget {
-  const _MultilineRow({
-    required this.label,
-    required this.hint,
-    required this.value,
-    required this.onChanged,
-  });
+enum _ResetChoice { current, all }
 
-  final String label;
-  final String hint;
-  final String value;
-  final ValueChanged<String> onChanged;
+/// 「恢复默认」的二次确认。沿用 20px 圆角的玻璃浮层。
+class _ResetDialog extends StatelessWidget {
+  const _ResetDialog({required this.current, required this.hasGroup});
+
+  final SettingsSectionKey current;
+
+  /// 当前分区有没有可重置的东西（「本地服务」没有）。
+  final bool hasGroup;
 
   @override
-  Widget build(BuildContext context) => _Row(
-    label: label,
-    hint: hint,
-    child: TextFormField(
-      initialValue: value,
-      maxLines: 3,
-      minLines: 2,
-      style: context.texts.bodyMedium,
-      onChanged: onChanged,
-    ),
-  );
-}
-
-class _Text extends StatelessWidget {
-  const _Text({
-    super.key,
-    required this.value,
-    required this.onChanged,
-    this.obscure = false,
-  });
-
-  final String value;
-  final ValueChanged<String> onChanged;
-  final bool obscure;
-
-  @override
-  Widget build(BuildContext context) => TextFormField(
-    initialValue: value,
-    obscureText: obscure,
-    style: context.texts.bodyMedium,
-    onChanged: onChanged,
-  );
-}
-
-class _Choice extends StatelessWidget {
-  const _Choice({
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
-  final String value;
-  final List<({String value, String label})> options;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerLeft,
-    child: SegmentedButton<String>(
-      segments: [
-        for (final o in options)
-          ButtonSegment(value: o.value, label: Text(o.label)),
+  Widget build(BuildContext context) {
+    final cs = context.colors;
+    return AlertDialog(
+      title: const Text('恢复默认设置'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Text(
+          '全部恢复会清掉所有服务的地址、模型与 API 密钥，并把语言、'
+          '任务默认值、输出目录、主题都退回初始值。已排队的任务不受影响。',
+          style: context.texts.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+        ),
+      ),
+      actions: [
+        QuietButton(label: '取消', onPressed: () => Navigator.pop(context)),
+        if (hasGroup)
+          ControlButton(
+            label: '仅「${current.title}」',
+            onPressed: () => Navigator.pop(context, _ResetChoice.current),
+          ),
+        ControlButton(
+          label: '全部恢复',
+          onPressed: () => Navigator.pop(context, _ResetChoice.all),
+        ),
       ],
-      selected: {value},
-      showSelectedIcon: false,
-      onSelectionChanged: (set) => onChanged(set.first),
-    ),
-  );
+    );
+  }
 }

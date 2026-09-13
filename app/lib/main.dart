@@ -57,6 +57,7 @@ class SubtitleStudioApp extends StatefulWidget {
 class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   final _tasksKey = GlobalKey<TasksPageState>();
   final _editorKey = GlobalKey<EditorPageState>();
+  final _settingsKey = GlobalKey<SettingsPageState>();
   AppSection _section = AppSection.tasks;
   EditorController? _editor;
 
@@ -169,6 +170,10 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
         );
       case AppSection.newTranscribe:
         return newTranscribeChrome(_transcribeForm);
+      case AppSection.settings:
+        return settingsChrome(
+          onReset: () => _settingsKey.currentState?.confirmReset(),
+        );
       case AppSection.editor:
         final editor = _editor;
         if (editor == null) {
@@ -236,7 +241,10 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       onOpenSettings: () => setState(() => _section = AppSection.settings),
       onOpenTasks: () => setState(() => _section = AppSection.tasks),
     ),
-    AppSection.settings => SettingsPage(settings: widget.settings),
+    AppSection.settings => SettingsPage(
+      key: _settingsKey,
+      settings: widget.settings,
+    ),
     AppSection.editor when _editor != null => EditorPage(
       key: _editorKey,
       controller: _editor!,

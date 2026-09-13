@@ -7,6 +7,7 @@ import '../domain/language.dart';
 import '../domain/task_options.dart';
 import 'openai_compatible.dart';
 import 'provider_api.dart';
+import 'registry.dart';
 
 /// 单个服务的连接配置。
 class ProviderConfig {
@@ -35,6 +36,9 @@ class ProviderConfig {
     apiKey: json['apiKey'] as String?,
   );
 }
+
+/// 设置页上的分区，「恢复默认」按它分组作用。
+enum SettingsGroup { appearance, asr, translation, language, defaults, output }
 
 /// 应用设置。用 ChangeNotifier 让设置页与状态栏都跟着变。
 ///
@@ -188,6 +192,58 @@ class AppSettings extends ChangeNotifier {
       _prefs.setString(_kLastTranscribe, jsonEncode(v.toJson()));
     }
     // 不 notify：这份参数只被「上次参数」按钮读取，不影响任何常显内容。
+  }
+
+  /// 把一组设置恢复成默认值。
+  ///
+  /// 「恢复默认」按分区作用：用户来设置页多半只想重置某一块（比如把识别
+  /// 服务的地址改坏了），整份清空会把翻译密钥也一起抹掉。
+  void reset(SettingsGroup group) {
+    switch (group) {
+      case SettingsGroup.appearance:
+        _prefs.remove(_kThemeMode);
+      case SettingsGroup.asr:
+        _prefs.remove(_kAsrId);
+        _prefs.remove(_kAsrPrompt);
+        _removeConfigs(Registry.asr.map((p) => p.id));
+      case SettingsGroup.translation:
+        _prefs.remove(_kMtId);
+        _prefs.remove(_kBatchSize);
+        _prefs.remove(_kGuidance);
+        _removeConfigs(Registry.translation.map((p) => p.id));
+      case SettingsGroup.language:
+        _prefs.remove(_kSourceLang);
+        _prefs.remove(_kTargetLang);
+      case SettingsGroup.defaults:
+        _prefs.remove(_kOutputFormat);
+        _prefs.remove(_kBilingual);
+        _prefs.remove(_kCjkLineLength);
+        _prefs.remove(_kLatinLineLength);
+      case SettingsGroup.output:
+        _prefs.remove(_kOutputDir);
+    }
+    notifyListeners();
+  }
+
+  /// 全部恢复默认。「上次参数」不在其列 —— 它是历史记录，不是设置。
+  void resetAll() {
+    for (final group in SettingsGroup.values) {
+      reset(group);
+    }
+  }
+
+  void _removeConfigs(Iterable<String> providerIds) {
+    final ids = providerIds.toSet();
+    _configs = {
+      for (final e in _configs.entries)
+        if (!ids.contains(e.key)) e.key: e.value,
+    };
+    _prefs.setString(
+      _kConfigs,
+      jsonEncode({
+        for (final e in _configs.entries) e.key: e.value.toJson(),
+      }),
+    );
   }
 
   ProviderConfig configFor(String providerId) =>
