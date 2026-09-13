@@ -90,7 +90,8 @@ abstract final class Srt {
   /// 至少 30% 的非空条目带标签才算数 —— 零星一两句「注意：」不该把整份文件
   /// 改掉；不同标签超过 20 种也不算，那更像是正文里的冒号。
   /// 「说话人3」「Speaker 3」这类默认标签直接换回编号 2，不记名字；其他标签
-  /// 按出现顺序排在默认编号之后，并记下名字。没带标签的条目保持原样。
+  /// 按出现顺序依次占用还空着的最小编号，并记下名字 —— 第一个开口的人是
+  /// 1 号，徽标颜色与名单顺序都从他开始。没带标签的条目保持原样。
   static SpeakerLabelDetection? detectSpeakerLabels(List<Cue> cues) {
     final found = <int, ({String label, String rest})>{};
     var nonEmpty = 0;
@@ -121,13 +122,17 @@ abstract final class Srt {
       final n = generic == null ? 0 : int.parse(generic.group(1)!);
       if (n >= 1) ids[label] = n - 1;
     }
-    var next = ids.values.fold<int>(-1, (a, b) => a > b ? a : b) + 1;
+    final taken = ids.values.toSet();
+    var next = 0;
     final names = <int, String>{};
     for (final label in labels) {
       if (ids.containsKey(label)) continue;
+      while (taken.contains(next)) {
+        next++;
+      }
       ids[label] = next;
       names[next] = label;
-      next++;
+      taken.add(next);
     }
 
     return SpeakerLabelDetection(

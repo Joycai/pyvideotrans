@@ -17,8 +17,9 @@ void main() {
         _c('Mia：好，我们继续'),
       ])!;
       expect(r.labels, ['Mia', '说话人3', '周老师']);
-      expect(r.cues.map((c) => c.speaker), [3, 2, 4, null, 3]);
-      expect(r.speakers, {3: 'Mia', 4: '周老师'});
+      // 说话人3 占住编号 2；Mia、周老师按出现顺序拿空着的 0、1。
+      expect(r.cues.map((c) => c.speaker), [0, 2, 1, null, 0]);
+      expect(r.speakers, {0: 'Mia', 1: '周老师'});
       expect(r.cues[0].source, '大家好');
       // 多行字幕只去掉第一行的标签。
       expect(r.cues[2].source, '谢谢邀请\n很高兴来聊');
@@ -32,6 +33,16 @@ void main() {
       ])!;
       expect(r.cues.map((c) => c.speaker), [0, 1]);
       expect(r.speakers, isEmpty);
+    });
+
+    test('名字标签先出现也不会占掉后面默认标签的编号', () {
+      final r = Srt.detectSpeakerLabels([
+        _c('Mia：大家好'),
+        _c('说话人1：嗯'),
+        _c('周老师：谢谢'),
+      ])!;
+      expect(r.cues.map((c) => c.speaker), [1, 0, 2]);
+      expect(r.speakers, {1: 'Mia', 2: '周老师'});
     });
 
     test('带标签的条目不到 30% 时不算', () {
