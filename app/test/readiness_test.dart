@@ -80,8 +80,11 @@ void main() {
       final s = await freshSettings()
         ..setConfig('siliconflow', const ProviderConfig(apiKey: 'k'));
       expect(
-        ProviderReadiness.asr('siliconflow', s, language: Languages.auto)
-            .isReady,
+        ProviderReadiness.asr(
+          'siliconflow',
+          s,
+          language: Languages.auto,
+        ).isReady,
         isTrue,
       );
     });
@@ -90,8 +93,11 @@ void main() {
       final s = await freshSettings()
         ..setConfig('openai', const ProviderConfig(apiKey: 'k'));
       expect(
-        ProviderReadiness.asr('openai', s, language: Languages.byCode('fr'))
-            .isReady,
+        ProviderReadiness.asr(
+          'openai',
+          s,
+          language: Languages.byCode('fr'),
+        ).isReady,
         isTrue,
       );
     });
@@ -101,6 +107,19 @@ void main() {
     test('本机服务不需要密钥', () async {
       final s = await freshSettings();
       expect(ProviderReadiness.translation('ollama', s).isReady, isTrue);
+    });
+
+    test('自定义模型可满足模型检查，空模型则拦住', () async {
+      final s = await freshSettings();
+      expect(ProviderReadiness.translation('lmstudio', s).isBlocked, isTrue);
+      expect(
+        ProviderReadiness.translation(
+          'lmstudio',
+          s,
+          model: 'local-model',
+        ).isReady,
+        isTrue,
+      );
     });
 
     test('登记表里每个已实施的服务都有默认地址', () async {

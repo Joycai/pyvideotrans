@@ -27,14 +27,11 @@ class TaskQueue extends ChangeNotifier {
 
   UnmodifiableListView<SubtitleTask> get tasks => UnmodifiableListView(_tasks);
 
-  SubtitleTask? get running =>
-      _runningId == null ? null : byId(_runningId!);
+  SubtitleTask? get running => _runningId == null ? null : byId(_runningId!);
 
-  SubtitleTask? byId(String id) =>
-      _tasks.where((t) => t.id == id).firstOrNull;
+  SubtitleTask? byId(String id) => _tasks.where((t) => t.id == id).firstOrNull;
 
-  int countWhere(bool Function(SubtitleTask) test) =>
-      _tasks.where(test).length;
+  int countWhere(bool Function(SubtitleTask) test) => _tasks.where(test).length;
 
   /// 整体进度：进行中任务的平均值。没有进行中的任务时为 0。
   double get overallProgress {
@@ -47,10 +44,7 @@ class TaskQueue extends ChangeNotifier {
   /// 把一批文件按同一份参数入队。「新建转写」一次选多个文件走的就是这里。
   ///
   /// 返回的顺序与 [paths] 一致，方便调用方选中第一个。
-  List<SubtitleTask> enqueueAll(
-    List<String> paths, {
-    TaskOptions? options,
-  }) => [
+  List<SubtitleTask> enqueueAll(List<String> paths, {TaskOptions? options}) => [
     for (final path in paths) enqueue(sourcePath: path, options: options),
   ];
 
@@ -68,10 +62,9 @@ class TaskQueue extends ChangeNotifier {
     final task = SubtitleTask(
       id: const Uuid().v4(),
       sourcePath: sourcePath,
-      kind: kind ??
-          (MediaKinds.isSubtitle(sourcePath)
-              ? TaskKind.translate
-              : opts.kind),
+      kind:
+          kind ??
+          (MediaKinds.isSubtitle(sourcePath) ? TaskKind.translate : opts.kind),
       options: opts,
     );
     task.note('任务已加入队列（位置 ${_tasks.where((t) => t.isActive).length + 1}）');
@@ -138,12 +131,14 @@ class TaskQueue extends ChangeNotifier {
   /// 插队。只对排队中的任务有意义。
   void prioritize(String id) {
     final index = _tasks.indexWhere((t) => t.id == id);
-    if (index <= 0) return;
+    if (index < 0 || index == _tasks.length - 1) return;
     final task = _tasks[index];
     if (task.status != TaskStatus.queued) return;
+    // The queue is stored newest-first, while _pump takes the last queued
+    // item (FIFO). Move a prioritized item to the tail so it runs next.
     _tasks
       ..removeAt(index)
-      ..insert(0, task);
+      ..add(task);
     notifyListeners();
   }
 

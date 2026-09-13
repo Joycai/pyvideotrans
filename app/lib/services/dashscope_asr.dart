@@ -80,6 +80,9 @@ class DashScopeAsrProvider implements AsrProvider {
 
     onProgress(0, 1, note: '按静音切分音频');
     final clips = await splitter.split(audioPath, token: token);
+    if (clips.isEmpty) {
+      throw const ProviderException('未识别到语音', hint: '整段音频都是静音。确认音视频中确有人声。');
+    }
 
     final code = language.split('-').first.toLowerCase();
     final lang = code.isEmpty || code == 'auto' ? null : code;
@@ -131,9 +134,7 @@ class DashScopeAsrProvider implements AsrProvider {
               final wait =
                   retryAfter ?? backoff[waits.clamp(0, backoff.length - 1)];
               waits++;
-              progress(
-                '${reason.title}，等待 ${wait.inSeconds} 秒后重试第 ${i + 1} 段',
-              );
+              progress('${reason.title}，等待 ${wait.inSeconds} 秒后重试第 ${i + 1} 段');
               await _sleep(wait, token);
             case _Failed(:final error, :final fatal):
               lastError = '第 ${i + 1} 段：${error.detail ?? error.title}';
@@ -172,7 +173,13 @@ class DashScopeAsrProvider implements AsrProvider {
     } finally {
       // 片段目录只是中转，识别完就删；续跑会重新切，切分点一样。
       final dir = File(clips.first.path).parent;
-      if (dir.existsSync()) dir.deleteSync(recursive: true);
+      if (dir.existsSync()) {
+        try {
+          dir.deleteSync(recursive: true);
+        } on FileSystemException {
+          // Cleanup failure must not hide the recognition result/error.
+        }
+      }
     }
 
     final failed = cp.pending.length;
@@ -180,7 +187,8 @@ class DashScopeAsrProvider implements AsrProvider {
       throw ProviderException(
         '有 $failed 段识别失败',
         detail: lastError,
-        hint: '从识别阶段继续只会重试失败的段；同一段失败 '
+        hint:
+            '从识别阶段继续只会重试失败的段；同一段失败 '
             '${RecognitionCheckpoint.maxFailures} 次后会跳过并留下待校对的空字幕。',
       );
     }
@@ -215,10 +223,7 @@ class DashScopeAsrProvider implements AsrProvider {
     }
 
     if (cues.isEmpty) {
-      throw const ProviderException(
-        '未识别到语音',
-        hint: '确认音视频中确有人声，且所选语言与实际语言一致。',
-      );
+      throw const ProviderException('未识别到语音', hint: '确认音视频中确有人声，且所选语言与实际语言一致。');
     }
     return cues;
   }
@@ -408,7 +413,8 @@ class DashScopeAsrProvider implements AsrProvider {
     }
   }
 
-  static String _clip(String s) => s.length > 600 ? '${s.substring(0, 600)}…' : s;
+  static String _clip(String s) =>
+      s.length > 600 ? '${s.substring(0, 600)}…' : s;
 
   static String _statusTitle(int status, String vendor) => switch (status) {
     401 || 403 => '$vendor 拒绝了密钥',

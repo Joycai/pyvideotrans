@@ -190,7 +190,20 @@ class TranslateFormController extends ChangeNotifier {
   }
 
   Future<void> _parse(String path) async {
-    final info = await media.probeFile(path);
+    final MediaFileInfo info;
+    try {
+      info = await media.probeFile(path);
+    } catch (_) {
+      _setParseResult(
+        path,
+        MediaFileInfo(path: path, sizeBytes: 0, exists: false),
+      );
+      return;
+    }
+    _setParseResult(path, info);
+  }
+
+  void _setParseResult(String path, MediaFileInfo info) {
     if (_disposed) return;
     final i = _files.indexWhere((f) => f.path == path);
     if (i < 0) return; // 解析期间被移除了。
@@ -286,8 +299,11 @@ class TranslateFormController extends ChangeNotifier {
 
   // —— 校验 ————————————————————————————————————————————————
 
-  Readiness get readiness =>
-      ProviderReadiness.translation(_options.translationProviderId, settings);
+  Readiness get readiness => ProviderReadiness.translation(
+    _options.translationProviderId,
+    settings,
+    model: _options.translationModel,
+  );
 
   bool get canStart => enqueueable.isNotEmpty && !readiness.isBlocked;
 
@@ -489,7 +505,11 @@ class TranslateLanguageSection extends StatelessWidget {
         error: readiness.isBlocked,
         groups: providerGroups(
           Registry.translation,
-          (id) => ProviderReadiness.translation(id, form.settings),
+          (id) => ProviderReadiness.translation(
+            id,
+            form.settings,
+            model: id == o.translationProviderId ? o.translationModel : null,
+          ),
         ),
         // 换服务就把模型清掉，否则会把上一家的模型名发给下一家。
         onChanged: (id) => form.update(

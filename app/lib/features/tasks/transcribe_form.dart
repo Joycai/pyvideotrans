@@ -173,7 +173,20 @@ class TranscribeFormController extends ChangeNotifier {
   }
 
   Future<void> _probe(String path) async {
-    final info = await media.probeFile(path);
+    final MediaFileInfo info;
+    try {
+      info = await media.probeFile(path);
+    } catch (_) {
+      // A single unreadable path must not leave the row stuck in "probing"
+      // or reject the whole batch.
+      final fallback = MediaFileInfo(path: path, sizeBytes: 0, exists: false);
+      _setProbeResult(path, fallback);
+      return;
+    }
+    _setProbeResult(path, info);
+  }
+
+  void _setProbeResult(String path, MediaFileInfo info) {
     if (_disposed) return;
     final i = _files.indexWhere((f) => f.path == path);
     if (i < 0) return; // 探测期间被移除了。
@@ -249,8 +262,11 @@ class TranscribeFormController extends ChangeNotifier {
     model: _options.asrModel,
   );
 
-  Readiness get translationReadiness =>
-      ProviderReadiness.translation(_options.translationProviderId, settings);
+  Readiness get translationReadiness => ProviderReadiness.translation(
+    _options.translationProviderId,
+    settings,
+    model: _options.translationModel,
+  );
 
   List<Readiness> get _checks => [
     asrReadiness,
@@ -534,7 +550,11 @@ class TranscribeTranslateSection extends StatelessWidget {
         error: form.translationReadiness.isBlocked,
         groups: providerGroups(
           Registry.translation,
-          (id) => ProviderReadiness.translation(id, form.settings),
+          (id) => ProviderReadiness.translation(
+            id,
+            form.settings,
+            model: id == o.translationProviderId ? o.translationModel : null,
+          ),
         ),
         onChanged: (id) => form.update(
           (o) => o.copyWith(translationProviderId: id, translationModel: null),
