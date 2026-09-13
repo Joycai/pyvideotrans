@@ -53,8 +53,10 @@ class DashScopeAsrProvider implements AsrProvider {
   static const diarizeClipMs = 120000;
 
   /// 分离出来的一条字幕最长多久 / 多少字，超过就在下一个词前断开。
+  /// 字数上限按文字种类：中日韩 40 字，拉丁文 90 字符（一个词好几个字母）。
   static const _maxPieceMs = 10000;
-  static const _maxPieceChars = 40;
+  static const _maxPieceCharsCjk = 40;
+  static const _maxPieceCharsLatin = 90;
 
   final http.Client _client;
 
@@ -522,9 +524,12 @@ class DashScopeAsrProvider implements AsrProvider {
 
       final current = buffer;
       if (current != null) {
+        final limit = _cjk.hasMatch(current.toString())
+            ? _maxPieceCharsCjk
+            : _maxPieceCharsLatin;
         final tooLong =
             end - pieceStart! > _maxPieceMs ||
-            current.length + wordText.length > _maxPieceChars;
+            current.length + wordText.length > limit;
         if (speaker != pieceSpeaker || endsSentence || tooLong) flush();
       }
       if (buffer == null) {
@@ -546,13 +551,18 @@ class DashScopeAsrProvider implements AsrProvider {
 
   static final _sentenceEnd = RegExp(r'[。！？.!?;；]');
   static final _latinEdge = RegExp(r'[A-Za-z0-9]');
+  static final _asciiPunct = RegExp(r'[,.;:!?]');
+  static final _cjk = RegExp(r'[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]');
 
-  /// 两个相邻词之间要不要空格：两边都是拉丁字母 / 数字才加，中文不加。
-  static bool _needsSpace(String before, String next) =>
-      before.isNotEmpty &&
-      next.isNotEmpty &&
-      _latinEdge.hasMatch(before[before.length - 1]) &&
-      _latinEdge.hasMatch(next[0]);
+  /// 两个相邻词之间要不要空格：下一个词是拉丁字母 / 数字，且前面以拉丁
+  /// 字母、数字或英文标点结尾才加（"Hi," + "let's" → "Hi, let's"）；中文不加。
+  static bool _needsSpace(String before, String next) {
+    if (before.isEmpty || next.isEmpty || !_latinEdge.hasMatch(next[0])) {
+      return false;
+    }
+    final last = before[before.length - 1];
+    return _latinEdge.hasMatch(last) || _asciiPunct.hasMatch(last);
+  }
 
   /// 从两种响应形态里取文本：`output.text`，或
   /// `output.choices[0].message.content[*].text` 拼接。取不到返回 null。

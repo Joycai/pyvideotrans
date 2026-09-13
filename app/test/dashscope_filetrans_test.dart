@@ -287,6 +287,141 @@ void main() {
       expect(server.log.where((l) => l.contains('/uploads')), isEmpty);
     });
 
+    test('只有上传地址时跳过上传直接提交；成功后地址与任务号都清掉', () async {
+      final server = _Server();
+      final cp = RecognitionCheckpoint()..asyncFileUrl = 'oss://already/there.wav';
+      await build(server.client).transcribe(
+        audioPath: audio,
+        language: 'zh',
+        token: CancellationToken(),
+        onProgress: _noProgress,
+        checkpoint: cp,
+      );
+      expect(server.upload, isNull);
+      expect(
+        ((jsonDecode(server.submit!.body) as Map)['input'] as Map)['file_urls'],
+        ['oss://already/there.wav'],
+      );
+      expect(cp.asyncFileUrl, isNull);
+      expect(cp.asyncTaskId, isNull);
+    });
+
+    test('上传后提交前停下：地址已记进检查点，续跑不重传', () async {
+      final token = CancellationToken();
+      var uploads = 0;
+      final client = MockClient((req) async {
+        final url = req.url.toString();
+        if (url.contains('getPolicy')) return _ok(_policy);
+        if (url.startsWith('https://dashscope-file.oss')) {
+          uploads++;
+          token.cancel();
+          return http.Response('', 200);
+        }
+        fail('不该走到提交');
+      });
+      final cp = RecognitionCheckpoint();
+      await expectLater(
+        build(client).transcribe(
+          audioPath: audio,
+          language: 'zh',
+          token: token,
+          onProgress: _noProgress,
+          checkpoint: cp,
+        ),
+        throwsA(isA<TaskCancelled>()),
+      );
+      expect(uploads, 1);
+      expect(cp.asyncFileUrl, startsWith('oss://dashscope-instant/'));
+      expect(cp.asyncTaskId, isNull);
+    });
+
+    test('任务不存在只丢任务号，保留上传地址；文件取不到时两者都丢', () async {
+      final gone = MockClient((req) async => http.Response('{"code":"NotFound"}', 404));
+      final cp = RecognitionCheckpoint()
+        ..asyncFileUrl = 'oss://f'
+        ..asyncTaskId = 'old';
+      await expectLater(
+        build(gone).transcribe(
+          audioPath: audio,
+          language: 'zh',
+          token: CancellationToken(),
+          onProgress: _noProgress,
+          checkpoint: cp,
+        ),
+        throwsA(isA<ProviderException>()),
+      );
+      expect(cp.asyncTaskId, isNull);
+      expect(cp.asyncFileUrl, 'oss://f');
+
+      final failed = MockClient((req) async => _ok({
+        'output': {
+          'task_id': 'old',
+          'task_status': 'FAILED',
+          'code': 'InvalidFile.DownloadFailed',
+          'message': 'download failed',
+        },
+      }));
+      cp.asyncTaskId = 'old';
+      await expectLater(
+        build(failed).transcribe(
+          audioPath: audio,
+          language: 'zh',
+          token: CancellationToken(),
+          onProgress: _noProgress,
+          checkpoint: cp,
+        ),
+        throwsA(isA<ProviderException>()),
+      );
+      expect(cp.asyncTaskId, isNull);
+      expect(cp.asyncFileUrl, isNull);
+    });
+
+    test('结果地址过期：丢任务号、留地址', () async {
+      final cp = RecognitionCheckpoint()
+        ..asyncFileUrl = 'oss://f'
+        ..asyncTaskId = 'task-1';
+      final client = MockClient((req) async {
+        if (req.url.toString() == 'https://result.example/t.json') {
+          return http.Response('expired', 403);
+        }
+        return _ok({
+          'output': {
+            'task_id': 'task-1',
+            'task_status': 'SUCCEEDED',
+            'results': [
+              {'subtask_status': 'SUCCEEDED', 'transcription_url': 'https://result.example/t.json'},
+            ],
+          },
+        });
+      });
+      await expectLater(
+        build(client).transcribe(
+          audioPath: audio,
+          language: 'zh',
+          token: CancellationToken(),
+          onProgress: _noProgress,
+          checkpoint: cp,
+        ),
+        throwsA(isA<ProviderException>().having((e) => e.hint, 'hint', contains('重新提交'))),
+      );
+      expect(cp.asyncTaskId, isNull);
+      expect(cp.asyncFileUrl, 'oss://f');
+    });
+
+    test('只有标点的空句不进字幕', () {
+      final cues = DashScopeFileTransProvider.parseTranscript({
+        'transcripts': [
+          {
+            'sentences': [
+              {'begin_time': 0, 'end_time': 1000, 'text': 'Hello.', 'speaker_id': 0},
+              {'begin_time': 1000, 'end_time': 1030, 'text': ' 。', 'speaker_id': 0},
+            ],
+          },
+        ],
+      });
+      expect(cues.map((c) => c.source), ['Hello.']);
+    });
+
     test('轮询等待时取消能立刻停下，任务号留在检查点里', () async {
       final token = CancellationToken();
       var polls = 0;

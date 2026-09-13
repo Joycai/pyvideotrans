@@ -335,6 +335,45 @@ void main() {
       expect(cues.map((c) => c.index), [1, 2, 3]);
     });
 
+    test('词拼接：英文标点后补空格；拉丁文按 90 字符上限，不在 40 字处切', () {
+      final words = [
+        {'begin_time': 0, 'end_time': 300, 'text': 'Hi', 'punctuation': ','},
+        {'begin_time': 300, 'end_time': 600, 'text': "let's", 'punctuation': ''},
+        {'begin_time': 600, 'end_time': 900, 'text': 'go', 'punctuation': ''},
+        {'begin_time': 900, 'end_time': 1200, 'text': 'over', 'punctuation': ''},
+        {'begin_time': 1200, 'end_time': 1500, 'text': 'the', 'punctuation': ''},
+        {'begin_time': 1500, 'end_time': 1800, 'text': 'project', 'punctuation': ''},
+        {'begin_time': 1800, 'end_time': 2100, 'text': 'status', 'punctuation': ''},
+        {'begin_time': 2100, 'end_time': 2400, 'text': 'today', 'punctuation': ''},
+        {'begin_time': 2400, 'end_time': 2700, 'text': 'and', 'punctuation': ''},
+        {'begin_time': 2700, 'end_time': 3000, 'text': 'tomorrow', 'punctuation': '.'},
+      ];
+      final pieces = DashScopeAsrProvider.splitWords(
+        words,
+        offsetMs: 0,
+        minMs: 0,
+        maxMs: 3000,
+      );
+      expect(pieces.map((p) => p.text), [
+        "Hi, let's go over the project status today and tomorrow.",
+      ]);
+
+      final cjk = [
+        for (var i = 0; i < 12; i++)
+          {'begin_time': i * 100, 'end_time': i * 100 + 100, 'text': '四个字词', 'punctuation': ''},
+      ];
+      final cjkPieces = DashScopeAsrProvider.splitWords(
+        cjk,
+        offsetMs: 0,
+        minMs: 0,
+        maxMs: 1200,
+      );
+      // 48 字超过 40 字上限，在第 10 个词后断开；中文之间没有空格。
+      expect(cjkPieces, hasLength(2));
+      expect(cjkPieces.first.text, '四个字词' * 10);
+      expect(cjkPieces.first.text.contains(' '), isFalse);
+    });
+
     test('说话人分离：没有词级信息就整段一条，说话人取句级；服务端不给说话人时提示', () async {
       final notes = <String>[];
       final client = MockClient(

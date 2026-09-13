@@ -58,8 +58,10 @@ class RecognitionCheckpoint {
   /// 所以「已完成 / 总数」要用它而不是 [length]。
   int? total;
 
-  /// 异步整文件转写（阿里百炼 filetrans）已提交的任务号。中途停下再继续时
-  /// 直接查这个任务，不重新上传、不重新提交。
+  /// 异步整文件转写（阿里百炼 filetrans）的断点：已上传的音频地址
+  /// （`oss://…`，48 小时有效）与已提交的任务号。中途停下再继续时，
+  /// 有任务号就直接查任务；只有地址就用它重新提交，不重新上传。
+  String? asyncFileUrl;
   String? asyncTaskId;
 
   /// 一段最多失败几次，之后放弃并跳过。
@@ -99,6 +101,7 @@ class RecognitionCheckpoint {
   void clear() {
     _segments.clear();
     total = null;
+    asyncFileUrl = null;
     asyncTaskId = null;
   }
 

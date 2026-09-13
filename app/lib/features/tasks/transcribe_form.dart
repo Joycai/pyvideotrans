@@ -524,7 +524,7 @@ class _DiarizeToggle extends StatelessWidget {
                 Text(
                   on
                       ? '按说话人切开字幕并标上「说话人1：」；多人会议、访谈适用。'
-                            '带 -filetrans 的模型整段处理，编号全程一致；qwen3-asr-flash 不支持。'
+                            '需选 qwen-audio-3.0-asr-flash-filetrans 模型。'
                       : '区分多位说话人，给每条字幕标上说话人编号',
                   style: context.texts.bodySmall?.copyWith(
                     color: cs.onSurfaceVariant,

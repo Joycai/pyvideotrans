@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -101,21 +102,29 @@ class DashScopeFileTransProvider implements AsrProvider {
     final lang = code.isEmpty || code == 'auto' ? null : code;
     final cp = checkpoint ?? RecognitionCheckpoint();
 
+    // 三步各自可以断点续跑：有任务号直接轮询；只有上传地址就重新提交；
+    // 什么都没有才上传。每一步的产物一到手就记进检查点。
     var taskId = cp.asyncTaskId;
     if (taskId == null) {
-      onProgress(0, 3, note: '上传音频到百炼临时存储');
-      final url = await _upload(file, token);
+      var url = cp.asyncFileUrl;
+      if (url == null) {
+        onProgress(0, 3, note: '上传音频到百炼临时存储');
+        url = await _upload(file, token);
+        cp.asyncFileUrl = url;
+      } else {
+        onProgress(0, 3, note: '音频之前已上传，直接提交');
+      }
       token.throwIfCancelled();
       onProgress(1, 3, note: '提交转写任务');
-      taskId = await _submit(url, lang);
+      taskId = await _submit(url, lang, cp);
       cp.asyncTaskId = taskId;
     } else {
       onProgress(1, 3, note: '继续查询之前提交的任务');
     }
 
-    final resultUrl = await _poll(taskId, token, onProgress);
+    final resultUrl = await _poll(taskId, token, onProgress, cp);
     onProgress(3, 3, note: '下载识别结果');
-    final json = await _fetchResult(resultUrl);
+    final json = await _fetchResult(resultUrl, cp);
     final cues = parseTranscript(json);
     if (cues.isEmpty) {
       throw const ProviderException(
@@ -130,8 +139,9 @@ class DashScopeFileTransProvider implements AsrProvider {
         note: '服务端没有返回说话人信息，字幕不带说话人编号；确认模型支持说话人分离',
       );
     }
-    // 任务已消费完，续跑时不该再拿旧任务号。
+    // 任务已消费完，续跑时不该再拿旧任务号与旧文件。
     cp.asyncTaskId = null;
+    cp.asyncFileUrl = null;
     return cues;
   }
 
@@ -175,18 +185,28 @@ class DashScopeFileTransProvider implements AsrProvider {
     final name = file.uri.pathSegments.last;
     final key =
         '$dir/${DateTime.now().millisecondsSinceEpoch}_${name.isEmpty ? 'audio.wav' : name}';
-    // 字段顺序有讲究：OSS 要求 file 是最后一个；http 的 MultipartRequest
-    // 先写 fields 再写 files，正好。
-    final request = http.MultipartRequest('POST', Uri.parse(host))
-      ..fields['OSSAccessKeyId'] = '${data['oss_access_key_id'] ?? ''}'
-      ..fields['policy'] = '${data['policy'] ?? ''}'
-      ..fields['Signature'] = '${data['signature'] ?? ''}'
-      ..fields['key'] = key
-      ..fields['x-oss-object-acl'] = '${data['x_oss_object_acl'] ?? 'private'}'
-      ..fields['x-oss-forbid-overwrite'] =
-          '${data['x_oss_forbid_overwrite'] ?? 'true'}'
-      ..fields['success_action_status'] = '200'
-      ..files.add(await http.MultipartFile.fromPath('file', file.path));
+    // 不用 http 包的 MultipartRequest：它随机生成的边界串里带 ()+,?:= 这类
+    // 符号，OSS 的解析器会报 MalformedPOSTRequest。自己拼一份最朴素的
+    // multipart：字母数字边界、标准头、file 放最后（OSS 的硬性要求）。
+    final boundary = 'SubtitleStudio${DateTime.now().microsecondsSinceEpoch}';
+    final body = buildMultipart(
+      boundary: boundary,
+      fields: {
+        'OSSAccessKeyId': '${data['oss_access_key_id'] ?? ''}',
+        'policy': '${data['policy'] ?? ''}',
+        'Signature': '${data['signature'] ?? ''}',
+        'key': key,
+        'x-oss-object-acl': '${data['x_oss_object_acl'] ?? 'private'}',
+        'x-oss-forbid-overwrite': '${data['x_oss_forbid_overwrite'] ?? 'true'}',
+        'success_action_status': '200',
+      },
+      fileField: 'file',
+      fileName: name.isEmpty ? 'audio.wav' : name,
+      fileBytes: await file.readAsBytes(),
+    );
+    final request = http.Request('POST', Uri.parse(host))
+      ..headers['Content-Type'] = 'multipart/form-data; boundary=$boundary'
+      ..bodyBytes = body;
 
     final streamed = await _guard(
       () => _client.send(request).timeout(endpoint.timeout),
@@ -205,9 +225,42 @@ class DashScopeFileTransProvider implements AsrProvider {
     return 'oss://$key';
   }
 
+  /// 拼 multipart/form-data 正文。文本字段按给定顺序在前，文件在最后。
+  static List<int> buildMultipart({
+    required String boundary,
+    required Map<String, String> fields,
+    required String fileField,
+    required String fileName,
+    required List<int> fileBytes,
+    String fileContentType = 'application/octet-stream',
+  }) {
+    final out = BytesBuilder(copy: false);
+    void line(String s) => out.add(utf8.encode('$s\r\n'));
+    for (final e in fields.entries) {
+      line('--$boundary');
+      line('Content-Disposition: form-data; name="${e.key}"');
+      line('');
+      line(e.value);
+    }
+    line('--$boundary');
+    line(
+      'Content-Disposition: form-data; name="$fileField"; filename="$fileName"',
+    );
+    line('Content-Type: $fileContentType');
+    line('');
+    out.add(fileBytes);
+    line('');
+    line('--$boundary--');
+    return out.takeBytes();
+  }
+
   // —— 提交 ——————————————————————————————————————————————
 
-  Future<String> _submit(String fileUrl, String? lang) async {
+  Future<String> _submit(
+    String fileUrl,
+    String? lang,
+    RecognitionCheckpoint cp,
+  ) async {
     final response = await _guard(
       () => _client
           .post(
@@ -223,6 +276,11 @@ class DashScopeFileTransProvider implements AsrProvider {
           .timeout(endpoint.timeout),
       what: '提交转写任务',
     );
+    if (response.statusCode == 400) {
+      // 提交阶段的 400 多半是文件地址失效（临时存储 48 小时到期）：
+      // 丢掉地址，下次续跑重新上传。
+      cp.asyncFileUrl = null;
+    }
     _throwIfRejected(response, what: '提交转写任务');
     final json = _json(response, what: '提交结果');
     final output = json['output'];
@@ -259,6 +317,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     String taskId,
     CancellationToken token,
     ProgressSink onProgress,
+    RecognitionCheckpoint cp,
   ) async {
     final started = DateTime.now();
     var round = 0;
@@ -277,10 +336,12 @@ class DashScopeFileTransProvider implements AsrProvider {
         what: '查询转写任务',
       );
       if (response.statusCode == 404) {
+        // 任务号作废，但上传的音频还在：续跑只需重新提交。
+        cp.asyncTaskId = null;
         throw ProviderException(
           '${info.vendor} 上找不到该任务',
           detail: 'task $taskId · ${_clip(_bodyText(response))}',
-          hint: '任务可能已过期。从识别阶段重新开始会重新上传并提交。',
+          hint: '任务可能已过期。从识别阶段继续会用已上传的音频重新提交。',
         );
       }
       _throwIfRejected(response, what: '查询转写任务');
@@ -289,13 +350,17 @@ class DashScopeFileTransProvider implements AsrProvider {
       final status = output is Map ? '${output['task_status'] ?? ''}' : '';
       switch (status) {
         case 'SUCCEEDED':
-          return _resultUrl(output as Map, taskId);
+          return _resultUrl(output as Map, taskId, cp);
         case 'FAILED' || 'CANCELED' || 'UNKNOWN':
           final out = output as Map;
+          final reason = '${out['code'] ?? ''}${out['message'] ?? ''}';
+          // 失败的任务不能再查；文件取不到时连地址也一起作废。
+          cp.asyncTaskId = null;
+          if (_fileProblem(reason)) cp.asyncFileUrl = null;
           throw ProviderException(
             '${info.vendor} 转写任务失败',
             detail: '${out['code'] ?? ''} ${out['message'] ?? ''}'.trim(),
-            hint: _failureHint('${out['code'] ?? ''}${out['message'] ?? ''}'),
+            hint: _failureHint(reason),
           );
         default:
           final elapsed = DateTime.now().difference(started).inSeconds;
@@ -311,7 +376,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     }
   }
 
-  String _resultUrl(Map output, String taskId) {
+  String _resultUrl(Map output, String taskId, RecognitionCheckpoint cp) {
     final results = output['results'];
     if (results is List) {
       for (final r in results) {
@@ -322,10 +387,13 @@ class DashScopeFileTransProvider implements AsrProvider {
             url.isNotEmpty) {
           return url;
         }
+        final reason = '${r['code'] ?? ''}${r['message'] ?? ''}';
+        cp.asyncTaskId = null;
+        if (_fileProblem(reason)) cp.asyncFileUrl = null;
         throw ProviderException(
           '${info.vendor} 转写子任务失败',
           detail: '${r['code'] ?? ''} ${r['message'] ?? ''}'.trim(),
-          hint: _failureHint('${r['code'] ?? ''}${r['message'] ?? ''}'),
+          hint: _failureHint(reason),
         );
       }
     }
@@ -337,16 +405,24 @@ class DashScopeFileTransProvider implements AsrProvider {
     );
   }
 
-  Future<Map<String, Object?>> _fetchResult(String url) async {
+  Future<Map<String, Object?>> _fetchResult(
+    String url,
+    RecognitionCheckpoint cp,
+  ) async {
     final response = await _guard(
       () => _client.get(Uri.parse(url)).timeout(endpoint.timeout),
       what: '下载识别结果',
     );
     if (response.statusCode != 200) {
+      // 结果地址有时效。地址过期时任务本身也未必还能查，退一步：
+      // 丢任务号、留上传地址，续跑重新提交。
+      if (response.statusCode == 403 || response.statusCode == 404) {
+        cp.asyncTaskId = null;
+      }
       throw ProviderException(
         '下载识别结果失败',
         detail: 'HTTP ${response.statusCode} · ${_clip(_bodyText(response))}',
-        hint: '结果地址有时效，从识别阶段继续会重新查询任务。',
+        hint: '结果地址有时效，从识别阶段继续会用已上传的音频重新提交。',
       );
     }
     return _json(response, what: '识别结果');
@@ -367,7 +443,8 @@ class DashScopeFileTransProvider implements AsrProvider {
     final cues = <Cue>[];
     void add(int start, int end, String text, int? speaker) {
       final t = text.trim();
-      if (t.isEmpty) return;
+      // 服务端偶尔在末尾补一句只有标点的空句，不要。
+      if (t.isEmpty || !_hasContent.hasMatch(t)) return;
       cues.add(
         Cue(
           index: cues.length + 1,
@@ -449,11 +526,23 @@ class DashScopeFileTransProvider implements AsrProvider {
     );
   }
 
+  /// 字幕正文至少得有一个字母、数字或汉字假名。
+  static final _hasContent = RegExp(r'[\p{L}\p{N}]', unicode: true);
+
+  /// 服务端的失败原因是否指向文件本身（取不到、格式不对）。
+  static bool _fileProblem(String reason) {
+    final t = reason.toLowerCase();
+    return t.contains('download') ||
+        t.contains('url') ||
+        t.contains('file') ||
+        t.contains('format');
+  }
+
   static String? _failureHint(String text) {
-    final t = text.toLowerCase();
-    if (t.contains('download') || t.contains('url') || t.contains('file')) {
-      return '服务端取不到上传的音频；从识别阶段重新开始会重新上传。';
+    if (_fileProblem(text)) {
+      return '服务端取不到上传的音频；从识别阶段继续会重新上传。';
     }
+    final t = text.toLowerCase();
     if (t.contains('duration') || t.contains('too long')) {
       return '音频过长；把文件切短，或改用逐段识别的模型。';
     }

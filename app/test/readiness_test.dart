@@ -76,12 +76,22 @@ void main() {
       );
       expect(r.level, ReadinessLevel.advisory);
       expect(r.message, contains('不支持说话人分离'));
-      expect(r.hint, contains('qwen-audio-3.0-asr-flash'));
+      expect(r.hint, contains('qwen-audio-3.0-asr-flash-filetrans'));
 
+      // 实测同步接口不给说话人：非 filetrans 模型同样提示。
+      expect(
+        ProviderReadiness.asr(
+          'dashscope_qwen_asr',
+          s,
+          model: 'qwen-audio-3.0-asr-flash',
+          diarize: true,
+        ).level,
+        ReadinessLevel.advisory,
+      );
       final ok = ProviderReadiness.asr(
         'dashscope_qwen_asr',
         s,
-        model: 'qwen-audio-3.0-asr-flash',
+        model: 'qwen-audio-3.0-asr-flash-filetrans',
         diarize: true,
       );
       expect(ok.isReady, isTrue);

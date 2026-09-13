@@ -75,11 +75,13 @@ abstract final class ProviderReadiness {
           hint: '这一项会被忽略；需要分离请改用阿里百炼 · Qwen3-ASR。',
         );
       }
-      if (chosen.startsWith('qwen3-asr')) {
+      // 实测：同步接口忽略 diarization_enabled，只有录音文件转写
+      // （-filetrans）真会给说话人编号；qwen3 族在文档里就不支持。
+      if (!chosen.endsWith('-filetrans') || chosen.startsWith('qwen3-asr')) {
         return Readiness(
           ReadinessLevel.advisory,
           message: '$chosen 不支持说话人分离',
-          hint: '换 qwen-audio-3.0-asr-flash（或其 -filetrans 版）、fun-asr 系列模型。',
+          hint: '换 qwen-audio-3.0-asr-flash-filetrans（整段上传、异步转写）。',
         );
       }
     }
