@@ -9,8 +9,12 @@ import 'domain/task.dart';
 import 'features/shell/app_shell.dart';
 import 'features/shell/nav_rail.dart';
 import 'features/editor/editor_controller.dart';
+import 'features/editor/editor_open_form.dart';
+import 'features/editor/editor_open_page.dart';
 import 'features/editor/editor_page.dart';
 import 'features/editor/editor_session.dart';
+import 'features/editor/editor_widgets.dart';
+import 'services/editor_store.dart';
 import 'features/settings/settings_page.dart';
 import 'features/shell/status_bar.dart';
 import 'features/tasks/new_transcribe_page.dart';
@@ -42,7 +46,15 @@ Future<void> main() async {
   );
   await queue.restore();
 
-  runApp(SubtitleStudioApp(settings: settings, queue: queue, media: media));
+  runApp(
+    SubtitleStudioApp(
+      settings: settings,
+      queue: queue,
+      media: media,
+      // 本地字幕会话的附加状态（已校对标记、说话人名单）与最近打开。
+      editorStore: EditorStore('$support/editor'),
+    ),
+  );
 }
 
 class SubtitleStudioApp extends StatefulWidget {
@@ -51,11 +63,13 @@ class SubtitleStudioApp extends StatefulWidget {
     required this.settings,
     required this.queue,
     required this.media,
+    required this.editorStore,
   });
 
   final AppSettings settings;
   final TaskQueue queue;
   final Media media;
+  final EditorStore editorStore;
 
   @override
   State<SubtitleStudioApp> createState() => _SubtitleStudioAppState();
@@ -67,6 +81,21 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   final _settingsKey = GlobalKey<SettingsPageState>();
   AppSection _section = AppSection.tasks;
   EditorController? _editor;
+
+  /// 对话框与 SnackBar 要一个 MaterialApp 以下的 context，根节点自己没有。
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  final _messengerKey = GlobalKey<ScaffoldMessengerState>();
+
+  /// 编辑器入口页的表单。挂在根节点上，切去别的页面再回来，挑好的文件还在。
+  late final _openForm = EditorOpenForm(
+    defaults: widget.settings.defaultTaskOptions,
+  );
+
+  /// 有会话开着时点了「打开其他字幕…」：先显示入口页，真正打开新会话时
+  /// 才关掉旧的 —— 用户也可能只是看一眼又返回编辑器。
+  bool _showOpen = false;
+
+  List<RecentSession> _recents = const [];
 
   /// 退出前把还没写盘的任务改动写掉。
   late final AppLifecycleListener _lifecycle;
@@ -98,6 +127,9 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       onPause: widget.queue.flush,
       onDetach: widget.queue.flush,
     );
+    widget.editorStore.loadRecents().then((recents) {
+      if (mounted) setState(() => _recents = recents);
+    });
   }
 
   @override
@@ -105,6 +137,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     widget.settings.removeListener(_refresh);
     _lifecycle.dispose();
     _editor?.dispose();
+    _openForm.dispose();
     _transcribeForm.dispose();
     _translateForm.dispose();
     super.dispose();
@@ -121,6 +154,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     widget.settings,
     _transcribeForm,
     _translateForm,
+    _openForm,
     ?_editor,
   ]);
 
@@ -130,19 +164,145 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     _ => ThemeMode.system,
   };
 
-  void _openEditor(SubtitleTask task) {
+  void _say(String message) => _messengerKey.currentState?.showSnackBar(
+    SnackBar(content: Text(message)),
+  );
+
+  /// 换成新会话前：本地会话有未保存修改先问一句。
+  Future<bool> _leaveCurrent() async {
+    final editor = _editor;
+    final context = _navigatorKey.currentContext;
+    if (editor == null || context == null) return true;
+    return confirmLeaveEditor(context, editor);
+  }
+
+  void _activate(EditorController controller) {
     final previous = _editor;
+    setState(() {
+      _editor = controller;
+      _showOpen = false;
+      _section = AppSection.editor;
+    });
+    previous?.dispose();
+  }
+
+  void _remember(RecentSession entry) {
+    widget.editorStore.touchRecent(entry).then((recents) {
+      if (mounted) setState(() => _recents = recents);
+    });
+  }
+
+  Future<void> _openEditor(SubtitleTask task) async {
+    final current = _editor?.session;
+    if (current is TaskSession && current.task.id == task.id) {
+      setState(() {
+        _showOpen = false;
+        _section = AppSection.editor;
+      });
+      return;
+    }
+    if (!await _leaveCurrent()) return;
     final controller = EditorController(
       session: TaskSession(task),
       settings: widget.settings,
     )
       // 编辑器里的改动（改字、改时间、拆分合并、重新翻译）跟着写盘。
       ..addListener(() => widget.queue.persist(task));
-    setState(() {
-      _editor = controller;
-      _section = AppSection.editor;
-    });
-    previous?.dispose();
+    _activate(controller);
+    _remember(
+      RecentSession(
+        title: task.fileName,
+        openedAt: DateTime.now(),
+        cueCount: task.document.cues.length,
+        speakerCount: task.document.speakerIds.length,
+        taskId: task.id,
+      ),
+    );
+  }
+
+  /// 入口页「打开编辑器」。同一对文件上次保存过附加状态的，直接恢复。
+  Future<void> _openFiles() async {
+    final form = _openForm;
+    if (!form.canOpen) return;
+    if (!await _leaveCurrent()) return;
+    final restored = await widget.editorStore.loadFileState(
+      form.source!.path,
+      form.translation?.path,
+    );
+    final session = form.build(restored: restored);
+    _activate(
+      EditorController(
+        session: session,
+        settings: widget.settings,
+        store: widget.editorStore,
+      ),
+    );
+    form.clear();
+    _remember(
+      RecentSession(
+        title: session.title,
+        openedAt: DateTime.now(),
+        cueCount: session.document.cues.length,
+        speakerCount: session.document.speakerIds.length,
+        sourcePath: session.sourcePath,
+        translationPath: session.translationPath,
+      ),
+    );
+  }
+
+  Future<void> _openRecent(RecentSession recent) async {
+    if (recent.isTask) {
+      final task = widget.queue.byId(recent.taskId!);
+      if (task == null) {
+        _say('这个任务已经删除了');
+        return;
+      }
+      return _openEditor(task);
+    }
+    await _openForm.seed(
+      sourcePath: recent.sourcePath!,
+      translationPath: recent.translationPath,
+    );
+    if (_openForm.source == null) {
+      _say('${baseName(recent.sourcePath!)} 读不了，可能已经移动或删除');
+      return;
+    }
+    await _openFiles();
+  }
+
+  /// 来源浮层「替换…」、「挂载译文」、把文件拖到编辑页：带着当前文件去入口页，
+  /// 换上新文件后在那里确认配对，不直接改动正在编辑的会话。
+  Future<void> _stageReplacement(OpenSlot slot, {String? path}) async {
+    final session = _editor?.session;
+    if (session is FileSession) {
+      await _openForm.seed(
+        sourcePath: session.sourcePath,
+        translationPath: session.mountedTranslationPath,
+      );
+    } else {
+      _openForm.clear();
+    }
+    if (path != null) {
+      await _openForm.load(slot, path);
+    } else {
+      await _openForm.browse(slot);
+    }
+    if (mounted) setState(() => _showOpen = true);
+  }
+
+  Future<void> _repair() async {
+    final session = _editor?.session;
+    if (session is! FileSession) return;
+    await _openForm.seed(
+      sourcePath: session.sourcePath,
+      translationPath: session.mountedTranslationPath,
+    );
+    if (mounted) setState(() => _showOpen = true);
+  }
+
+  void _openOther() {
+    _openForm.clear();
+    setState(() => _showOpen = true);
   }
 
   StatusSnapshot get _status {
@@ -176,6 +336,9 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       etaText: queue.running?.eta == null
           ? null
           : '剩余约 ${queue.running!.eta!.inMinutes} 分钟',
+      note: _section == AppSection.editor && _editor != null && !_showOpen
+          ? editorStatusNote(_editor!)
+          : null,
     );
   }
 
@@ -205,21 +368,29 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
         );
       case AppSection.editor:
         final editor = _editor;
-        if (editor == null) {
-          return const PageChrome(title: '编辑器', subtitle: '从任务页打开一个任务开始校对');
+        if (editor == null || _showOpen) {
+          return editorOpenChrome(
+            onBack: editor == null
+                ? null
+                : () => setState(() => _showOpen = false),
+          );
         }
         return PageChrome(
           title: '编辑器',
-          subtitle:
-              '${editor.session.title} · ${editor.document.cues.length} 条 · '
-              '${editor.session.sourceLanguage.name} → ${editor.session.targetLanguage.name}',
-          titleTrailing: EditorReviewBadge(count: editor.document.reviewCount),
+          subtitle: editorSubtitle(editor),
+          titleTrailing: EditorTitleTrailing(
+            controller: editor,
+            onReplace: (slot) => _stageReplacement(slot),
+            onRepair: _repair,
+            onOpenOther: _openOther,
+          ),
           actions: [
             EditorPageActions(
               controller: editor,
               onTranslateMissing: () =>
                   _editorKey.currentState?.translateMissing(),
               onExport: () => _editorKey.currentState?.export(),
+              onSave: () => _editorKey.currentState?.save(),
             ),
           ],
         );
@@ -229,6 +400,8 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
+      scaffoldMessengerKey: _messengerKey,
       title: '字幕工具',
       debugShowCheckedModeBanner: false,
       theme: lightTheme,
@@ -277,42 +450,26 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       key: _settingsKey,
       settings: widget.settings,
     ),
-    AppSection.editor when _editor != null => EditorPage(
+    AppSection.editor when _editor != null && !_showOpen => EditorPage(
       key: _editorKey,
       controller: _editor!,
+      onMountTranslation: () => _stageReplacement(OpenSlot.translation),
+      onDropFiles: (path, slot) => _stageReplacement(slot, path: path),
     ),
-    _ => _Placeholder(section: _section),
+    AppSection.editor => ListenableBuilder(
+      listenable: widget.queue,
+      builder: (_, _) => EditorOpenPage(
+        form: _openForm,
+        tasks: [
+          for (final t in widget.queue.tasks)
+            if (t.status == TaskStatus.done && t.document.cues.isNotEmpty) t,
+        ],
+        recents: _recents,
+        onOpenFiles: _openFiles,
+        onOpenTask: _openEditor,
+        onOpenRecent: _openRecent,
+        onOpenTasks: () => setState(() => _section = AppSection.tasks),
+      ),
+    ),
   };
-}
-
-class _Placeholder extends StatelessWidget {
-  const _Placeholder({required this.section});
-
-  final AppSection section;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(section.icon, size: 32, weight: 400, color: cs.outline),
-            const SizedBox(height: 12),
-            Text(
-              section.label,
-              style: Theme.of(context).textTheme.titleSmall
-                  ?.copyWith(color: cs.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

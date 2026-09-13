@@ -15,7 +15,11 @@ class StatusSnapshot {
     this.runningTasks = 0,
     this.overallProgress = 0,
     this.etaText,
+    this.note,
   });
+
+  /// 右侧附加的一句话，比如编辑器的「未保存 3 处修改」。
+  final String? note;
 
   /// 本地识别：第一期未实施，显示为「未启用」。
   final String localEngine;
@@ -70,6 +74,10 @@ class AppStatusBar extends StatelessWidget {
           const SizedBox(width: AppSpacing.s1 + 2),
           Text(snapshot.localBackend.label, style: muted),
           const Spacer(),
+          if (snapshot.note != null) ...[
+            Text(snapshot.note!, style: muted),
+            _divider(cs),
+          ],
           if (snapshot.runningTasks > 0) ...[
             Text('后台任务 ', style: muted),
             Timecode(

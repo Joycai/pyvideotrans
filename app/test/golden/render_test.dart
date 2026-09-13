@@ -16,7 +16,13 @@ import 'package:subtitle_studio/features/shell/nav_rail.dart';
 import 'package:subtitle_studio/features/shell/status_bar.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_page.dart';
+import 'package:subtitle_studio/features/editor/editor_open_form.dart';
+import 'package:subtitle_studio/features/editor/editor_open_page.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
+import 'package:subtitle_studio/features/editor/editor_widgets.dart';
+import 'package:subtitle_studio/services/editor_store.dart';
+
+import '../editor_fixtures.dart';
 import 'package:subtitle_studio/features/tasks/tasks_board.dart';
 import 'package:subtitle_studio/features/tasks/tasks_page.dart';
 import 'package:subtitle_studio/services/settings.dart';
@@ -339,5 +345,146 @@ void main() {
 
   testWidgets('任务页 · 深色', (tester) async {
     await pumpTasks(tester, brightness: Brightness.dark, file: 'tasks_dark');
+  });
+
+  Future<void> pumpShell(
+    WidgetTester tester, {
+    required Brightness brightness,
+    required PageChrome Function() chrome,
+    required Widget child,
+    String? note,
+  }) async {
+    tester.view
+      ..physicalSize = const Size(1440, 900)
+      ..devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: _readable(
+          brightness == Brightness.light ? lightTheme : darkTheme,
+        ),
+        home: AppShell(
+          section: AppSection.editor,
+          onSectionChanged: (_) {},
+          chrome: chrome,
+          status: () => StatusSnapshot(
+            localEngine: 'ffmpeg · 就绪',
+            cloud: (connected: true, label: '阿里百炼 · 已配置'),
+            localBackend: (connected: true, label: 'DeepSeek · 已配置'),
+            note: note,
+          ),
+          child: child,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+  }
+
+  Future<void> pumpLocal(
+    WidgetTester tester, {
+    required Brightness brightness,
+    required String file,
+    bool withTranslation = true,
+  }) async {
+    SharedPreferences.setMockInitialValues({});
+    final settings = await AppSettings.load();
+    final controller = EditorController(
+      session: localSession(withTranslation: withTranslation),
+      settings: settings,
+    );
+    // 三处修改，让「保存」带上脏标记。
+    for (final i in [0, 1, 2]) {
+      controller
+        ..select(i)
+        ..toggleReviewed();
+    }
+    controller.select(6);
+
+    await pumpShell(
+      tester,
+      brightness: brightness,
+      note: editorStatusNote(controller),
+      chrome: () => PageChrome(
+        title: '编辑器',
+        subtitle: editorSubtitle(controller),
+        titleTrailing: EditorTitleTrailing(controller: controller),
+        actions: [
+          EditorPageActions(
+            controller: controller,
+            onTranslateMissing: () {},
+            onExport: () {},
+            onSave: () {},
+          ),
+        ],
+      ),
+      child: EditorPage(
+        controller: controller,
+        onMountTranslation: withTranslation ? null : () {},
+      ),
+    );
+    await expectLater(find.byType(AppShell), matchesGoldenFile('$file.png'));
+  }
+
+  testWidgets('编辑器 · 本地会话 · 浅色', (tester) async {
+    await pumpLocal(tester, brightness: Brightness.light, file: 'editor_local_light');
+  });
+
+  testWidgets('编辑器 · 本地会话 · 深色', (tester) async {
+    await pumpLocal(tester, brightness: Brightness.dark, file: 'editor_local_dark');
+  });
+
+  testWidgets('编辑器 · 只有原文', (tester) async {
+    await pumpLocal(
+      tester,
+      brightness: Brightness.light,
+      file: 'editor_single_light',
+      withTranslation: false,
+    );
+  });
+
+  testWidgets('编辑器入口页 · 两份文件', (tester) async {
+    editorClock = () => DateTime(2026, 9, 13, 22);
+    addTearDown(() => editorClock = DateTime.now);
+    final form = EditorOpenForm(
+      defaults: () => testOptions(source: 'zh', target: 'en'),
+    )
+      ..setFile(OpenSlot.source, localZhFile())
+      ..setFile(OpenSlot.translation, localEnFile());
+    final done = _fixtures().where((t) => t.document.cues.isNotEmpty).toList();
+    await pumpShell(
+      tester,
+      brightness: Brightness.light,
+      chrome: editorOpenChrome,
+      child: EditorOpenPage(
+        form: form,
+        tasks: done,
+        recents: [
+          RecentSession(
+            title: 'interview_ep12',
+            openedAt: DateTime(2026, 9, 12, 21, 40),
+            cueCount: 488,
+            speakerCount: 3,
+            sourcePath: '/Users/mia/Movies/采访/interview_ep12.zh.srt',
+            translationPath: '/Users/mia/Movies/采访/interview_ep12.en.srt',
+          ),
+          RecentSession(
+            title: 'lecture_week3',
+            openedAt: DateTime(2026, 9, 10, 9),
+            cueCount: 1284,
+            speakerCount: 5,
+            taskId: 'x',
+          ),
+        ],
+        onOpenFiles: () {},
+        onOpenTask: (_) {},
+        onOpenRecent: (_) {},
+        onOpenTasks: () {},
+      ),
+    );
+    await expectLater(
+      find.byType(AppShell),
+      matchesGoldenFile('editor_open_light.png'),
+    );
   });
 }

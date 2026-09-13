@@ -28,6 +28,15 @@ enum CueFilter {
   final String label;
 }
 
+/// 界面上显示的状态。整份文档都没有译文时（只挂了原文），「未翻译」没有
+/// 意义，按置信度与校对标记显示成「待校对」或「已校对」。
+CueState displayStateOf(Cue cue, {required bool translated}) {
+  final state = cue.state;
+  if (translated || state != CueState.untranslated) return state;
+  final low = cue.confidence != null && cue.confidence! < Cue.lowConfidence;
+  return low && !cue.reviewed ? CueState.review : CueState.ok;
+}
+
 /// 名单上的一位说话人，带上界面要显示的统计。
 class SpeakerSummary {
   const SpeakerSummary({
@@ -92,14 +101,29 @@ class EditorController extends ChangeNotifier {
     return _editsSinceSave < 1 ? 1 : _editsSinceSave;
   }
 
+  /// 文档里有没有任何译文。只挂了原文的会话没有，这时「未翻译」不算一种
+  /// 状态，列表按有没有校对来显示。
+  bool get hasTranslations => document.cues.any((c) => c.hasTranslation);
+
+  /// 还没有译文、且有原文可翻的条数：「翻译未译 N 条」。
+  int get missingTranslationCount => document.cues
+      .where((c) => !c.hasTranslation && c.source.trim().isNotEmpty)
+      .length;
+
+  /// 界面上显示的状态。见 [displayStateOf]。
+  CueState displayState(Cue cue) =>
+      displayStateOf(cue, translated: hasTranslations);
+
   List<Cue> get visibleCues {
     final needle = search.trim().toLowerCase();
+    final translated = hasTranslations;
     return document.cues.where((cue) {
+      final state = displayStateOf(cue, translated: translated);
       final passesFilter = switch (filter) {
         CueFilter.all => true,
-        CueFilter.review => cue.state == CueState.review,
-        CueFilter.untranslated => cue.state == CueState.untranslated,
-        CueFilter.unpaired => cue.state == CueState.unpaired,
+        CueFilter.review => state == CueState.review,
+        CueFilter.untranslated => state == CueState.untranslated,
+        CueFilter.unpaired => state == CueState.unpaired,
       };
       if (!passesFilter) return false;
       if (speakerFilter.isNotEmpty && !speakerFilter.contains(cue.speaker)) {
@@ -115,12 +139,18 @@ class EditorController extends ChangeNotifier {
       ? document.cues[selected]
       : null;
 
-  int countOf(CueFilter f) => switch (f) {
-    CueFilter.all => document.cues.length,
-    CueFilter.review => document.reviewCount,
-    CueFilter.untranslated => document.untranslatedCount,
-    CueFilter.unpaired => document.unpairedCount,
-  };
+  int countOf(CueFilter f) {
+    if (f == CueFilter.all) return document.cues.length;
+    final translated = hasTranslations;
+    final want = switch (f) {
+      CueFilter.review => CueState.review,
+      CueFilter.untranslated => CueState.untranslated,
+      _ => CueState.unpaired,
+    };
+    return document.cues
+        .where((c) => displayStateOf(c, translated: translated) == want)
+        .length;
+  }
 
   /// 说话人名单，按编号排。
   List<SpeakerSummary> get speakers {

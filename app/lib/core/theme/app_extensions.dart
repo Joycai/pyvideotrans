@@ -7,22 +7,50 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.success,
     required this.successContainer,
     required this.onSuccessContainer,
+    required this.speakers,
   });
 
   final Color success;
   final Color successContainer;
   final Color onSuccessContainer;
 
+  /// 说话人徽标的底色：八种低饱和、明度相近的颜色，避开 primary 蓝与字幕黄
+  /// 的色相。文字一律 onSurface，两套主题下都达到 AA。只用于徽标，不用于
+  /// 行底色、描边或文字。编号超过 8 时循环。
+  final List<Color> speakers;
+
+  Color speaker(int id) => speakers[id % speakers.length];
+
   static const light = AppColors(
     success: Color(0xFF1F7A45),
     successContainer: Color(0xFFCFEEDB),
     onSuccessContainer: Color(0xFF0A3D1F),
+    speakers: [
+      Color(0xFFEFD6DC), // 玫瑰
+      Color(0xFFD2E8D6), // 绿
+      Color(0xFFE0D8EF), // 紫
+      Color(0xFFF0DACD), // 珊瑚
+      Color(0xFFCDE7E3), // 青
+      Color(0xFFEBD6E8), // 藕荷
+      Color(0xFFDDE6CC), // 苔
+      Color(0xFFD5E2EA), // 灰蓝
+    ],
   );
 
   static const dark = AppColors(
     success: Color(0xFF7ED4A0),
     successContainer: Color(0xFF1B4A2E),
     onSuccessContainer: Color(0xFFCFEEDB),
+    speakers: [
+      Color(0xFF4A2F37),
+      Color(0xFF2E4434),
+      Color(0xFF3A3350),
+      Color(0xFF4B3629),
+      Color(0xFF2A4441),
+      Color(0xFF473045),
+      Color(0xFF3A4230),
+      Color(0xFF2E3B45),
+    ],
   );
 
   @override
@@ -30,10 +58,12 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? success,
     Color? successContainer,
     Color? onSuccessContainer,
+    List<Color>? speakers,
   }) => AppColors(
     success: success ?? this.success,
     successContainer: successContainer ?? this.successContainer,
     onSuccessContainer: onSuccessContainer ?? this.onSuccessContainer,
+    speakers: speakers ?? this.speakers,
   );
 
   @override
@@ -51,6 +81,7 @@ class AppColors extends ThemeExtension<AppColors> {
             other.onSuccessContainer,
             t,
           )!,
+          speakers: t < 0.5 ? speakers : other.speakers,
         );
 }
 

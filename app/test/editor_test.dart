@@ -289,7 +289,13 @@ void main() {
     });
 
     test('说话人筛选与状态筛选叠加', () async {
-      final c = await _speakerController()
+      final c = await _speakerController();
+      // 整份都没有译文时「未翻译」不算状态，先给一条译文。
+      c.session.document = c.document.replaceAt(
+        0,
+        c.document.cues.first.copyWith(translation: 'Hello'),
+      );
+      c
         ..setFilter(CueFilter.untranslated)
         ..setSpeakerFilter({1});
       expect(c.visibleCues.map((x) => x.index), [3, 5, 6]);
