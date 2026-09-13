@@ -35,6 +35,10 @@ class SegmentRecord {
 class RecognitionCheckpoint {
   final Map<String, SegmentRecord> _segments = {};
 
+  /// 切分出来的总段数。识别服务切完音频后写入；记录只覆盖跑到过的段，
+  /// 所以「已完成 / 总数」要用它而不是 [length]。
+  int? total;
+
   /// 一段最多失败几次，之后放弃并跳过。
   static const maxFailures = 3;
 
@@ -55,17 +59,19 @@ class RecognitionCheckpoint {
   );
 
   /// 这一批切分点与记录是否吻合。不吻合说明音频变了，记录不能用。
+  ///
+  /// 记录只覆盖跑到过的段（中途失败时后面的段还没记），所以只要求
+  /// 记录过的每一段都能在新切分里找到，不要求数量相等。
   bool matches(Iterable<({int startMs, int endMs})> clips) {
     if (_segments.isEmpty) return true;
-    var n = 0;
-    for (final c in clips) {
-      n++;
-      if (!_segments.containsKey('${c.startMs}-${c.endMs}')) return false;
-    }
-    return n == _segments.length;
+    final keys = {for (final c in clips) '${c.startMs}-${c.endMs}'};
+    return _segments.keys.every(keys.contains);
   }
 
-  void clear() => _segments.clear();
+  void clear() {
+    _segments.clear();
+    total = null;
+  }
 
   /// 记一次失败。达到上限就放弃这一段。返回是否已放弃。
   bool fail(SegmentRecord s, String error) {
