@@ -334,42 +334,6 @@ class TranscribeFormController extends ChangeNotifier {
 // 平铺、用 1px 分隔线隔开（flat）。字段、文案、校验完全相同。
 // ═══════════════════════════════════════════════════════════════════════
 
-Widget _twoColumn(Widget left, Widget right, {double gap = AppSpacing.s4}) =>
-    Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: left),
-        SizedBox(width: gap),
-        Expanded(child: right),
-      ],
-    );
-
-/// 平铺段的容器：上方 1px 分隔线 + 16px 内边距。
-Widget _flatSection(
-  BuildContext context, {
-  required List<Widget> children,
-  double gap = AppSpacing.s3,
-  bool divider = true,
-  EdgeInsets padding = const EdgeInsets.all(AppSpacing.s4),
-}) => Container(
-  padding: padding,
-  decoration: divider
-      ? BoxDecoration(
-          border: Border(top: BorderSide(color: context.colors.outlineVariant)),
-        )
-      : null,
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      for (final (i, child) in children.indexed) ...[
-        if (i > 0) SizedBox(height: gap),
-        child,
-      ],
-    ],
-  ),
-);
-
 String serviceLabel(ProviderInfo? info, String? model) {
   if (info == null) return '—';
   final chosen = model ?? info.defaultModel ?? '';
@@ -439,14 +403,14 @@ class TranscribeRecognizeSection extends StatelessWidget {
       settings: form.settings,
       onChanged: (m) => form.update((o) => o.copyWith(asrModel: m)),
     );
-    final status = _StatusLine(
-      form: form,
+    final status = ReadinessLine(
       readiness: readiness,
+      needsApiKey: info?.needsApiKey ?? true,
       onOpenSettings: onOpenSettings,
     );
 
     if (flat) {
-      return _flatSection(
+      return flatSection(
         context,
         divider: false,
         padding: const EdgeInsets.fromLTRB(
@@ -462,7 +426,7 @@ class TranscribeRecognizeSection extends StatelessWidget {
               color: context.colors.onSurfaceVariant,
             ),
           ),
-          _twoColumn(language, service, gap: gap),
+          twoColumn(language, service, gap: gap),
           model,
           status,
         ],
@@ -472,9 +436,9 @@ class TranscribeRecognizeSection extends StatelessWidget {
     return FormSection(
       title: '识别',
       children: [
-        _twoColumn(language, service),
+        twoColumn(language, service),
         const SizedBox(height: AppSpacing.s3),
-        _twoColumn(
+        twoColumn(
           model,
           info != null && !info.implemented
               ? Align(
@@ -493,54 +457,6 @@ class TranscribeRecognizeSection extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.s2),
         status,
-      ],
-    );
-  }
-}
-
-class _StatusLine extends StatelessWidget {
-  const _StatusLine({
-    required this.form,
-    required this.readiness,
-    required this.onOpenSettings,
-  });
-
-  final TranscribeFormController form;
-  final Readiness readiness;
-  final VoidCallback? onOpenSettings;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = context.colors;
-    final error = readiness.isBlocked;
-    final color = error ? cs.error : cs.onSurfaceVariant;
-    final icon = switch (readiness.level) {
-      ReadinessLevel.ready => Symbols.check_circle,
-      ReadinessLevel.advisory => Symbols.schedule,
-      ReadinessLevel.blocked => Symbols.error,
-    };
-    return Row(
-      children: [
-        Icon(icon, size: 16, weight: 400, color: color),
-        const SizedBox(width: AppSpacing.s1 + 2),
-        Flexible(
-          child: Text(
-            readiness.isReady
-                ? (Registry.asrInfo(form.options.asrProviderId)?.needsApiKey ??
-                          true)
-                      ? '已配置密钥，可直接开始'
-                      : '无需密钥，可直接开始'
-                : [
-                    readiness.message,
-                    if (!error) readiness.hint,
-                  ].nonNulls.join('。'),
-            style: context.texts.bodySmall?.copyWith(color: color),
-          ),
-        ),
-        if (error && onOpenSettings != null) ...[
-          const SizedBox(width: AppSpacing.s2),
-          LinkText(label: '去设置', color: color, onTap: onOpenSettings!),
-        ],
       ],
     );
   }
@@ -655,14 +571,14 @@ class TranscribeTranslateSection extends StatelessWidget {
     );
 
     if (flat) {
-      return _flatSection(
+      return flatSection(
         context,
         gap: 14,
         children: [
           toggle,
           if (on) ...[
-            _twoColumn(target, service, gap: gap),
-            _twoColumn(
+            twoColumn(target, service, gap: gap),
+            twoColumn(
               model,
               LabeledField(label: '每批条数', child: batch),
               gap: gap,
@@ -680,8 +596,8 @@ class TranscribeTranslateSection extends StatelessWidget {
         toggle,
         if (on) ...[
           Container(height: 1, color: cs.outlineVariant),
-          _twoColumn(target, service),
-          _twoColumn(
+          twoColumn(target, service),
+          twoColumn(
             model,
             LabeledField(
               label: '每批条数',
@@ -762,7 +678,7 @@ class TranscribeAdvancedSection extends StatelessWidget {
             form.update((o) => o.copyWith(asrPrompt: v), notify: false),
       ),
     );
-    final lengths = _twoColumn(
+    final lengths = twoColumn(
       LabeledField(
         label: '每行最大字符数 · 中日韩',
         child: NumberField(
@@ -814,7 +730,7 @@ class TranscribeAdvancedSection extends StatelessWidget {
     );
 
     if (flat) {
-      return _flatSection(
+      return flatSection(
         context,
         gap: 14,
         children: [
@@ -914,7 +830,7 @@ class _OutputLocationRadios extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.s2),
-        _RadioRow(
+        RadioRow(
           selected: !custom,
           label: OutputLocation.besideSource.label,
           onTap: () => form.update(
@@ -922,7 +838,7 @@ class _OutputLocationRadios extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.s1),
-        _RadioRow(
+        RadioRow(
           selected: custom,
           label: OutputLocation.custom.label,
           trailing: custom
@@ -957,63 +873,6 @@ class _OutputLocationRadios extends StatelessWidget {
           style: context.texts.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
       ],
-    );
-  }
-}
-
-class _RadioRow extends StatelessWidget {
-  const _RadioRow({
-    required this.selected,
-    required this.label,
-    required this.onTap,
-    this.trailing,
-  });
-
-  final bool selected;
-  final String label;
-  final VoidCallback onTap;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = context.colors;
-    return Tappable(
-      onTap: onTap,
-      child: SizedBox(
-        height: 24,
-        child: Row(
-          children: [
-            Container(
-              width: 20,
-              height: 20,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: selected ? cs.primary : cs.outline,
-                  width: 2,
-                ),
-              ),
-              child: selected
-                  ? Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: cs.primary,
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: AppSpacing.s2 + 2),
-            Text(label, style: context.texts.bodyMedium),
-            if (trailing != null) ...[
-              const SizedBox(width: AppSpacing.s1),
-              Flexible(child: trailing!),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }

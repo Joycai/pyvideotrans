@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/app_extensions.dart';
+import '../../core/theme/tokens.dart';
 import '../../core/widgets/fields.dart';
 import '../../services/provider_api.dart';
 import '../../services/readiness.dart';
@@ -198,4 +199,155 @@ String grouped(int value) {
     buffer.write(digits[i]);
   }
   return buffer.toString();
+}
+
+/// 左右两列等宽。
+Widget twoColumn(Widget left, Widget right, {double gap = AppSpacing.s4}) =>
+    Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: left),
+        SizedBox(width: gap),
+        Expanded(child: right),
+      ],
+    );
+
+/// 页面参数面板里的平铺段：上方 1px 分隔线 + 16px 内边距。
+/// 对话框里每段是一张卡片（FormSection），页面里三段平铺、用分隔线隔开。
+Widget flatSection(
+  BuildContext context, {
+  required List<Widget> children,
+  double gap = AppSpacing.s3,
+  bool divider = true,
+  EdgeInsets padding = const EdgeInsets.all(AppSpacing.s4),
+}) => Container(
+  padding: padding,
+  decoration: divider
+      ? BoxDecoration(
+          border: Border(top: BorderSide(color: context.colors.outlineVariant)),
+        )
+      : null,
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (final (i, child) in children.indexed) ...[
+        if (i > 0) SizedBox(height: gap),
+        child,
+      ],
+    ],
+  ),
+);
+
+/// 竖排单选的一行：圆点 + 文字 + 可选的尾随内容（比如已选目录）。
+class RadioRow extends StatelessWidget {
+  const RadioRow({
+    super.key,
+    required this.selected,
+    required this.label,
+    required this.onTap,
+    this.trailing,
+  });
+
+  final bool selected;
+  final String label;
+  final VoidCallback onTap;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.colors;
+    return Tappable(
+      onTap: onTap,
+      child: SizedBox(
+        height: 24,
+        child: Row(
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? cs.primary : cs.outline,
+                  width: 2,
+                ),
+              ),
+              child: selected
+                  ? Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: cs.primary,
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: AppSpacing.s2 + 2),
+            Text(label, style: context.texts.bodyMedium),
+            if (trailing != null) ...[
+              const SizedBox(width: AppSpacing.s1),
+              Flexible(child: trailing!),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 服务就绪状态行：图标 + 一句话，阻断时 error 色并附「去设置」。
+class ReadinessLine extends StatelessWidget {
+  const ReadinessLine({
+    super.key,
+    required this.readiness,
+    required this.needsApiKey,
+    this.onOpenSettings,
+  });
+
+  final Readiness readiness;
+
+  /// 就绪时用来区分「已配置密钥」与「无需密钥」两句。
+  final bool needsApiKey;
+
+  /// 缺密钥时那个「去设置」。为 null 就只显示文字 —— 宁可不给链接，
+  /// 也不要给一个点了没反应的链接。
+  final VoidCallback? onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.colors;
+    final error = readiness.isBlocked;
+    final color = error ? cs.error : cs.onSurfaceVariant;
+    final icon = switch (readiness.level) {
+      ReadinessLevel.ready => Symbols.check_circle,
+      ReadinessLevel.advisory => Symbols.schedule,
+      ReadinessLevel.blocked => Symbols.error,
+    };
+    return Row(
+      children: [
+        Icon(icon, size: 16, weight: 400, color: color),
+        const SizedBox(width: AppSpacing.s1 + 2),
+        Flexible(
+          child: Text(
+            readiness.isReady
+                ? needsApiKey
+                      ? '已配置密钥，可直接开始'
+                      : '无需密钥，可直接开始'
+                : [
+                    readiness.message,
+                    if (!error) readiness.hint,
+                  ].nonNulls.join('。'),
+            style: context.texts.bodySmall?.copyWith(color: color),
+          ),
+        ),
+        if (error && onOpenSettings != null) ...[
+          const SizedBox(width: AppSpacing.s2),
+          LinkText(label: '去设置', color: color, onTap: onOpenSettings!),
+        ],
+      ],
+    );
+  }
 }

@@ -12,8 +12,10 @@ import 'features/editor/editor_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/shell/status_bar.dart';
 import 'features/tasks/new_transcribe_page.dart';
+import 'features/tasks/new_translate_page.dart';
 import 'features/tasks/tasks_page.dart';
 import 'features/tasks/transcribe_form.dart';
+import 'features/tasks/translate_form.dart';
 import 'pipeline/task_queue.dart';
 import 'pipeline/task_runner.dart';
 import 'services/media.dart';
@@ -33,9 +35,7 @@ Future<void> main() async {
     settings: settings,
   );
 
-  runApp(
-    SubtitleStudioApp(settings: settings, queue: queue, media: media),
-  );
+  runApp(SubtitleStudioApp(settings: settings, queue: queue, media: media));
 }
 
 class SubtitleStudioApp extends StatefulWidget {
@@ -67,6 +67,12 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     media: widget.media,
   );
 
+  /// 「翻译」页的表单，同样挂在根节点上。
+  late final _translateForm = TranslateFormController(
+    settings: widget.settings,
+    media: widget.media,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -81,6 +87,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     widget.settings.removeListener(_refresh);
     _editor?.dispose();
     _transcribeForm.dispose();
+    _translateForm.dispose();
     super.dispose();
   }
 
@@ -94,6 +101,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     widget.queue,
     widget.settings,
     _transcribeForm,
+    _translateForm,
     ?_editor,
   ]);
 
@@ -122,9 +130,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     final mt = Registry.translationInfo(widget.settings.translationProviderId);
 
     return StatusSnapshot(
-      localEngine: widget.media.available
-          ? 'ffmpeg · 就绪'
-          : 'ffmpeg · 未找到',
+      localEngine: widget.media.available ? 'ffmpeg · 就绪' : 'ffmpeg · 未找到',
       cloud: (
         connected: asr != null && widget.settings.isConfigured(asr),
         label: asr == null
@@ -153,23 +159,22 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     final queue = widget.queue;
     switch (_section) {
       case AppSection.tasks:
-        final running = queue.countWhere(
-          (t) => t.status == TaskStatus.running,
-        );
+        final running = queue.countWhere((t) => t.status == TaskStatus.running);
         final failed = queue.countWhere((t) => t.status == TaskStatus.failed);
         return PageChrome(
           title: '任务',
           subtitle: '${queue.tasks.length} 个任务 · $running 个进行中 · $failed 个失败',
           actions: [
             TasksPageActions(
-              onNewTranslate: () =>
-                  _tasksKey.currentState?.newTranslate(),
+              onNewTranslate: () => _tasksKey.currentState?.newTranslate(),
               onNewTranscribe: () => _tasksKey.currentState?.newTranscribe(),
             ),
           ],
         );
       case AppSection.newTranscribe:
         return newTranscribeChrome(_transcribeForm);
+      case AppSection.newTranslate:
+        return newTranslateChrome(_translateForm);
       case AppSection.settings:
         return settingsChrome(
           onReset: () => _settingsKey.currentState?.confirmReset(),
@@ -177,19 +182,14 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       case AppSection.editor:
         final editor = _editor;
         if (editor == null) {
-          return const PageChrome(
-            title: '编辑器',
-            subtitle: '从任务页打开一个任务开始校对',
-          );
+          return const PageChrome(title: '编辑器', subtitle: '从任务页打开一个任务开始校对');
         }
         return PageChrome(
           title: '编辑器',
           subtitle:
               '${editor.task.fileName} · ${editor.document.cues.length} 条 · '
               '${editor.task.sourceLanguage.name} → ${editor.task.targetLanguage.name}',
-          titleTrailing: EditorReviewBadge(
-            count: editor.document.reviewCount,
-          ),
+          titleTrailing: EditorReviewBadge(count: editor.document.reviewCount),
           actions: [
             EditorPageActions(
               controller: editor,
@@ -199,8 +199,6 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
             ),
           ],
         );
-      default:
-        return PageChrome(title: _section.label);
     }
   }
 
@@ -231,8 +229,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
         key: _tasksKey,
         queue: widget.queue,
         onOpenEditor: _openEditor,
-        onOpenSettings: () =>
-            setState(() => _section = AppSection.settings),
+        onOpenSettings: () => setState(() => _section = AppSection.settings),
       ),
     ),
     AppSection.newTranscribe => NewTranscribePage(
@@ -240,6 +237,17 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       queue: widget.queue,
       onOpenSettings: () => setState(() => _section = AppSection.settings),
       onOpenTasks: () => setState(() => _section = AppSection.tasks),
+    ),
+    AppSection.newTranslate => NewTranslatePage(
+      form: _translateForm,
+      queue: widget.queue,
+      onOpenSettings: () => setState(() => _section = AppSection.settings),
+      onOpenTasks: () => setState(() => _section = AppSection.tasks),
+      // 拖错了门的音视频原样带去「新建转写」页，不让用户再拖一次。
+      onSwitchToTranscribe: (media) {
+        _transcribeForm.seed(media);
+        setState(() => _section = AppSection.newTranscribe);
+      },
     ),
     AppSection.settings => SettingsPage(
       key: _settingsKey,
@@ -275,9 +283,8 @@ class _Placeholder extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               section.label,
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(color: cs.onSurfaceVariant),
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(color: cs.onSurfaceVariant),
             ),
           ],
         ),
