@@ -2,11 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!--
+	  不启用 App Sandbox：这个工具要调用 Homebrew 装的 ffmpeg、把字幕写到源视频旁边、
+	  访问在线识别/翻译服务。沙盒开着而没有对应 entitlement 时，文件选择面板
+	  没有反应、网络请求静默失败，所以这里明确关掉。它不走 App Store 分发。
+	-->
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
+	<false/>
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
-	<key>com.apple.security.network.server</key>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
 	<true/>
 </dict>
 </plist>

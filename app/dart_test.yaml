@@ -4,3 +4,7 @@ tags:
   # 重新生成截图：  flutter test --tags golden --run-skipped --update-goldens
   golden:
     skip: "默认跳过（依赖宿主机字体）。加 --tags golden --run-skipped 运行。"
+  # 真实调用在线服务，需要密钥（环境变量 DASHSCOPE_API_KEY），默认不跑。
+  # 联调：DASHSCOPE_API_KEY=sk-… flutter test --tags live --run-skipped
+  live:
+    skip: "默认跳过（需要真实密钥）。加 --tags live --run-skipped 运行。"

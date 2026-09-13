@@ -197,9 +197,13 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
       onOpen: () => setState(() => _open = true),
       onClose: () => setState(() => _open = false),
       alignmentOffset: const Offset(0, 4),
+      // 菜单必须不透明：它浮在对话框的文字上方，半透明会把下层文字透出来，
+      // 分组标题与选项说明混成一片。层次感改由投影提供。
       style: MenuStyle(
-        backgroundColor: WidgetStatePropertyAll(context.glass.glassStrong),
-        elevation: const WidgetStatePropertyAll(0),
+        backgroundColor: WidgetStatePropertyAll(cs.surfaceContainerLowest),
+        elevation: const WidgetStatePropertyAll(6),
+        shadowColor: WidgetStatePropertyAll(cs.shadow.withValues(alpha: 0.35)),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
         padding: const WidgetStatePropertyAll(
           EdgeInsets.symmetric(vertical: AppSpacing.s1),
         ),
@@ -207,7 +211,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.lg - 4),
-            side: BorderSide(color: context.glass.glassBorder),
+            side: BorderSide(color: cs.outlineVariant),
           ),
         ),
       ),
