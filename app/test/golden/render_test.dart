@@ -388,13 +388,21 @@ void main() {
     required String file,
     bool withTranslation = true,
     Size size = const Size(1440, 900),
+    List<int> review = const [],
+    bool speakerManager = false,
   }) async {
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
-    final controller = EditorController(
-      session: localSession(withTranslation: withTranslation),
-      settings: settings,
-    );
+    final session = localSession(withTranslation: withTranslation);
+    // 本地 SRT 没有置信度；压低几条，验证徽标叠在待校对行上仍可辨。
+    for (final i in review) {
+      session.document = session.document.replaceAt(
+        i,
+        session.document.cues[i].copyWith(confidence: 0.5),
+      );
+    }
+    final controller = EditorController(session: session, settings: settings);
+    final pageKey = GlobalKey<EditorPageState>();
     // 三处修改，让「保存」带上脏标记。
     for (final i in [0, 1, 2]) {
       controller
@@ -422,11 +430,19 @@ void main() {
         ],
       ),
       child: EditorPage(
+        key: pageKey,
         controller: controller,
         onMountTranslation: withTranslation ? null : () {},
       ),
     );
-    await expectLater(find.byType(AppShell), matchesGoldenFile('$file.png'));
+    if (speakerManager) {
+      pageKey.currentState!.manageSpeakers();
+      await tester.pumpAndSettle();
+    }
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('$file.png'),
+    );
   }
 
   testWidgets('编辑器 · 本地会话 · 浅色', (tester) async {
@@ -434,7 +450,22 @@ void main() {
   });
 
   testWidgets('编辑器 · 本地会话 · 深色', (tester) async {
-    await pumpLocal(tester, brightness: Brightness.dark, file: 'editor_local_dark');
+    await pumpLocal(
+      tester,
+      brightness: Brightness.dark,
+      file: 'editor_local_dark',
+      review: [4, 7],
+    );
+  });
+
+  testWidgets('编辑器 · 说话人名单 · 深色', (tester) async {
+    await pumpLocal(
+      tester,
+      brightness: Brightness.dark,
+      file: 'editor_speakers_dark',
+      review: [4, 7],
+      speakerManager: true,
+    );
   });
 
   testWidgets('编辑器 · 本地会话 · 窄窗口', (tester) async {
