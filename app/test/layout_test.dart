@@ -59,8 +59,8 @@ void main() {
           home: AppShell(
             section: AppSection.tasks,
             onSectionChanged: (_) {},
-            chrome: const PageChrome(title: '任务', subtitle: '副标题'),
-            status: StatusSnapshot.idle,
+            chrome: () => const PageChrome(title: '任务', subtitle: '副标题'),
+            status: () => StatusSnapshot.idle,
             child: const SizedBox(),
           ),
         ),

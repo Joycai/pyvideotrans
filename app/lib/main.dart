@@ -61,20 +61,30 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   @override
   void initState() {
     super.initState();
-    widget.queue.addListener(_refresh);
+    // 根节点只关心主题模式这类真正全局的设置；任务进度、编辑器改动
+    // 由 [_live] 通过 ListenableBuilder 局部驱动顶栏、状态栏与任务页，
+    // 否则每一次进度回调都会重建 MaterialApp 以下整棵树。
     widget.settings.addListener(_refresh);
   }
 
   @override
   void dispose() {
-    widget.queue.removeListener(_refresh);
     widget.settings.removeListener(_refresh);
+    _editor?.dispose();
     super.dispose();
   }
 
   void _refresh() {
     if (mounted) setState(() {});
   }
+
+  /// 顶栏与状态栏的数据源。编辑器打开时把它也并进来，标题里的条数
+  /// 与待校对徽标才会跟着文档变。
+  Listenable get _live => Listenable.merge([
+    widget.queue,
+    widget.settings,
+    ?_editor,
+  ]);
 
   ThemeMode get _themeMode => switch (widget.settings.themeMode) {
     'light' => ThemeMode.light,
@@ -83,13 +93,13 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   };
 
   void _openEditor(SubtitleTask task) {
-    _editor?.removeListener(_refresh);
-    final controller = EditorController(task: task, settings: widget.settings)
-      ..addListener(_refresh);
+    final previous = _editor;
+    final controller = EditorController(task: task, settings: widget.settings);
     setState(() {
       _editor = controller;
       _section = AppSection.editor;
     });
+    previous?.dispose();
   }
 
   StatusSnapshot get _status {
@@ -188,20 +198,25 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       home: AppShell(
         section: _section,
         onSectionChanged: (s) => setState(() => _section = s),
-        chrome: _chrome,
-        status: _status,
+        chrome: () => _chrome,
+        status: () => _status,
+        live: _live,
         child: _body,
       ),
     );
   }
 
   Widget get _body => switch (_section) {
-    AppSection.tasks => TasksPage(
-      key: _tasksKey,
-      queue: widget.queue,
-      onOpenEditor: _openEditor,
-      onOpenSettings: () =>
-          setState(() => _section = AppSection.settings),
+    // 任务页自己不监听队列，靠这里的 ListenableBuilder 跟进度走。
+    AppSection.tasks => ListenableBuilder(
+      listenable: widget.queue,
+      builder: (_, _) => TasksPage(
+        key: _tasksKey,
+        queue: widget.queue,
+        onOpenEditor: _openEditor,
+        onOpenSettings: () =>
+            setState(() => _section = AppSection.settings),
+      ),
     ),
     AppSection.settings => SettingsPage(settings: widget.settings),
     AppSection.editor when _editor != null => EditorPage(
