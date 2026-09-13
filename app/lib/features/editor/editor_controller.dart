@@ -3,8 +3,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../../domain/cue.dart';
+import '../../domain/language.dart';
+import '../../domain/line_wrap.dart';
 import '../../domain/srt.dart';
 import '../../domain/task.dart';
+import '../../domain/task_options.dart';
 import '../../services/provider_api.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
@@ -63,8 +66,7 @@ class EditorController extends ChangeNotifier {
     }).toList();
   }
 
-  Cue? get current =>
-      selected >= 0 && selected < document.cues.length
+  Cue? get current => selected >= 0 && selected < document.cues.length
       ? document.cues[selected]
       : null;
 
@@ -90,7 +92,9 @@ class EditorController extends ChangeNotifier {
   }
 
   void select(int indexInDocument) {
-    selected = indexInDocument;
+    selected = document.cues.isEmpty
+        ? 0
+        : indexInDocument.clamp(0, document.cues.length - 1);
     notifyListeners();
   }
 
@@ -117,7 +121,9 @@ class EditorController extends ChangeNotifier {
   void undo() {
     if (_undo.isEmpty) return;
     task.document = _undo.removeLast();
-    selected = selected.clamp(0, document.cues.length - 1);
+    selected = document.cues.isEmpty
+        ? 0
+        : selected.clamp(0, document.cues.length - 1);
     notifyListeners();
   }
 
@@ -149,7 +155,9 @@ class EditorController extends ChangeNotifier {
   void editEnd(int ms) {
     final cue = current;
     if (cue == null) return;
-    _replaceCurrent(cue.copyWith(endMs: ms < cue.startMs + 1 ? cue.startMs + 1 : ms));
+    _replaceCurrent(
+      cue.copyWith(endMs: ms < cue.startMs + 1 ? cue.startMs + 1 : ms),
+    );
   }
 
   void toggleReviewed() {
@@ -185,6 +193,8 @@ class EditorController extends ChangeNotifier {
       final provider = Registry.buildTranslation(
         task.translationProviderId,
         settings,
+        model: task.options.translationModel,
+        guidance: task.options.translationGuidance,
       );
       final result = await provider.translateBatch(
         lines: [cue.source],
@@ -192,6 +202,12 @@ class EditorController extends ChangeNotifier {
         targetLanguage: task.targetLanguage.name,
         token: CancellationToken(),
       );
+      if (result.length != 1) {
+        throw const ProviderException(
+          '译文与原文条数对不上',
+          hint: '模型没有返回恰好一条译文，请稍后重试。',
+        );
+      }
       _push();
       task.document = document.replaceAt(
         indexInDocument,
@@ -214,9 +230,11 @@ class EditorController extends ChangeNotifier {
     final provider = Registry.buildTranslation(
       task.translationProviderId,
       settings,
+      model: task.options.translationModel,
+      guidance: task.options.translationGuidance,
     );
     final token = CancellationToken();
-    final batchSize = settings.translationBatchSize;
+    final batchSize = task.options.translationBatchSize;
     final cues = [...document.cues];
     _push();
 
@@ -231,6 +249,13 @@ class EditorController extends ChangeNotifier {
         targetLanguage: task.targetLanguage.name,
         token: token,
       );
+      if (result.length != slice.length) {
+        throw ProviderException(
+          '译文与原文条数对不上',
+          detail: '期望 ${slice.length} 条，实际收到 ${result.length} 条',
+          hint: '模型合并或丢弃了字幕行，请减小批量后重试。',
+        );
+      }
       for (final (j, i) in slice.indexed) {
         cues[i] = cues[i].copyWith(translation: result[j]);
       }
@@ -242,12 +267,51 @@ class EditorController extends ChangeNotifier {
 
   /// 导出到源文件所在目录（或设置里指定的输出目录）。返回写出的路径。
   Future<List<String>> export(Set<SrtField> fields) async {
-    final dir = settings.outputDir ?? File(task.sourcePath).parent.path;
+    final options = task.options;
+    if (!options.format.implemented) {
+      throw const ProviderException(
+        '当前字幕格式尚未实施',
+        hint: '先在任务参数中选择 SRT、WebVTT 或纯文本。',
+      );
+    }
+    final dir = switch (options.outputLocation) {
+      OutputLocation.custom =>
+        options.outputDir?.trim().isNotEmpty == true
+            ? options.outputDir!.trim()
+            : File(task.sourcePath).parent.path,
+      OutputLocation.besideSource => File(task.sourcePath).parent.path,
+    };
+    await Directory(dir).create(recursive: true);
     final stem = task.fileName.replaceAll(RegExp(r'\.[^.]*$'), '');
     final written = <String>[];
 
+    String Function(String) wrap(Language language) {
+      final limit = language.cjk
+          ? options.cjkLineLength
+          : options.latinLineLength;
+      return (text) => LineWrap.wrap(text, limit: limit, cjk: language.cjk);
+    }
+
+    final wrapSource = wrap(task.sourceLanguage);
+    final wrapTranslation = wrap(task.targetLanguage);
+
     for (final field in fields) {
-      final content = Srt.serialize(document.cues, field: field);
+      final content = switch (options.format) {
+        SubtitleFormat.srt => Srt.serialize(
+          document.cues,
+          field: field,
+          wrapSource: wrapSource,
+          wrapTranslation: wrapTranslation,
+        ),
+        SubtitleFormat.vtt => Srt.serializeVtt(
+          document.cues,
+          field: field,
+          wrapSource: wrapSource,
+          wrapTranslation: wrapTranslation,
+        ),
+        SubtitleFormat.txt => Srt.serializePlain(document.cues, field: field),
+        SubtitleFormat.ass => '',
+      };
       if (content.trim().isEmpty) continue;
       final suffix = switch (field) {
         SrtField.source => _tag(task.sourceLanguage.code),
@@ -255,7 +319,7 @@ class EditorController extends ChangeNotifier {
         SrtField.bilingualTargetAbove || SrtField.bilingualTargetBelow =>
           '${_tag(task.sourceLanguage.code)}-${_tag(task.targetLanguage.code)}',
       };
-      final path = '$dir/$stem.$suffix.srt';
+      final path = '$dir/$stem.$suffix.${options.format.extension}';
       await File(path).writeAsString(content);
       written.add(path);
     }

@@ -44,13 +44,17 @@ void main() {
 
     test('没设过输出目录就是「与源文件同目录」', () async {
       final s = await freshSettings();
-      expect(s.defaultTaskOptions().outputLocation, OutputLocation.besideSource);
+      expect(
+        s.defaultTaskOptions().outputLocation,
+        OutputLocation.besideSource,
+      );
       s.outputDir = work.path;
       expect(s.defaultTaskOptions().outputLocation, OutputLocation.custom);
     });
 
     test('单行字数被限制在合理区间', () async {
-      final s = await freshSettings()..cjkLineLength = 999;
+      final s = await freshSettings()
+        ..cjkLineLength = 999;
       expect(s.cjkLineLength, lessThanOrEqualTo(60));
     });
 
@@ -58,6 +62,22 @@ void main() {
       final o = testOptions(source: 'zh', target: 'en');
       expect(o.sourceLineLength, 15);
       expect(o.targetLineLength, 40);
+    });
+
+    test('copyWith 传 null 可以明确清掉可选模型与输出目录', () {
+      final o = testOptions(
+        asrModel: 'whisper-1',
+        translationModel: 'gpt-test',
+        outputDir: '/tmp/out',
+      );
+      final cleared = o.copyWith(
+        asrModel: null,
+        translationModel: null,
+        outputDir: null,
+      );
+      expect(cleared.asrModel, isNull);
+      expect(cleared.translationModel, isNull);
+      expect(cleared.outputDir, isNull);
     });
   });
 
@@ -97,17 +117,18 @@ void main() {
     });
 
     test('一批文件共用同一份参数', () {
-      final tasks = queue.enqueueAll(
-        ['/v/a.mp4', '/v/b.mov'],
-        options: testOptions(source: 'ja'),
-      );
+      final tasks = queue.enqueueAll([
+        '/v/a.mp4',
+        '/v/b.mov',
+      ], options: testOptions(source: 'ja'));
       expect(tasks, hasLength(2));
       expect(tasks.every((t) => t.sourceLanguage.code == 'ja'), isTrue);
     });
 
     // 任务串行跑，排队期间改设置不该影响已经排上的任务。
     test('参数在入队时定死，之后改设置不影响它', () async {
-      final settings = await freshSettings()..translationBatchSize = 8;
+      final settings = await freshSettings()
+        ..translationBatchSize = 8;
       final q = TaskQueue(
         runner: TaskRunner(settings: settings, workDir: work.path),
         settings: settings,
@@ -216,14 +237,8 @@ void main() {
   group('双语排版', () {
     test('三档各自对应一路文本', () {
       expect(BilingualLayout.targetOnly.field, SrtField.translation);
-      expect(
-        BilingualLayout.targetAbove.field,
-        SrtField.bilingualTargetAbove,
-      );
-      expect(
-        BilingualLayout.targetBelow.field,
-        SrtField.bilingualTargetBelow,
-      );
+      expect(BilingualLayout.targetAbove.field, SrtField.bilingualTargetAbove);
+      expect(BilingualLayout.targetBelow.field, SrtField.bilingualTargetBelow);
       expect(BilingualLayout.targetOnly.isBilingual, isFalse);
       expect(BilingualLayout.targetAbove.isBilingual, isTrue);
     });
@@ -239,7 +254,10 @@ void main() {
 
     // 存盘用的是枚举名，认不出来的值（旧版本写的、手改坏的）回落到默认。
     test('读不认识的值回落到仅译文', () {
-      expect(BilingualLayout.byName('targetAbove'), BilingualLayout.targetAbove);
+      expect(
+        BilingualLayout.byName('targetAbove'),
+        BilingualLayout.targetAbove,
+      );
       expect(BilingualLayout.byName('乱写'), BilingualLayout.targetOnly);
     });
 
@@ -302,7 +320,9 @@ void _jsonTests() {
     test('设置里的「上次参数」坏了就当没有', () async {
       final s = await freshSettings();
       expect(s.lastTranscribeOptions, isNull);
-      s.lastTranscribeOptions = s.defaultTaskOptions().copyWith(translate: false);
+      s.lastTranscribeOptions = s.defaultTaskOptions().copyWith(
+        translate: false,
+      );
       expect(s.lastTranscribeOptions!.translate, isFalse);
       s.lastTranscribeOptions = null;
       expect(s.lastTranscribeOptions, isNull);
