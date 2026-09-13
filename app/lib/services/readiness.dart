@@ -45,6 +45,7 @@ abstract final class ProviderReadiness {
     AppSettings settings, {
     Language? language,
     String? model,
+    bool diarize = false,
   }) {
     final info = Registry.asrInfo(id);
     if (info == null) {
@@ -65,6 +66,22 @@ abstract final class ProviderReadiness {
         message: unsupported,
         hint: '换一个模型，或把源语言留给「自动检测」。',
       );
+    }
+    if (diarize) {
+      if (!info.supportsDiarization) {
+        return Readiness(
+          ReadinessLevel.advisory,
+          message: '${info.name}不支持说话人分离',
+          hint: '这一项会被忽略；需要分离请改用阿里百炼 · Qwen3-ASR。',
+        );
+      }
+      if (chosen.startsWith('qwen3-asr')) {
+        return Readiness(
+          ReadinessLevel.advisory,
+          message: '$chosen 不支持说话人分离',
+          hint: '换 qwen-audio-3.0-asr-flash 或 fun-asr 系列模型。',
+        );
+      }
     }
     return Readiness.ok;
   }

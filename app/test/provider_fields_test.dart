@@ -10,6 +10,8 @@ import 'package:subtitle_studio/services/settings.dart';
 
 /// 「新建转写」「新建翻译」的模型字段：显示的必须就是会发出去的那个模型。
 void main() {
+  group('说话人分离开关', _diarizeToggleTests);
+
   late AppSettings settings;
 
   setUp(() async {
@@ -131,5 +133,72 @@ void main() {
     expect(find.byType(ModelTextField), findsNothing);
     expect(dropdown(tester).value, 'whisper-x');
     expect(entries(tester), ['whisper-x']);
+  });
+}
+
+/// 「识别」段里的说话人分离开关。
+void _diarizeToggleTests() {
+  late AppSettings settings;
+
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    settings = await AppSettings.load()
+      ..setConfig('openai', const ProviderConfig(apiKey: 'sk'))
+      ..setConfig('dashscope_qwen_asr', const ProviderConfig(apiKey: 'sk'));
+  });
+
+  Future<TranscribeFormController> pump(
+    WidgetTester tester, {
+    required String asr,
+    bool diarize = false,
+  }) async {
+    final form = TranscribeFormController(
+      settings: settings,
+      initial: settings.defaultTaskOptions().copyWith(
+        asrProviderId: asr,
+        diarize: diarize,
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: lightTheme,
+        home: Scaffold(
+          body: SizedBox(
+            width: 720,
+            child: ListenableBuilder(
+              listenable: form,
+              builder: (_, _) => TranscribeRecognizeSection(form: form),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    return form;
+  }
+
+  testWidgets('只有支持的服务才显示开关', (tester) async {
+    await pump(tester, asr: 'openai');
+    expect(find.text('说话人分离'), findsNothing);
+
+    await pump(tester, asr: 'dashscope_qwen_asr');
+    expect(find.text('说话人分离'), findsOneWidget);
+  });
+
+  testWidgets('点开关切换参数；换到不支持的服务时参数随之关掉', (tester) async {
+    final form = await pump(tester, asr: 'dashscope_qwen_asr');
+    await tester.tap(find.text('说话人分离'));
+    await tester.pump();
+    expect(form.options.diarize, isTrue);
+
+    // 走服务下拉的 onChanged，跟用户真换服务一样。
+    final service = tester
+        .widgetList<AppDropdown<String>>(find.byType(AppDropdown<String>))
+        .firstWhere((d) => d.value == 'dashscope_qwen_asr');
+    service.onChanged('openai');
+    await tester.pump();
+    expect(form.options.asrProviderId, 'openai');
+    expect(form.options.diarize, isFalse);
+    expect(find.text('说话人分离'), findsNothing);
   });
 }

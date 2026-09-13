@@ -1,3 +1,4 @@
+import '../domain/speech_segments.dart';
 import 'audio_splitter.dart';
 import 'dashscope_asr.dart';
 import 'media.dart';
@@ -67,6 +68,8 @@ abstract final class Registry {
         'qwen-audio-3.0-asr-flash',
         'fun-asr-flash-2026-06-15',
       ],
+      // 文档：说话人分离只有 Qwen-Audio-3.0-ASR 与 Fun-ASR 两族支持。
+      supportsDiarization: true,
     ),
   ];
 
@@ -150,12 +153,16 @@ abstract final class Registry {
   /// 之后用户改设置不应该影响已经排上队的任务。传 null 表示沿用设置里的值。
   ///
   /// [media] 给需要本地切分音频的服务用（阿里百炼）；不传就临时建一个。
+  ///
+  /// [diarize] 开说话人分离：只有 [ProviderInfo.supportsDiarization] 的服务
+  /// 理会它，其余忽略。
   static AsrProvider buildAsr(
     String id,
     AppSettings settings, {
     String? model,
     String? prompt,
     Media? media,
+    bool diarize = false,
   }) {
     final info = asrInfo(id);
     if (info == null) {
@@ -173,7 +180,15 @@ abstract final class Registry {
         info: info,
         endpoint: _withModel(endpoint, model),
         prompt: prompt ?? settings.asrPrompt,
-        splitter: FfmpegAudioSplitter(media ?? Media()),
+        diarize: diarize,
+        // 说话人编号只在同一次请求里一致：开分离时把片段切得长一些，
+        // 跨片段对不上号的机会就少得多。
+        splitter: FfmpegAudioSplitter(
+          media ?? Media(),
+          maxMs: diarize
+              ? DashScopeAsrProvider.diarizeClipMs
+              : SpeechSegments.defaultMaxMs,
+        ),
       );
     }
     return OpenAiCompatibleAsrProvider(

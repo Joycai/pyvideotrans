@@ -28,6 +28,30 @@ Endpoint _endpoint([String model = 'qwen3-asr-flash']) => Endpoint(
   apiKey: 'sk-test',
 );
 
+/// 按给定的片段位置造文件，测试词级时间换算用。
+class _ClipSplitter implements AudioSplitter {
+  _ClipSplitter(this.clips);
+
+  final List<AudioClip> clips;
+
+  @override
+  Future<List<AudioClip>> split(
+    String audioPath, {
+    required CancellationToken token,
+  }) async {
+    final dir = Directory('$audioPath.clips')..createSync(recursive: true);
+    return [
+      for (final (i, c) in clips.indexed)
+        AudioClip(
+          path: (File('${dir.path}/clip_$i.wav')..writeAsBytesSync([i])).path,
+          startMs: c.startMs,
+          endMs: c.endMs,
+          fileStartMs: c.fileStartMs,
+        ),
+    ];
+  }
+}
+
 /// 不起 ffmpeg：直接把 [count] 个小文件写到 `<音频>.clips/` 里。
 class FakeSplitter implements AudioSplitter {
   FakeSplitter(this.count);
@@ -184,6 +208,194 @@ void main() {
       expect(part['type'], 'input_audio');
       expect((part['input_audio'] as Map)['data'], startsWith('data:audio/wav;base64,'));
       expect(body['parameters'], {'format': 'wav', 'sample_rate': '16000'});
+    });
+
+    test('说话人分离：请求带 diarization_enabled，按词级 speaker_id 切开并换算时间', () async {
+      late Map<String, Object?> body;
+      final client = MockClient((req) async {
+        body = jsonDecode(req.body) as Map<String, Object?>;
+        return _ok(
+          jsonEncode({
+            'output': {
+              'text': '你好，我们今天讨论项目进度。好的，我先汇报一下。OK let me start',
+              'sentence': {
+                'begin_time': 100,
+                'end_time': 5000,
+                'text': '你好，我们今天讨论项目进度。好的，我先汇报一下。OK let me start',
+                'speaker_id': 0,
+                'words': [
+                  {
+                    'begin_time': 100,
+                    'end_time': 400,
+                    'text': '你好',
+                    'punctuation': '，',
+                    'speaker_id': 0,
+                  },
+                  {
+                    'begin_time': 400,
+                    'end_time': 900,
+                    'text': '我们今天',
+                    'punctuation': '',
+                    'speaker_id': 0,
+                  },
+                  {
+                    'begin_time': 900,
+                    'end_time': 1500,
+                    'text': '讨论项目进度',
+                    'punctuation': '。',
+                    'speaker_id': 0,
+                  },
+                  // 换人：即便上一句没有句末标点也要断开。
+                  {
+                    'begin_time': 1600,
+                    'end_time': 1900,
+                    'text': '好的',
+                    'punctuation': '，',
+                    'speaker_id': 1,
+                  },
+                  {
+                    'begin_time': 1900,
+                    'end_time': 2600,
+                    'text': '我先汇报一下',
+                    'punctuation': '。',
+                    'speaker_id': 1,
+                  },
+                  // 句末标点后同一人继续：另起一条。拉丁词之间补空格。
+                  {
+                    'begin_time': 2700,
+                    'end_time': 2900,
+                    'text': 'OK',
+                    'punctuation': '',
+                    'speaker_id': 1,
+                  },
+                  {
+                    'begin_time': 2900,
+                    'end_time': 3100,
+                    'text': 'let',
+                    'punctuation': '',
+                    'speaker_id': 1,
+                  },
+                  {
+                    'begin_time': 3100,
+                    'end_time': 3300,
+                    'text': 'me',
+                    'punctuation': '',
+                    'speaker_id': 1,
+                  },
+                  // 超出片段范围的时间被夹回片段末尾。
+                  {
+                    'begin_time': 3300,
+                    'end_time': 99000,
+                    'text': 'start',
+                    'punctuation': '',
+                    'speaker_id': 1,
+                  },
+                ],
+              },
+            },
+          }),
+        );
+      });
+      // 片段文件从 10.0s 开始（含 200ms 余量），语音本身 10.2s–14.0s。
+      final splitter = _ClipSplitter([
+        const AudioClip(
+          path: '',
+          startMs: 10200,
+          endMs: 14000,
+          fileStartMs: 10000,
+        ),
+      ]);
+      final cues =
+          await DashScopeAsrProvider(
+            info: _info,
+            endpoint: _endpoint('qwen-audio-3.0-asr-flash'),
+            splitter: splitter,
+            diarize: true,
+            client: client,
+          ).transcribe(
+            audioPath: audio,
+            language: 'zh',
+            token: CancellationToken(),
+            onProgress: _noProgress,
+          );
+
+      expect((body['parameters'] as Map)['diarization_enabled'], isTrue);
+      expect(cues.map((c) => c.source), [
+        '你好，我们今天讨论项目进度。',
+        '好的，我先汇报一下。',
+        'OK let me start',
+      ]);
+      expect(cues.map((c) => c.speaker), [0, 1, 1]);
+      // 词时间 + 片段文件起点，且夹在片段范围内。
+      expect(cues.map((c) => (c.startMs, c.endMs)), [
+        (10200, 11500),
+        (11600, 12600),
+        (12700, 14000),
+      ]);
+      expect(cues.map((c) => c.index), [1, 2, 3]);
+    });
+
+    test('说话人分离：没有词级信息就整段一条，说话人取句级；服务端不给说话人时提示', () async {
+      final notes = <String>[];
+      final client = MockClient(
+        (req) async => _ok(
+          jsonEncode({
+            'output': {
+              'text': '整段',
+              'sentence': {'text': '整段', 'speaker_id': null},
+            },
+          }),
+        ),
+      );
+      final cues =
+          await DashScopeAsrProvider(
+            info: _info,
+            endpoint: _endpoint('qwen-audio-3.0-asr-flash'),
+            splitter: FakeSplitter(1),
+            diarize: true,
+            client: client,
+          ).transcribe(
+            audioPath: audio,
+            language: 'zh',
+            token: CancellationToken(),
+            onProgress: (d, t, {note}) => notes.add(note ?? ''),
+          );
+      expect(cues.single.source, '整段');
+      expect(cues.single.speaker, isNull);
+      expect(cues.single.startMs, 0);
+      expect(cues.single.endMs, 900);
+      expect(notes.last, contains('没有返回说话人信息'));
+    });
+
+    test('说话人分离：qwen3-asr-flash 不下发参数；不开分离时报文不变', () async {
+      final bodies = <Map<String, Object?>>[];
+      final client = MockClient((req) async {
+        bodies.add(jsonDecode(req.body) as Map<String, Object?>);
+        return _ok(_qwen3Reply('x'));
+      });
+      for (final (model, diarize) in [
+        ('qwen3-asr-flash', true),
+        ('qwen-audio-3.0-asr-flash', false),
+      ]) {
+        await DashScopeAsrProvider(
+          info: _info,
+          endpoint: _endpoint(model),
+          splitter: FakeSplitter(1),
+          diarize: diarize,
+          client: client,
+        ).transcribe(
+          audioPath: audio,
+          language: 'zh',
+          token: CancellationToken(),
+          onProgress: _noProgress,
+        );
+      }
+      for (final b in bodies) {
+        expect(
+          (b['parameters'] as Map).containsKey('diarization_enabled'),
+          isFalse,
+        );
+      }
     });
 
     test('某段 5xx 先记进检查点，续跑只重试它', () async {

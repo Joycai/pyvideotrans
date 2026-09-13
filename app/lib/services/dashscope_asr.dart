@@ -25,6 +25,7 @@ class DashScopeAsrProvider implements AsrProvider {
     required this.endpoint,
     required this.splitter,
     this.prompt = '',
+    this.diarize = false,
     http.Client? client,
     Future<void> Function(Duration)? delay,
   }) : _client = client ?? http.Client(),
@@ -38,6 +39,22 @@ class DashScopeAsrProvider implements AsrProvider {
 
   /// 领域提示（专有名词、术语）。Qwen3-ASR 用 system 消息做上下文偏置。
   final String prompt;
+
+  /// 说话人分离：请求里带 `diarization_enabled`，按返回的词级
+  /// `speaker_id` 把每段切成带说话人编号的多条字幕。
+  ///
+  /// 文档只承诺 Qwen-Audio-3.0-ASR 与 Fun-ASR 两族支持；qwen3-asr-flash
+  /// 不下发这个参数。服务端没给说话人时退化为不带编号的普通字幕。
+  final bool diarize;
+
+  /// 开说话人分离时的片段上限。编号只在同一次请求内一致，片段越长跨段
+  /// 对不上号的机会越少；2 分钟的 16k 单声道 wav 约 3.8 MB，base64 后
+  /// 约 5 MB，留在 flash 模型 10 MB 的上限之内。
+  static const diarizeClipMs = 120000;
+
+  /// 分离出来的一条字幕最长多久 / 多少字，超过就在下一个词前断开。
+  static const _maxPieceMs = 10000;
+  static const _maxPieceChars = 40;
 
   final http.Client _client;
 
@@ -115,8 +132,10 @@ class DashScopeAsrProvider implements AsrProvider {
           token.throwIfCancelled();
           final outcome = await _recognize(clip, lang);
           switch (outcome) {
-            case _Ok(:final text):
-              record.text = text;
+            case _Ok(:final text, :final pieces):
+              record
+                ..text = text
+                ..pieces = pieces;
               waits = 0;
             case _Wait(:final reason, :final retryAfter):
               // 限流与断网不是这一段的错，不计失败：非自动模式停下来
@@ -203,6 +222,22 @@ class DashScopeAsrProvider implements AsrProvider {
       }
       final text = record.text ?? '';
       if (text.isEmpty) continue;
+      final pieces = record.pieces;
+      if (pieces != null && pieces.isNotEmpty) {
+        for (final piece in pieces) {
+          if (piece.text.isEmpty) continue;
+          cues.add(
+            Cue(
+              index: cues.length + 1,
+              startMs: piece.startMs,
+              endMs: piece.endMs,
+              source: piece.text,
+              speaker: piece.speaker,
+            ),
+          );
+        }
+        continue;
+      }
       cues.add(
         Cue(
           index: cues.length + 1,
@@ -215,6 +250,13 @@ class DashScopeAsrProvider implements AsrProvider {
 
     if (cues.isEmpty) {
       throw const ProviderException('未识别到语音', hint: '确认音视频中确有人声，且所选语言与实际语言一致。');
+    }
+    if (diarize && cues.every((c) => c.speaker == null)) {
+      onProgress(
+        clips.length,
+        clips.length,
+        note: '服务端没有返回说话人信息，字幕不带说话人编号；确认模型支持说话人分离',
+      );
     }
     return cues;
   }
@@ -284,7 +326,8 @@ class DashScopeAsrProvider implements AsrProvider {
         );
       }
       final text = extractText(json);
-      return text == null ? const _Transient('服务端没有返回文本') : _Ok(text);
+      if (text == null) return const _Transient('服务端没有返回文本');
+      return _Ok(text, pieces: diarize ? extractPieces(json, clip) : null);
     }
 
     final body = _clip(_bodyText(response));
@@ -340,7 +383,11 @@ class DashScopeAsrProvider implements AsrProvider {
             },
           ],
         },
-        'parameters': {'format': 'wav', 'sample_rate': '16000'},
+        'parameters': {
+          'format': 'wav',
+          'sample_rate': '16000',
+          if (diarize) 'diarization_enabled': true,
+        },
       };
     }
     return {
@@ -372,6 +419,126 @@ class DashScopeAsrProvider implements AsrProvider {
       },
     };
   }
+
+  /// 开说话人分离时把一段的返回拆成小块：按 `output.sentence.words[]`
+  /// 的词级时间与 `speaker_id`，换人、句末标点、过长处断开。
+  /// 没有词级信息就整段一块，说话人取句级 `speaker_id`。
+  ///
+  /// 词的时间戳相对片段文件起点，用 [AudioClip.fileStartMs] 换算回原音频，
+  /// 并夹在片段范围内，免得 200ms 的切分余量让字幕越界。
+  static List<SegmentPiece> extractPieces(
+    Map<String, Object?> json,
+    AudioClip clip,
+  ) {
+    final text = extractText(json) ?? '';
+    final output = json['output'];
+    final sentence = output is Map && output['sentence'] is Map
+        ? output['sentence'] as Map
+        : json['sentence'] is Map
+        ? json['sentence'] as Map
+        : null;
+    int clampMs(int ms) => ms.clamp(clip.startMs, clip.endMs);
+    int? speakerOf(Map m) => switch (m['speaker_id']) {
+      final int id => id,
+      final String s => int.tryParse(s),
+      _ => null,
+    };
+
+    final words = sentence?['words'];
+    if (words is! List || words.isEmpty) {
+      return [
+        SegmentPiece(
+          startMs: clip.startMs,
+          endMs: clip.endMs,
+          text: text,
+          speaker: sentence == null ? null : speakerOf(sentence),
+        ),
+      ];
+    }
+
+    final pieces = <SegmentPiece>[];
+    StringBuffer? buffer;
+    int? pieceStart;
+    int? pieceEnd;
+    int? pieceSpeaker;
+    var endsSentence = false;
+
+    void flush() {
+      final t = buffer?.toString().trim() ?? '';
+      if (t.isNotEmpty && pieceStart != null && pieceEnd != null) {
+        pieces.add(
+          SegmentPiece(
+            startMs: pieceStart!,
+            endMs: pieceEnd! > pieceStart! ? pieceEnd! : pieceStart! + 1,
+            text: t,
+            speaker: pieceSpeaker,
+          ),
+        );
+      }
+      buffer = null;
+      pieceStart = null;
+      pieceEnd = null;
+      endsSentence = false;
+    }
+
+    for (final raw in words) {
+      if (raw is! Map) continue;
+      final wordText = (raw['text'] as String? ?? '').trim();
+      final punct = (raw['punctuation'] as String? ?? '').trim();
+      if (wordText.isEmpty && punct.isEmpty) continue;
+      final begin = clampMs(
+        clip.fileStartMs + ((raw['begin_time'] as num?)?.toInt() ?? 0),
+      );
+      final end = clampMs(
+        clip.fileStartMs + ((raw['end_time'] as num?)?.toInt() ?? begin),
+      );
+      final speaker = speakerOf(raw);
+
+      final current = buffer;
+      if (current != null) {
+        final tooLong =
+            end - pieceStart! > _maxPieceMs ||
+            current.length + wordText.length > _maxPieceChars;
+        if (speaker != pieceSpeaker || endsSentence || tooLong) flush();
+      }
+      if (buffer == null) {
+        buffer = StringBuffer();
+        pieceStart = begin;
+        pieceSpeaker = speaker;
+      } else if (_needsSpace(buffer!.toString(), wordText)) {
+        buffer!.write(' ');
+      }
+      buffer!
+        ..write(wordText)
+        ..write(punct);
+      pieceEnd = end;
+      endsSentence = _sentenceEnd.hasMatch(punct);
+    }
+    flush();
+
+    // 词全是空的：退回整段。
+    if (pieces.isEmpty) {
+      return [
+        SegmentPiece(
+          startMs: clip.startMs,
+          endMs: clip.endMs,
+          text: text,
+          speaker: speakerOf(sentence!),
+        ),
+      ];
+    }
+    return pieces;
+  }
+
+  static final _sentenceEnd = RegExp(r'[。！？.!?;；]');
+  static final _latinEdge = RegExp(r'[A-Za-z0-9]');
+
+  /// 两个相邻词之间要不要空格：两边都是拉丁字母 / 数字才加，中文不加。
+  static bool _needsSpace(String before, String next) =>
+      before.isNotEmpty &&
+      next.isNotEmpty &&
+      _latinEdge.hasMatch(before[before.length - 1]) &&
+      _latinEdge.hasMatch(next[0]);
 
   /// 从两种响应形态里取文本：`output.text`，或
   /// `output.choices[0].message.content[*].text` 拼接。取不到返回 null。
@@ -441,11 +608,12 @@ sealed class _Outcome {
   const _Outcome();
 }
 
-/// 拿到文本；空串表示这段没话。
+/// 拿到文本；空串表示这段没话。[pieces] 是说话人分离切出来的小块。
 class _Ok extends _Outcome {
-  const _Ok(this.text);
+  const _Ok(this.text, {this.pieces});
 
   final String text;
+  final List<SegmentPiece>? pieces;
 }
 
 /// 限流或断网：不是这一段的错，等一等再试同一段。

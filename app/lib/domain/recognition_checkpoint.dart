@@ -1,3 +1,19 @@
+/// 一段识别结果里的一小块：带自己的时间与说话人。开说话人分离时一段
+/// 音频会回来多块（按说话人 / 句子切开），不开就只有整段一块。
+class SegmentPiece {
+  const SegmentPiece({
+    required this.startMs,
+    required this.endMs,
+    required this.text,
+    this.speaker,
+  });
+
+  final int startMs;
+  final int endMs;
+  final String text;
+  final int? speaker;
+}
+
 /// 识别检查点里的一段：按片段的时间范围记，续跑时用同样的切分点对上。
 class SegmentRecord {
   SegmentRecord({
@@ -14,6 +30,9 @@ class SegmentRecord {
 
   /// 识别出来的文本。null 表示还没成功过；空串表示这段确实没有话。
   String? text;
+
+  /// 细分结果（说话人分离时按说话人 / 句子切开的小块）。没有就整段一条。
+  List<SegmentPiece>? pieces;
 
   /// 累计失败次数，跨多次续跑累加。
   int failures;

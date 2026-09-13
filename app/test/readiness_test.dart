@@ -65,6 +65,46 @@ void main() {
       expect(r.message, contains('法语'));
     });
 
+    test('说话人分离：qwen3-asr-flash 提示不支持，不拦着开始', () async {
+      final s = await freshSettings()
+        ..setConfig('dashscope_qwen_asr', const ProviderConfig(apiKey: 'k'));
+      final r = ProviderReadiness.asr(
+        'dashscope_qwen_asr',
+        s,
+        model: 'qwen3-asr-flash',
+        diarize: true,
+      );
+      expect(r.level, ReadinessLevel.advisory);
+      expect(r.message, contains('不支持说话人分离'));
+      expect(r.hint, contains('qwen-audio-3.0-asr-flash'));
+
+      final ok = ProviderReadiness.asr(
+        'dashscope_qwen_asr',
+        s,
+        model: 'qwen-audio-3.0-asr-flash',
+        diarize: true,
+      );
+      expect(ok.isReady, isTrue);
+
+      // 不开就不管模型。
+      expect(
+        ProviderReadiness.asr(
+          'dashscope_qwen_asr',
+          s,
+          model: 'qwen3-asr-flash',
+        ).isReady,
+        isTrue,
+      );
+    });
+
+    test('说话人分离：不支持的服务提示会被忽略', () async {
+      final s = await freshSettings()
+        ..setConfig('openai', const ProviderConfig(apiKey: 'k'));
+      final r = ProviderReadiness.asr('openai', s, diarize: true);
+      expect(r.level, ReadinessLevel.advisory);
+      expect(r.message, contains('不支持说话人分离'));
+    });
+
     test('支持的语种不提示', () async {
       final s = await freshSettings()
         ..setConfig('siliconflow', const ProviderConfig(apiKey: 'k'));

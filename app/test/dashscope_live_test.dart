@@ -10,11 +10,20 @@ import 'package:subtitle_studio/services/media.dart';
 import 'package:subtitle_studio/services/openai_compatible.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/registry.dart';
+import 'package:subtitle_studio/services/settings.dart';
 
 /// 对真实的百炼服务跑一遍：macOS `say` 合成两句中文，中间留 1.2s 停顿，
 /// 期望切成两段并各自识别出文本。密钥来自环境变量，不落盘。
 void main() {
   final key = Platform.environment['DASHSCOPE_API_KEY'] ?? '';
+  // 专属域名（如 token-plan）可用 DASHSCOPE_BASE_URL 覆盖；
+  // DASHSCOPE_MODELS 用逗号列出要跑的模型，不设就跑登记表里的全部。
+  final baseUrl =
+      Platform.environment['DASHSCOPE_BASE_URL'] ??
+      'https://dashscope.aliyuncs.com/api/v1';
+  final models = ProviderConfig.splitModels(
+    Platform.environment['DASHSCOPE_MODELS'],
+  );
   final media = Media();
 
   test(
@@ -38,15 +47,13 @@ void main() {
       );
 
       // 登记表里列出的每个模型都真跑一遍：两族报文形态都要能通。
-      for (final model in Registry.asrInfo('dashscope_qwen_asr')!.models) {
+      for (final model in models.isEmpty
+          ? Registry.asrInfo('dashscope_qwen_asr')!.models
+          : models) {
         final notes = <String>[];
         final provider = DashScopeAsrProvider(
           info: Registry.asrInfo('dashscope_qwen_asr')!,
-          endpoint: Endpoint(
-            baseUrl: 'https://dashscope.aliyuncs.com/api/v1',
-            model: model,
-            apiKey: key,
-          ),
+          endpoint: Endpoint(baseUrl: baseUrl, model: model, apiKey: key),
           splitter: FfmpegAudioSplitter(media),
         );
         final cues = await provider.transcribe(
@@ -67,6 +74,62 @@ void main() {
         expect(cues.map((c) => c.source).join(), contains('天气'), reason: model);
         expect(cues.map((c) => c.source).join(), contains('公园'), reason: model);
       }
+    },
+    skip: key.isEmpty ? '未设置 DASHSCOPE_API_KEY' : false,
+  );
+
+  test(
+    '说话人分离：两个嗓子对话 → 每条字幕带说话人编号',
+    () async {
+      final tmp = Directory.systemTemp.createTempSync('dashscope_diarize_');
+      addTearDown(() => tmp.deleteSync(recursive: true));
+      final wav = '${tmp.path}/dialog.wav';
+      final parts = <String>[];
+      for (final (i, (voice, text)) in [
+        ('Tingting', '你好，我们今天讨论一下项目进度。'),
+        ('Eddy', '好的，我先汇报一下本周的情况。'),
+        ('Tingting', '没问题，你说吧。'),
+      ].indexed) {
+        final aiff = '${tmp.path}/p$i.aiff';
+        final say = await Process.run('say', ['-v', voice, '-o', aiff, text]);
+        expect(say.exitCode, 0, reason: say.stderr.toString());
+        parts.add(aiff);
+      }
+      final concat = await Process.run('ffmpeg', [
+        '-y', '-loglevel', 'error',
+        for (final p in parts) ...['-i', p],
+        '-filter_complex', '[0][1][2]concat=n=3:v=0:a=1',
+        '-ar', '16000', '-ac', '1', wav,
+      ]);
+      expect(concat.exitCode, 0, reason: concat.stderr.toString());
+
+      final model = models.isEmpty ? 'qwen-audio-3.0-asr-flash' : models.first;
+      final notes = <String>[];
+      final cues = await DashScopeAsrProvider(
+        info: Registry.asrInfo('dashscope_qwen_asr')!,
+        endpoint: Endpoint(baseUrl: baseUrl, model: model, apiKey: key),
+        splitter: FfmpegAudioSplitter(
+          media,
+          maxMs: DashScopeAsrProvider.diarizeClipMs,
+        ),
+        diarize: true,
+      ).transcribe(
+        audioPath: wav,
+        language: 'zh',
+        token: CancellationToken(),
+        onProgress: (d, t, {note}) => notes.add('$d/$t $note'),
+      );
+      for (final c in cues) {
+        // ignore: avoid_print
+        print('  ${c.startMs}–${c.endMs}  [说话人${c.speaker}] ${c.source}');
+      }
+      // ignore: avoid_print
+      print(notes.join('\n'));
+      expect(
+        cues.map((c) => c.speaker).toSet().length,
+        greaterThan(1),
+        reason: '应至少分出两位说话人',
+      );
     },
     skip: key.isEmpty ? '未设置 DASHSCOPE_API_KEY' : false,
   );

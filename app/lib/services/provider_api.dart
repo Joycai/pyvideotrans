@@ -60,6 +60,7 @@ class ProviderInfo {
     this.defaultBaseUrl,
     this.defaultModel,
     this.models = const [],
+    this.supportsDiarization = false,
   });
 
   /// 注册 id，任务里存的就是它。
@@ -79,6 +80,10 @@ class ProviderInfo {
   final String? defaultBaseUrl;
   final String? defaultModel;
   final List<String> models;
+
+  /// 能按说话人分离（给每条字幕标说话人编号）。「新建转写」里只有支持的
+  /// 服务才显示那个开关。
+  final bool supportsDiarization;
 }
 
 /// 语音识别。

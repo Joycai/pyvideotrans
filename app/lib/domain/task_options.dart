@@ -75,6 +75,7 @@ class TaskOptions {
     required this.asrProviderId,
     this.asrModel,
     this.asrPrompt = '',
+    this.diarize = false,
     this.translate = true,
     required this.targetLanguage,
     required this.translationProviderId,
@@ -98,6 +99,9 @@ class TaskOptions {
 
   /// 给识别服务的提示词，用来固定专有名词的写法。
   final String asrPrompt;
+
+  /// 说话人分离：给每条字幕标上说话人编号。只有支持的识别服务理会。
+  final bool diarize;
 
   /// 转写完成后是否接着翻译。
   final bool translate;
@@ -148,6 +152,7 @@ class TaskOptions {
     'asrProviderId': asrProviderId,
     'asrModel': asrModel,
     'asrPrompt': asrPrompt,
+    'diarize': diarize,
     'translate': translate,
     'targetLanguage': targetLanguage.code,
     'translationProviderId': translationProviderId,
@@ -184,6 +189,7 @@ class TaskOptions {
       asrProviderId: pick('asrProviderId', fallback.asrProviderId),
       asrModel: pick<String?>('asrModel', fallback.asrModel),
       asrPrompt: pick('asrPrompt', fallback.asrPrompt),
+      diarize: pick('diarize', fallback.diarize),
       translate: pick('translate', fallback.translate),
       targetLanguage: Languages.resolve(
         pick('targetLanguage', fallback.targetLanguage.code),
@@ -224,6 +230,7 @@ class TaskOptions {
     String? asrProviderId,
     String? asrModel,
     String? asrPrompt,
+    bool? diarize,
     bool? translate,
     Language? targetLanguage,
     String? translationProviderId,
@@ -241,6 +248,7 @@ class TaskOptions {
     asrProviderId: asrProviderId ?? this.asrProviderId,
     asrModel: asrModel ?? this.asrModel,
     asrPrompt: asrPrompt ?? this.asrPrompt,
+    diarize: diarize ?? this.diarize,
     translate: translate ?? this.translate,
     targetLanguage: targetLanguage ?? this.targetLanguage,
     translationProviderId:

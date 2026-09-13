@@ -86,11 +86,15 @@ abstract final class Srt {
   /// 折行只发生在产物里，文档本身始终保持不带硬换行的干净文本，否则用户在
   /// 编辑器里改一个字就得重新折一遍。两路分开传是因为双语字幕的两行往往
   /// 语种不同，中日韩一行 15 字、拉丁语一行 40 字，用同一个上限必然有一边难看。
+  ///
+  /// [speakerLabel] 把说话人编号（0 起）变成写在字幕前面的标签，比如
+  /// 「说话人1：」；不传就不写标签，编号只留在文档里。
   static String serialize(
     List<Cue> cues, {
     SrtField field = SrtField.source,
     String Function(String)? wrapSource,
     String Function(String)? wrapTranslation,
+    String Function(int)? speakerLabel,
   }) {
     final buffer = StringBuffer();
     var line = 0;
@@ -100,6 +104,7 @@ abstract final class Srt {
         field,
         wrapSource: wrapSource,
         wrapTranslation: wrapTranslation,
+        speakerLabel: speakerLabel,
       );
       if (text.trim().isEmpty) continue;
 
@@ -121,6 +126,7 @@ abstract final class Srt {
     SrtField field = SrtField.source,
     String Function(String)? wrapSource,
     String Function(String)? wrapTranslation,
+    String Function(int)? speakerLabel,
   }) {
     final buffer = StringBuffer()..writeln('WEBVTT')..writeln();
     for (final cue in cues) {
@@ -129,6 +135,7 @@ abstract final class Srt {
         field,
         wrapSource: wrapSource,
         wrapTranslation: wrapTranslation,
+        speakerLabel: speakerLabel,
       );
       if (text.trim().isEmpty) continue;
       buffer
@@ -146,10 +153,11 @@ abstract final class Srt {
   static String serializePlain(
     List<Cue> cues, {
     SrtField field = SrtField.source,
+    String Function(int)? speakerLabel,
   }) {
     final buffer = StringBuffer();
     for (final cue in cues) {
-      final text = textOf(cue, field);
+      final text = textOf(cue, field, speakerLabel: speakerLabel);
       if (text.trim().isEmpty) continue;
       buffer.writeln(text.replaceAll('\n', ' '));
     }
@@ -161,6 +169,7 @@ abstract final class Srt {
     SrtField field, {
     String Function(String)? wrapSource,
     String Function(String)? wrapTranslation,
+    String Function(int)? speakerLabel,
   }) {
     String source() =>
         wrapSource == null ? cue.source : wrapSource(cue.source);
@@ -169,6 +178,21 @@ abstract final class Srt {
       return wrapTranslation == null ? text : wrapTranslation(text);
     }
 
+    final body = _fieldText(cue, field, source, translation);
+    final speaker = cue.speaker;
+    // 标签只加在第一行：双语两行各加一遍既啰嗦又把译文那行挤长。
+    if (speaker == null || speakerLabel == null || body.trim().isEmpty) {
+      return body;
+    }
+    return '${speakerLabel(speaker)}$body';
+  }
+
+  static String _fieldText(
+    Cue cue,
+    SrtField field,
+    String Function() source,
+    String Function() translation,
+  ) {
     return switch (field) {
       SrtField.source => source(),
       SrtField.translation => translation(),
