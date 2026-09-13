@@ -227,7 +227,7 @@ void main() {
         home: AppShell(
           section: AppSection.tasks,
           onSectionChanged: (_) {},
-          chrome: PageChrome(
+          chrome: () => PageChrome(
             title: '任务',
             subtitle: '${tasks.length} 个任务 · 1 个进行中 · 1 个失败',
             actions: [
@@ -237,7 +237,7 @@ void main() {
               ),
             ],
           ),
-          status: const StatusSnapshot(
+          status: () => const StatusSnapshot(
             localEngine: 'ffmpeg · 就绪',
             cloud: (connected: true, label: 'OpenAI · 已配置'),
             localBackend: (connected: true, label: 'DeepSeek · 已配置'),
@@ -298,7 +298,7 @@ void main() {
         home: AppShell(
           section: AppSection.editor,
           onSectionChanged: (_) {},
-          chrome: PageChrome(
+          chrome: () => PageChrome(
             title: '编辑器',
             subtitle:
                 '${task.fileName} · ${task.document.cues.length} 条 · 中文 → 英文',
@@ -313,7 +313,7 @@ void main() {
               ),
             ],
           ),
-          status: const StatusSnapshot(
+          status: () => const StatusSnapshot(
             localEngine: 'ffmpeg · 就绪',
             cloud: (connected: true, label: 'OpenAI · 已配置'),
             localBackend: (connected: true, label: 'DeepSeek · 已配置'),
@@ -343,8 +343,8 @@ void main() {
         home: AppShell(
           section: AppSection.settings,
           onSectionChanged: (_) {},
-          chrome: const PageChrome(title: '设置'),
-          status: StatusSnapshot.idle,
+          chrome: () => const PageChrome(title: '设置'),
+          status: () => StatusSnapshot.idle,
           child: SettingsPage(settings: settings),
         ),
       ),
