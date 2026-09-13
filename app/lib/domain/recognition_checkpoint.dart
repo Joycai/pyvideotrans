@@ -12,6 +12,20 @@ class SegmentPiece {
   final int endMs;
   final String text;
   final int? speaker;
+
+  Map<String, Object?> toJson() => {
+    'startMs': startMs,
+    'endMs': endMs,
+    'text': text,
+    if (speaker != null) 'speaker': speaker,
+  };
+
+  factory SegmentPiece.fromJson(Map<String, Object?> json) => SegmentPiece(
+    startMs: json['startMs']! as int,
+    endMs: json['endMs']! as int,
+    text: json['text']! as String,
+    speaker: json['speaker'] as int?,
+  );
 }
 
 /// 识别检查点里的一段：按片段的时间范围记，续跑时用同样的切分点对上。
@@ -44,15 +58,65 @@ class SegmentRecord {
   bool get done => text != null || skipped;
 
   String get key => '$startMs-$endMs';
+
+  Map<String, Object?> toJson() => {
+    'startMs': startMs,
+    'endMs': endMs,
+    if (text != null) 'text': text,
+    if (pieces != null) 'pieces': [for (final p in pieces!) p.toJson()],
+    if (failures > 0) 'failures': failures,
+    if (skipped) 'skipped': true,
+    if (lastError != null) 'lastError': lastError,
+  };
+
+  factory SegmentRecord.fromJson(Map<String, Object?> json) =>
+      SegmentRecord(
+          startMs: json['startMs']! as int,
+          endMs: json['endMs']! as int,
+          text: json['text'] as String?,
+          failures: json['failures'] as int? ?? 0,
+          skipped: json['skipped'] as bool? ?? false,
+          lastError: json['lastError'] as String?,
+        )
+        ..pieces = switch (json['pieces']) {
+          final List list => [
+            for (final p in list)
+              SegmentPiece.fromJson((p as Map).cast<String, Object?>()),
+          ],
+          _ => null,
+        };
 }
 
 /// 识别阶段的检查点：逐段识别的服务把每段的结果记在这里，失败或取消后
-/// 续跑时跳过已完成的段。只存在内存里，随任务一起丢弃。
+/// 续跑时跳过已完成的段。随任务一起持久化，应用重启后仍能续跑。
 ///
 /// 静音切分是确定性的：同一份音频再切一遍得到同样的片段，所以按
 /// 时间范围就能对上。切分结果对不上（音频被重新抽取过）就整份作废。
 class RecognitionCheckpoint {
+  RecognitionCheckpoint();
+
+  factory RecognitionCheckpoint.fromJson(Map<String, Object?> json) {
+    final cp = RecognitionCheckpoint()
+      ..total = json['total'] as int?
+      ..asyncFileUrl = json['asyncFileUrl'] as String?
+      ..asyncTaskId = json['asyncTaskId'] as String?
+      ..autoRetry = json['autoRetry'] as bool? ?? false;
+    for (final raw in json['segments'] as List? ?? const []) {
+      final s = SegmentRecord.fromJson((raw as Map).cast<String, Object?>());
+      cp._segments[s.key] = s;
+    }
+    return cp;
+  }
+
   final Map<String, SegmentRecord> _segments = {};
+
+  Map<String, Object?> toJson() => {
+    'segments': [for (final s in _segments.values) s.toJson()],
+    if (total != null) 'total': total,
+    if (asyncFileUrl != null) 'asyncFileUrl': asyncFileUrl,
+    if (asyncTaskId != null) 'asyncTaskId': asyncTaskId,
+    if (autoRetry) 'autoRetry': true,
+  };
 
   /// 切分出来的总段数。识别服务切完音频后写入；记录只覆盖跑到过的段，
   /// 所以「已完成 / 总数」要用它而不是 [length]。

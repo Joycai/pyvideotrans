@@ -126,6 +126,22 @@ class SubtitleDocument {
 
   static const empty = SubtitleDocument(cues: []);
 
+  Map<String, Object?> toJson() => {
+    'cues': [for (final c in cues) c.toJson()],
+    if (sourceLanguage != null) 'sourceLanguage': sourceLanguage,
+    if (targetLanguage != null) 'targetLanguage': targetLanguage,
+  };
+
+  factory SubtitleDocument.fromJson(Map<String, Object?> json) =>
+      SubtitleDocument(
+        cues: [
+          for (final c in json['cues'] as List? ?? const [])
+            Cue.fromJson((c as Map).cast<String, Object?>()),
+        ],
+        sourceLanguage: json['sourceLanguage'] as String?,
+        targetLanguage: json['targetLanguage'] as String?,
+      );
+
   int get reviewCount => cues.where((c) => c.state == CueState.review).length;
   int get untranslatedCount =>
       cues.where((c) => c.state == CueState.untranslated).length;

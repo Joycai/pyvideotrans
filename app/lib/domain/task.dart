@@ -88,6 +88,23 @@ class LogEntry {
   final LogLevel level;
   final String message;
 
+  Map<String, Object?> toJson() => {
+    'time': time.toIso8601String(),
+    'level': level.name,
+    'message': message,
+  };
+
+  static LogEntry? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final time = DateTime.tryParse(raw['time'] as String? ?? '');
+    final level = LogLevel.values
+        .where((l) => l.name == raw['level'])
+        .firstOrNull;
+    final message = raw['message'];
+    if (time == null || level == null || message is! String) return null;
+    return LogEntry(time, level, message);
+  }
+
   String get clock =>
       '${_p(time.hour)}:${_p(time.minute)}:${_p(time.second)}';
 
@@ -130,12 +147,17 @@ class SubtitleTask {
     this.error,
     this.mediaDuration,
     this.eta,
-  }) : stages = stages ?? {for (final s in TaskStage.values) s: const StageRecord()},
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now(),
+       stages = stages ?? {for (final s in TaskStage.values) s: const StageRecord()},
        log = log ?? [];
 
   final String id;
   final String sourcePath;
   final TaskKind kind;
+
+  /// 入队时间。持久化后恢复时按它排出列表顺序（新的在前）。
+  final DateTime createdAt;
 
   /// 入队那一刻定死的全部参数。之后用户改设置不影响已排队的任务。
   final TaskOptions options;
@@ -177,6 +199,86 @@ class SubtitleTask {
       if (st != StageState.done && st != StageState.skipped) return s;
     }
     return TaskStage.finish;
+  }
+
+  /// 持久化用。[eta] 是运行时估算，不存。
+  Map<String, Object?> toJson() => {
+    'version': 1,
+    'id': id,
+    'sourcePath': sourcePath,
+    'kind': kind.name,
+    'createdAt': createdAt.toIso8601String(),
+    'options': options.toJson(),
+    'status': status.name,
+    'stage': stage.name,
+    'stages': {for (final e in stages.entries) e.key.name: e.value.toJson()},
+    'progress': progress,
+    'document': document.toJson(),
+    'log': [for (final l in log) l.toJson()],
+    if (error != null) 'error': error!.toJson(),
+    if (recognition != null) 'recognition': recognition!.toJson(),
+    if (mediaDuration != null) 'mediaDurationMs': mediaDuration!.inMilliseconds,
+  };
+
+  /// 从存档读回。参数缺项回落到 [fallbackOptions]；未知的阶段 / 状态名按
+  /// 待执行处理，不因为一份旧存档抛异常。缺 id 或源文件路径的存档无法使用，
+  /// 抛 [FormatException] 由调用方跳过。
+  factory SubtitleTask.fromJson(
+    Map<String, Object?> json, {
+    required TaskOptions fallbackOptions,
+  }) {
+    final id = json['id'];
+    final sourcePath = json['sourcePath'];
+    if (id is! String || sourcePath is! String) {
+      throw const FormatException('任务存档缺少 id 或 sourcePath');
+    }
+    T byName<T extends Enum>(List<T> values, Object? name, T orElse) =>
+        values.where((v) => v.name == name).firstOrNull ?? orElse;
+    Map<String, Object?>? map(Object? v) =>
+        v is Map ? v.cast<String, Object?>() : null;
+
+    final rawStages = map(json['stages']) ?? const {};
+    final task = SubtitleTask(
+      id: id,
+      sourcePath: sourcePath,
+      kind: byName(TaskKind.values, json['kind'], TaskKind.transcribe),
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+      options: TaskOptions.fromJson(
+        map(json['options']) ?? const {},
+        fallback: fallbackOptions,
+      ),
+      status: byName(TaskStatus.values, json['status'], TaskStatus.paused),
+      stage: byName(TaskStage.values, json['stage'], TaskStage.queued),
+      stages: {
+        for (final s in TaskStage.values)
+          s: switch (map(rawStages[s.name])) {
+            final m? => StageRecord.fromJson(m),
+            null => const StageRecord(),
+          },
+      },
+      progress: (json['progress'] as num?)?.toDouble() ?? 0,
+      document: switch (map(json['document'])) {
+        final m? => SubtitleDocument.fromJson(m),
+        null => SubtitleDocument.empty,
+      },
+      log: [
+        for (final raw in json['log'] as List? ?? const [])
+          ?LogEntry.fromJson(raw),
+      ],
+      error: switch (map(json['error'])) {
+        final m? => TaskError.fromJson(m),
+        null => null,
+      },
+      mediaDuration: switch (json['mediaDurationMs']) {
+        final int ms => Duration(milliseconds: ms),
+        _ => null,
+      },
+    );
+    task.recognition = switch (map(json['recognition'])) {
+      final m? => RecognitionCheckpoint.fromJson(m),
+      null => null,
+    };
+    return task;
   }
 
   void note(String message, [LogLevel level = LogLevel.info]) =>
@@ -222,4 +324,18 @@ class TaskError {
 
   /// 主按钮文案，null 表示只提供「从 X 阶段继续」。
   final String? primaryAction;
+
+  Map<String, Object?> toJson() => {
+    'title': title,
+    'detail': detail,
+    'hint': hint,
+    if (primaryAction != null) 'primaryAction': primaryAction,
+  };
+
+  factory TaskError.fromJson(Map<String, Object?> json) => TaskError(
+    title: json['title'] as String? ?? '',
+    detail: json['detail'] as String? ?? '',
+    hint: json['hint'] as String? ?? '',
+    primaryAction: json['primaryAction'] as String?,
+  );
 }
