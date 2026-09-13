@@ -138,6 +138,7 @@ class _Toolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
+    final compact = isCompactEditor(context);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.s4,
@@ -149,7 +150,12 @@ class _Toolbar extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: speakers ? 188 : 240,
+            // 窄窗口收到 150，给右侧的筛选 chip 多让出位置。
+            width: compact
+                ? 150
+                : speakers
+                ? 188
+                : 240,
             height: 32,
             child: TextField(
               onChanged: controller.setSearch,
@@ -186,11 +192,16 @@ class _Toolbar extends StatelessWidget {
                 items: [
                   for (final f in CueFilter.values)
                     // 只挂原文时没有「未翻译」可筛；「未配对」只在真有对不上的行时出现。
+                    // 窄窗口再藏掉数量为 0 的，「全部」与当前选中的除外。
                     if (switch (f) {
-                      CueFilter.untranslated => controller.hasTranslations,
-                      CueFilter.unpaired => controller.countOf(f) > 0,
-                      _ => true,
-                    })
+                          CueFilter.untranslated => controller.hasTranslations,
+                          CueFilter.unpaired => controller.countOf(f) > 0,
+                          _ => true,
+                        } &&
+                        (!compact ||
+                            f == CueFilter.all ||
+                            f == controller.filter ||
+                            controller.countOf(f) > 0))
                       (key: f.name, label: f.label, count: controller.countOf(f)),
                 ],
               ),

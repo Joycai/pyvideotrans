@@ -123,6 +123,10 @@ void main() {
       expect(find.text('双语'), findsNothing);
       expect(find.text('说话人 · 全部'), findsNothing);
       expect(find.byTooltip('说话人 · 全部'), findsOneWidget);
+      // 数量为 0 的筛选 chip 藏起来，有数量的照常显示。
+      expect(c.countOf(CueFilter.review), 0);
+      expect(find.text('待校对'), findsNothing);
+      expect(find.text('未配对'), findsWidgets);
       await tester.tap(find.text('视图 · 双语'));
       await tester.pump();
       await tester.tap(
