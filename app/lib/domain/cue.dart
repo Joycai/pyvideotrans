@@ -1,3 +1,5 @@
+import 'language.dart';
+
 /// 一条字幕的校对状态。
 enum CueState {
   /// 已校对 / 正常。
@@ -8,6 +10,9 @@ enum CueState {
 
   /// 尚未翻译。
   untranslated,
+
+  /// 只有译文、找不到对应原文 —— 挂载本地原文与译文配对时留下的行。
+  unpaired,
 }
 
 /// 一条字幕。时间以毫秒记，避免浮点累积误差。
@@ -49,6 +54,7 @@ class Cue {
   static const lowConfidence = 0.65;
 
   CueState get state {
+    if (source.trim().isEmpty && hasTranslation) return CueState.unpaired;
     if (!hasTranslation) return CueState.untranslated;
     if (reviewed) return CueState.ok;
     if (confidence != null && confidence! < lowConfidence) {
@@ -78,6 +84,7 @@ class Cue {
     double? confidence,
     bool? reviewed,
     int? speaker,
+    bool clearSpeaker = false,
   }) => Cue(
     index: index ?? this.index,
     startMs: startMs ?? this.startMs,
@@ -86,7 +93,7 @@ class Cue {
     translation: clearTranslation ? null : (translation ?? this.translation),
     confidence: confidence ?? this.confidence,
     reviewed: reviewed ?? this.reviewed,
-    speaker: speaker ?? this.speaker,
+    speaker: clearSpeaker ? null : (speaker ?? this.speaker),
   );
 
   Map<String, Object?> toJson() => {
@@ -118,11 +125,22 @@ class SubtitleDocument {
     required this.cues,
     this.sourceLanguage,
     this.targetLanguage,
+    this.speakers = const {},
+    this.speakerLabels = true,
   });
 
   final List<Cue> cues;
   final String? sourceLanguage;
   final String? targetLanguage;
+
+  /// 说话人编号 → 名字。没起名的说话人不在表里，显示成「说话人N」。
+  ///
+  /// 名字放在文档上而不是每条字幕上：改一次名整份文档一起变，
+  /// 撤销也只是换回一份快照。
+  final Map<int, String> speakers;
+
+  /// 写出产物时是否在字幕前面加说话人标签（「周老师：」）。
+  final bool speakerLabels;
 
   static const empty = SubtitleDocument(cues: []);
 
@@ -130,6 +148,10 @@ class SubtitleDocument {
     'cues': [for (final c in cues) c.toJson()],
     if (sourceLanguage != null) 'sourceLanguage': sourceLanguage,
     if (targetLanguage != null) 'targetLanguage': targetLanguage,
+    // JSON 的键只能是字符串。
+    if (speakers.isNotEmpty)
+      'speakers': {for (final e in speakers.entries) '${e.key}': e.value},
+    if (!speakerLabels) 'speakerLabels': false,
   };
 
   factory SubtitleDocument.fromJson(Map<String, Object?> json) =>
@@ -140,11 +162,19 @@ class SubtitleDocument {
         ],
         sourceLanguage: json['sourceLanguage'] as String?,
         targetLanguage: json['targetLanguage'] as String?,
+        speakers: {
+          for (final e in (json['speakers'] as Map? ?? const {}).entries)
+            if (int.tryParse('${e.key}') case final id? when e.value is String)
+              id: e.value as String,
+        },
+        speakerLabels: json['speakerLabels'] as bool? ?? true,
       );
 
   int get reviewCount => cues.where((c) => c.state == CueState.review).length;
   int get untranslatedCount =>
       cues.where((c) => c.state == CueState.untranslated).length;
+  int get unpairedCount =>
+      cues.where((c) => c.state == CueState.unpaired).length;
   int get okCount => cues.where((c) => c.state == CueState.ok).length;
 
   Duration get duration => cues.isEmpty
@@ -160,10 +190,100 @@ class SubtitleDocument {
     List<Cue>? cues,
     String? sourceLanguage,
     String? targetLanguage,
+    Map<int, String>? speakers,
+    bool? speakerLabels,
   }) => SubtitleDocument(
     cues: cues ?? this.cues,
     sourceLanguage: sourceLanguage ?? this.sourceLanguage,
     targetLanguage: targetLanguage ?? this.targetLanguage,
+    speakers: speakers ?? this.speakers,
+    speakerLabels: speakerLabels ?? this.speakerLabels,
+  );
+
+  /// 文档里出现过或起过名字的说话人编号，从小到大。
+  List<int> get speakerIds =>
+      {for (final c in cues) ?c.speaker, ...speakers.keys}.toList()..sort();
+
+  bool get hasSpeakers => cues.any((c) => c.speaker != null);
+
+  /// 下一个没用过的说话人编号。
+  int get nextSpeakerId {
+    final ids = speakerIds;
+    return ids.isEmpty ? 0 : ids.last + 1;
+  }
+
+  /// 界面上显示的名字。
+  String speakerName(int id) => speakers[id] ?? '说话人${id + 1}';
+
+  /// 写进产物的说话人标签：中日韩「周老师：」，其他「Mia: 」；没起名的
+  /// 写「说话人1：」/「Speaker 1: 」。关掉了标签时返回 null，写出方就不加。
+  String Function(int)? speakerLabeler(Language language) {
+    if (!speakerLabels) return null;
+    return language.cjk
+        ? (n) => '${speakers[n] ?? '说话人${n + 1}'}：'
+        : (n) => '${speakers[n] ?? 'Speaker ${n + 1}'}: ';
+  }
+
+  /// 改名。名字清空等于去掉名字，回到「说话人N」。
+  SubtitleDocument renameSpeaker(int id, String name) {
+    final trimmed = name.trim();
+    if (speakers[id] == (trimmed.isEmpty ? null : trimmed)) return this;
+    final next = {...speakers};
+    if (trimmed.isEmpty) {
+      next.remove(id);
+    } else {
+      next[id] = trimmed;
+    }
+    return copyWith(speakers: next);
+  }
+
+  /// 把 [from] 名下的字幕全部改给 [into]，并从名单里去掉 [from]。
+  /// 识别服务常把应答声单独分成一个人，合并是最常用的修正。
+  SubtitleDocument mergeSpeaker(int from, int into) {
+    if (from == into) return this;
+    return copyWith(
+      cues: [
+        for (final c in cues)
+          c.speaker == from ? c.copyWith(speaker: into) : c,
+      ],
+      speakers: {...speakers}..remove(from),
+    );
+  }
+
+  /// 把 [positions] 上的字幕改给 [speaker]；传 null 表示清除说话人。
+  SubtitleDocument assignSpeaker(Iterable<int> positions, int? speaker) {
+    final next = [...cues];
+    for (final p in positions) {
+      next[p] = speaker == null
+          ? next[p].copyWith(clearSpeaker: true)
+          : next[p].copyWith(speaker: speaker);
+    }
+    return copyWith(cues: next);
+  }
+
+  /// [position] 所在的「同一人连续说的一段」的首尾位置（含）。
+  /// 识别在换人处切歪时往往一连错好几条，改说话人时要能整段改。
+  /// 这一条没有说话人时只有它自己。
+  ({int start, int end}) speakerRun(int position) {
+    final speaker = cues[position].speaker;
+    var start = position;
+    var end = position;
+    if (speaker == null) return (start: start, end: end);
+    while (start > 0 && cues[start - 1].speaker == speaker) {
+      start--;
+    }
+    while (end < cues.length - 1 && cues[end + 1].speaker == speaker) {
+      end++;
+    }
+    return (start: start, end: end);
+  }
+
+  /// 去掉全部译文：清空每条的译文，删掉只有译文的未配对行。
+  SubtitleDocument withoutTranslations() => copyWith(
+    cues: _renumber([
+      for (final c in cues)
+        if (c.state != CueState.unpaired) c.copyWith(clearTranslation: true),
+    ]),
   );
 
   /// 替换一条并保持行号连续。
@@ -197,6 +317,7 @@ class SubtitleDocument {
       endMs: cue.endMs,
       source: text.substring(cut).trim(),
       confidence: cue.confidence,
+      speaker: cue.speaker,
     );
 
     final next = [...cues]
@@ -215,13 +336,21 @@ class SubtitleDocument {
       index: a.index,
       startMs: a.startMs,
       endMs: b.endMs,
-      source: '${a.source}$join${b.source}',
+      // 任一边为空（未配对的译文行没有原文）时不留多余的空格。
+      source: [
+        a.source,
+        b.source,
+      ].where((t) => t.trim().isNotEmpty).join(join),
       translation: a.hasTranslation || b.hasTranslation
-          ? '${a.translation ?? ''}${cjk ? '' : ' '}${b.translation ?? ''}'
-                .trim()
+          ? [a.translation, b.translation]
+                .whereType<String>()
+                .where((t) => t.trim().isNotEmpty)
+                .join(join)
           : null,
       confidence: Cue.mergedConfidence(a.confidence, b.confidence),
       reviewed: a.reviewed && b.reviewed,
+      // 未配对行没有说话人，并入时沿用有说话人的那一边。
+      speaker: a.speaker ?? b.speaker,
     );
 
     final next = [...cues]

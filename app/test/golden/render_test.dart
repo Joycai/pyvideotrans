@@ -16,6 +16,7 @@ import 'package:subtitle_studio/features/shell/nav_rail.dart';
 import 'package:subtitle_studio/features/shell/status_bar.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_page.dart';
+import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/tasks/tasks_board.dart';
 import 'package:subtitle_studio/features/tasks/tasks_page.dart';
 import 'package:subtitle_studio/services/settings.dart';
@@ -280,8 +281,10 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
     final task = _fixtures().first;
-    final controller = EditorController(task: task, settings: settings)
-      ..select(4);
+    final controller = EditorController(
+      session: TaskSession(task),
+      settings: settings,
+    )..select(4);
 
     tester.view
       ..physicalSize = const Size(1440, 900)

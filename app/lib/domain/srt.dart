@@ -75,6 +75,84 @@ abstract final class Srt {
     return cues;
   }
 
+  /// 行首说话人标签：「周老师：正文」「Speaker 2: text」。
+  static final _speakerLabel = RegExp(
+    r'^\s*([^\s:：][^:：\n]{0,15}?)\s*[:：]\s*(\S.*)$',
+  );
+  static final _genericSpeaker = RegExp(
+    r'^(?:说话人|speaker\s*)(\d{1,3})$',
+    caseSensitive: false,
+  );
+  static final _labelPunctuation = RegExp(r'[,，。.!?！？、;；"“”()（）\[\]【】/]');
+
+  /// 识别整份字幕行首的说话人标签：去掉标签，换成说话人编号。
+  ///
+  /// 至少 30% 的非空条目带标签才算数 —— 零星一两句「注意：」不该把整份文件
+  /// 改掉；不同标签超过 20 种也不算，那更像是正文里的冒号。
+  /// 「说话人3」「Speaker 3」这类默认标签直接换回编号 2，不记名字；其他标签
+  /// 按出现顺序排在默认编号之后，并记下名字。没带标签的条目保持原样。
+  static SpeakerLabelDetection? detectSpeakerLabels(List<Cue> cues) {
+    final found = <int, ({String label, String rest})>{};
+    var nonEmpty = 0;
+    for (final (i, cue) in cues.indexed) {
+      if (cue.source.trim().isEmpty) continue;
+      nonEmpty++;
+      final lines = cue.source.split('\n');
+      final m = _speakerLabel.firstMatch(lines.first);
+      if (m == null) continue;
+      final label = m.group(1)!.trim();
+      if (!_isSpeakerLabel(label)) continue;
+      found[i] = (
+        label: label,
+        rest: [m.group(2)!, ...lines.skip(1)].join('\n').trim(),
+      );
+    }
+    // Set 字面量保持插入顺序，即标签第一次出现的顺序。
+    final labels = {for (final f in found.values) f.label};
+    if (nonEmpty == 0 ||
+        found.length < nonEmpty * 0.3 ||
+        labels.length > 20) {
+      return null;
+    }
+
+    final ids = <String, int>{};
+    for (final label in labels) {
+      final generic = _genericSpeaker.firstMatch(label);
+      final n = generic == null ? 0 : int.parse(generic.group(1)!);
+      if (n >= 1) ids[label] = n - 1;
+    }
+    var next = ids.values.fold<int>(-1, (a, b) => a > b ? a : b) + 1;
+    final names = <int, String>{};
+    for (final label in labels) {
+      if (ids.containsKey(label)) continue;
+      ids[label] = next;
+      names[next] = label;
+      next++;
+    }
+
+    return SpeakerLabelDetection(
+      cues: [
+        for (final (i, cue) in cues.indexed)
+          switch (found[i]) {
+            final f? => cue.copyWith(source: f.rest, speaker: ids[f.label]),
+            null => cue,
+          },
+      ],
+      speakers: names,
+      labels: labels.toList(),
+    );
+  }
+
+  /// 像不像人名：不超过 16 个字、三个词，不含句读，不是纯数字（「10:30」
+  /// 是时间），也不是网址的协议头。
+  static bool _isSpeakerLabel(String label) {
+    if (label.isEmpty || label.length > 16) return false;
+    if (RegExp(r'^\d+$').hasMatch(label)) return false;
+    if (_labelPunctuation.hasMatch(label)) return false;
+    if (label.split(RegExp(r'\s+')).length > 3) return false;
+    return !RegExp(r'^https?$', caseSensitive: false).hasMatch(label);
+  }
+
   /// 序列化为 SRT。
   ///
   /// [field] 决定写哪一路文本：原文、译文，或双语（两行挤在同一条字幕里，
@@ -230,6 +308,24 @@ abstract final class Srt {
   }
 
   static String _pad(int v) => v.toString().padLeft(2, '0');
+}
+
+/// [Srt.detectSpeakerLabels] 的结果。
+class SpeakerLabelDetection {
+  const SpeakerLabelDetection({
+    required this.cues,
+    required this.speakers,
+    required this.labels,
+  });
+
+  /// 去掉了标签、带上说话人编号的字幕。
+  final List<Cue> cues;
+
+  /// 起过名字的说话人。「说话人1」这类默认标签不在里面。
+  final Map<int, String> speakers;
+
+  /// 文件里出现过的标签，按第一次出现的顺序，给界面提示用。
+  final List<String> labels;
 }
 
 /// 一条字幕写出哪一路文本。

@@ -235,6 +235,7 @@ class _CueEditorState extends State<_CueEditor> {
     final (tagLabel, tagTone) = switch (cue.state) {
       CueState.review => ('待校对', TagTone.review),
       CueState.untranslated => ('未翻译', TagTone.quiet),
+      CueState.unpaired => ('未配对', TagTone.quiet),
       CueState.ok => ('已校对', TagTone.neutral),
     };
 
@@ -273,7 +274,7 @@ class _CueEditorState extends State<_CueEditor> {
             ],
           ),
           _Field(
-            label: '原文 · ${controller.task.sourceLanguage.name}',
+            label: '原文 · ${controller.session.sourceLanguage.name}',
             trailing: cue.confidence == null
                 ? null
                 : Row(
@@ -297,7 +298,7 @@ class _CueEditorState extends State<_CueEditor> {
             onSubmitted: controller.editSource,
           ),
           _Field(
-            label: '译文 · ${controller.task.targetLanguage.name}',
+            label: '译文 · ${controller.session.targetLanguage.name}',
             trailing: QuietButton(
               label: busy ? '翻译中…' : '重新翻译此条',
               icon: Symbols.refresh,

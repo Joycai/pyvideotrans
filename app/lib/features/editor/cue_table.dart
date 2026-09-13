@@ -53,6 +53,9 @@ class CueTable extends StatelessWidget {
                       );
                       return _CueRow(
                         cue: cue,
+                        speakerName: cue.speaker == null
+                            ? null
+                            : controller.document.speakerName(cue.speaker!),
                         view: controller.view,
                         selected: position == controller.selected,
                         onTap: () => controller.select(position),
@@ -118,8 +121,10 @@ class _Toolbar extends StatelessWidget {
             onChanged: (name) =>
                 controller.setFilter(CueFilter.values.byName(name)),
             items: [
+              // 「未配对」只在挂载本地原文与译文、且真有对不上的行时出现。
               for (final f in CueFilter.values)
-                (key: f.name, label: f.label, count: controller.countOf(f)),
+                if (f != CueFilter.unpaired || controller.countOf(f) > 0)
+                  (key: f.name, label: f.label, count: controller.countOf(f)),
             ],
           ),
           const Spacer(),
@@ -178,12 +183,16 @@ class _HeaderRow extends StatelessWidget {
 class _CueRow extends StatefulWidget {
   const _CueRow({
     required this.cue,
+    required this.speakerName,
     required this.view,
     required this.selected,
     required this.onTap,
   });
 
   final Cue cue;
+
+  /// 说话人显示名；没有说话人为 null。
+  final String? speakerName;
   final CueView view;
   final bool selected;
   final VoidCallback onTap;
@@ -219,6 +228,7 @@ class _CueRowState extends State<_CueRow> {
     final (tagLabel, tagTone) = switch (cue.state) {
       CueState.review => ('待校对', TagTone.review),
       CueState.untranslated => ('未翻译', TagTone.quiet),
+      CueState.unpaired => ('未配对', TagTone.quiet),
       CueState.ok => ('已校对', TagTone.neutral),
     };
 
@@ -250,9 +260,9 @@ class _CueRowState extends State<_CueRow> {
                 Timecode(Srt.formatTimecode(cue.endMs)),
                 if (widget.view != CueView.translation)
                   Text(
-                    cue.speaker == null
+                    widget.speakerName == null
                         ? cue.source
-                        : '[说话人${cue.speaker! + 1}] ${cue.source}',
+                        : '[${widget.speakerName}] ${cue.source}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: context.texts.bodyMedium,

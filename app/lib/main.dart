@@ -10,6 +10,7 @@ import 'features/shell/app_shell.dart';
 import 'features/shell/nav_rail.dart';
 import 'features/editor/editor_controller.dart';
 import 'features/editor/editor_page.dart';
+import 'features/editor/editor_session.dart';
 import 'features/settings/settings_page.dart';
 import 'features/shell/status_bar.dart';
 import 'features/tasks/new_transcribe_page.dart';
@@ -131,7 +132,10 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
 
   void _openEditor(SubtitleTask task) {
     final previous = _editor;
-    final controller = EditorController(task: task, settings: widget.settings)
+    final controller = EditorController(
+      session: TaskSession(task),
+      settings: widget.settings,
+    )
       // 编辑器里的改动（改字、改时间、拆分合并、重新翻译）跟着写盘。
       ..addListener(() => widget.queue.persist(task));
     setState(() {
@@ -207,8 +211,8 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
         return PageChrome(
           title: '编辑器',
           subtitle:
-              '${editor.task.fileName} · ${editor.document.cues.length} 条 · '
-              '${editor.task.sourceLanguage.name} → ${editor.task.targetLanguage.name}',
+              '${editor.session.title} · ${editor.document.cues.length} 条 · '
+              '${editor.session.sourceLanguage.name} → ${editor.session.targetLanguage.name}',
           titleTrailing: EditorReviewBadge(count: editor.document.reviewCount),
           actions: [
             EditorPageActions(
