@@ -14,17 +14,30 @@ Future<EditorController> _controller() async {
     id: 'e1',
     sourcePath: '/v/demo.mp4',
     kind: TaskKind.transcribeAndTranslate,
-      options: testOptions(asr: 'openai', mt: 'deepseek', source: 'zh', target: 'en'),
+    options: testOptions(
+      asr: 'openai',
+      mt: 'deepseek',
+      source: 'zh',
+      target: 'en',
+    ),
   );
   task.document = SubtitleDocument(
     cues: [
       const Cue(
-        index: 1, startMs: 0, endMs: 2000,
-        source: '第一句话在这里', translation: 'First', confidence: 0.95,
+        index: 1,
+        startMs: 0,
+        endMs: 2000,
+        source: '第一句话在这里',
+        translation: 'First',
+        confidence: 0.95,
       ),
       const Cue(
-        index: 2, startMs: 2000, endMs: 4000,
-        source: '第二句', translation: 'Second', confidence: 0.50,
+        index: 2,
+        startMs: 2000,
+        endMs: 4000,
+        source: '第二句',
+        translation: 'Second',
+        confidence: 0.50,
       ),
       const Cue(index: 3, startMs: 4000, endMs: 6000, source: '第三句'),
     ],
@@ -70,7 +83,8 @@ void main() {
     });
 
     test('到头不越界', () async {
-      final c = await _controller()..select(0);
+      final c = await _controller()
+        ..select(0);
       c.step(-1);
       expect(c.current!.index, 1);
       c
@@ -82,7 +96,8 @@ void main() {
 
   group('编辑', () {
     test('标记已校对后不再是待校对', () async {
-      final c = await _controller()..select(1);
+      final c = await _controller()
+        ..select(1);
       expect(c.current!.state, CueState.review);
       c.toggleReviewed();
       expect(c.current!.state, CueState.ok);
@@ -90,19 +105,22 @@ void main() {
     });
 
     test('起点不能越过终点', () async {
-      final c = await _controller()..select(0);
+      final c = await _controller()
+        ..select(0);
       c.editStart(99999);
       expect(c.current!.startMs, lessThan(c.current!.endMs));
     });
 
     test('终点不能早于起点', () async {
-      final c = await _controller()..select(1);
+      final c = await _controller()
+        ..select(1);
       c.editEnd(0);
       expect(c.current!.endMs, greaterThan(c.current!.startMs));
     });
 
     test('撤销回到上一版', () async {
-      final c = await _controller()..select(0);
+      final c = await _controller()
+        ..select(0);
       c.editSource('改过的原文');
       expect(c.current!.source, '改过的原文');
       c.undo();
@@ -116,8 +134,17 @@ void main() {
       expect(c.document.cues, hasLength(3));
     });
 
+    test('空文档上选择与撤销不会因下标越界而崩溃', () async {
+      final c = await _controller();
+      c.task.document = SubtitleDocument.empty;
+      c.select(99);
+      c.undo();
+      expect(c.current, isNull);
+    });
+
     test('拆分与合并互为逆操作（就条数而言）', () async {
-      final c = await _controller()..select(0);
+      final c = await _controller()
+        ..select(0);
       c.split();
       expect(c.document.cues, hasLength(4));
       c.mergeWithNext();
@@ -127,7 +154,8 @@ void main() {
     });
 
     test('最后一条不能合并下一条', () async {
-      final c = await _controller()..select(2);
+      final c = await _controller()
+        ..select(2);
       c.mergeWithNext();
       expect(c.document.cues, hasLength(3));
     });

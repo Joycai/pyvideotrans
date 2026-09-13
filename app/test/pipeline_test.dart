@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -111,6 +112,27 @@ class FakeTranslator implements TranslationProvider {
   }
 }
 
+class _BlockingRunner extends TaskRunner {
+  _BlockingRunner({required super.settings, required super.workDir});
+
+  final started = Completer<void>();
+  final release = Completer<void>();
+
+  @override
+  Future<void> run(
+    SubtitleTask task, {
+    required CancellationToken token,
+    required void Function() onChange,
+  }) async {
+    task.status = TaskStatus.running;
+    if (!started.isCompleted) {
+      started.complete();
+      await release.future;
+    }
+    task.status = TaskStatus.done;
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -172,11 +194,7 @@ void main() {
   group('流水线', () {
     test('翻译任务跑完，识别与断句被跳过', () async {
       final (task, runner, _) = await translateTask();
-      await runner.run(
-        task,
-        token: CancellationToken(),
-        onChange: () {},
-      );
+      await runner.run(task, token: CancellationToken(), onChange: () {});
 
       expect(task.status, TaskStatus.done);
       expect(task.stages[TaskStage.recognize]!.state, StageState.skipped);
@@ -210,10 +228,7 @@ void main() {
 
     test('网络类错误不减半，直接失败并给出建议', () async {
       final mt = FakeTranslator(
-        failWith: const ProviderException(
-          '无法连接到 测试',
-          hint: '检查网络与服务地址',
-        ),
+        failWith: const ProviderException('无法连接到 测试', hint: '检查网络与服务地址'),
       );
       final (task, runner, _) = await translateTask(
         translator: mt,
@@ -284,7 +299,12 @@ void main() {
         id: 't2',
         sourcePath: empty.path,
         kind: TaskKind.translate,
-      options: testOptions(asr: 'fake_asr', mt: 'fake_mt', source: 'zh', target: 'en'),
+        options: testOptions(
+          asr: 'fake_asr',
+          mt: 'fake_mt',
+          source: 'zh',
+          target: 'en',
+        ),
       );
       await runner.run(task, token: CancellationToken(), onChange: () {});
 
@@ -399,18 +419,38 @@ void main() {
         id: 't3',
         sourcePath: 'a.mp4',
         kind: TaskKind.transcribe,
-      options: testOptions(asr: 'x', mt: 'y', source: 'zh', target: 'en'),
+        options: testOptions(asr: 'x', mt: 'y', source: 'zh', target: 'en'),
       );
       task.stages[TaskStage.queued] = const StageRecord(state: StageState.done);
-      task.stages[TaskStage.prepare] = const StageRecord(state: StageState.done);
-      task.stages[TaskStage.recognize] =
-          const StageRecord(state: StageState.failed);
+      task.stages[TaskStage.prepare] = const StageRecord(
+        state: StageState.done,
+      );
+      task.stages[TaskStage.recognize] = const StageRecord(
+        state: StageState.failed,
+      );
 
       expect(task.resumeStage, TaskStage.recognize);
     });
   });
 
   group('队列', () {
+    test('插队任务会在当前任务完成后优先执行', () async {
+      final runner = _BlockingRunner(settings: settings, workDir: work.path);
+      final queue = TaskQueue(runner: runner, settings: settings);
+      final first = queue.enqueue(sourcePath: '/v/first.srt');
+      await runner.started.future;
+      final second = queue.enqueue(sourcePath: '/v/second.srt');
+
+      queue.prioritize(second.id);
+      expect(queue.tasks.last.id, second.id);
+
+      runner.release.complete();
+      for (var i = 0; i < 100 && queue.running != null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      expect(first.status, TaskStatus.done);
+    });
+
     test('串行执行，完成后自动取下一个', () async {
       final runner = TaskRunner(
         settings: settings,
@@ -553,23 +593,23 @@ void main() {
 
     test('双语产物带上两种语言，与单语那份区分得开', () async {
       final written = await runner().writeOutputs(
-        done(
-          kind: TaskKind.translate,
-          bilingual: BilingualLayout.targetAbove,
-        ),
+        done(kind: TaskKind.translate, bilingual: BilingualLayout.targetAbove),
       );
       expect(names(written), ['demo.zh-en.srt']);
-      expect(File(written.single).readAsStringSync(), contains('Line one\n第一句'));
+      expect(
+        File(written.single).readAsStringSync(),
+        contains('Line one\n第一句'),
+      );
     });
 
     test('译文在下时上下颠倒', () async {
       final written = await runner().writeOutputs(
-        done(
-          kind: TaskKind.translate,
-          bilingual: BilingualLayout.targetBelow,
-        ),
+        done(kind: TaskKind.translate, bilingual: BilingualLayout.targetBelow),
       );
-      expect(File(written.single).readAsStringSync(), contains('第一句\nLine one'));
+      expect(
+        File(written.single).readAsStringSync(),
+        contains('第一句\nLine one'),
+      );
     });
 
     // 纯文本没有「两行」的概念，界面会灰显这一项，这里再兜一次底。

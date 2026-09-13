@@ -70,6 +70,8 @@ enum OutputLocation {
 /// 去建下一个任务。参数必须在**入队那一刻**定死，否则前面排着的任务会被
 /// 后面的改动影响——这类 bug 事后极难复现。全局设置只作为这里的默认值。
 class TaskOptions {
+  static const _unset = Object();
+
   const TaskOptions({
     required this.sourceLanguage,
     required this.asrProviderId,
@@ -210,13 +212,17 @@ class TaskOptions {
         'translationGuidance',
         fallback.translationGuidance,
       ),
-      bilingual: BilingualLayout.byName(pick('bilingual', fallback.bilingual.name)),
+      bilingual: BilingualLayout.byName(
+        pick('bilingual', fallback.bilingual.name),
+      ),
       cjkLineLength: pick('cjkLineLength', fallback.cjkLineLength).clamp(4, 60),
       latinLineLength: pick(
         'latinLineLength',
         fallback.latinLineLength,
       ).clamp(8, 120),
-      format: SubtitleFormat.byExtension(pick('format', fallback.format.extension)),
+      format: SubtitleFormat.byExtension(
+        pick('format', fallback.format.extension),
+      ),
       // 指定目录却没有目录，等于没指定。
       outputLocation: location == OutputLocation.custom && dir == null
           ? OutputLocation.besideSource
@@ -228,13 +234,13 @@ class TaskOptions {
   TaskOptions copyWith({
     Language? sourceLanguage,
     String? asrProviderId,
-    String? asrModel,
+    Object? asrModel = _unset,
     String? asrPrompt,
     bool? diarize,
     bool? translate,
     Language? targetLanguage,
     String? translationProviderId,
-    String? translationModel,
+    Object? translationModel = _unset,
     int? translationBatchSize,
     String? translationGuidance,
     BilingualLayout? bilingual,
@@ -242,18 +248,19 @@ class TaskOptions {
     int? latinLineLength,
     SubtitleFormat? format,
     OutputLocation? outputLocation,
-    String? outputDir,
+    Object? outputDir = _unset,
   }) => TaskOptions(
     sourceLanguage: sourceLanguage ?? this.sourceLanguage,
     asrProviderId: asrProviderId ?? this.asrProviderId,
-    asrModel: asrModel ?? this.asrModel,
+    asrModel: identical(asrModel, _unset) ? this.asrModel : asrModel as String?,
     asrPrompt: asrPrompt ?? this.asrPrompt,
     diarize: diarize ?? this.diarize,
     translate: translate ?? this.translate,
     targetLanguage: targetLanguage ?? this.targetLanguage,
-    translationProviderId:
-        translationProviderId ?? this.translationProviderId,
-    translationModel: translationModel ?? this.translationModel,
+    translationProviderId: translationProviderId ?? this.translationProviderId,
+    translationModel: identical(translationModel, _unset)
+        ? this.translationModel
+        : translationModel as String?,
     translationBatchSize: translationBatchSize ?? this.translationBatchSize,
     translationGuidance: translationGuidance ?? this.translationGuidance,
     bilingual: bilingual ?? this.bilingual,
@@ -261,6 +268,8 @@ class TaskOptions {
     latinLineLength: latinLineLength ?? this.latinLineLength,
     format: format ?? this.format,
     outputLocation: outputLocation ?? this.outputLocation,
-    outputDir: outputDir ?? this.outputDir,
+    outputDir: identical(outputDir, _unset)
+        ? this.outputDir
+        : outputDir as String?,
   );
 }

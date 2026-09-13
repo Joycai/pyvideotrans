@@ -51,7 +51,9 @@ class Cue {
   CueState get state {
     if (!hasTranslation) return CueState.untranslated;
     if (reviewed) return CueState.ok;
-    if (confidence != null && confidence! < lowConfidence) return CueState.review;
+    if (confidence != null && confidence! < lowConfidence) {
+      return CueState.review;
+    }
     return CueState.ok;
   }
 
@@ -61,6 +63,7 @@ class Cue {
     int? endMs,
     String? source,
     String? translation,
+    bool clearTranslation = false,
     double? confidence,
     bool? reviewed,
     int? speaker,
@@ -69,7 +72,7 @@ class Cue {
     startMs: startMs ?? this.startMs,
     endMs: endMs ?? this.endMs,
     source: source ?? this.source,
-    translation: translation ?? this.translation,
+    translation: clearTranslation ? null : (translation ?? this.translation),
     confidence: confidence ?? this.confidence,
     reviewed: reviewed ?? this.reviewed,
     speaker: speaker ?? this.speaker,
@@ -119,7 +122,12 @@ class SubtitleDocument {
 
   Duration get duration => cues.isEmpty
       ? Duration.zero
-      : Duration(milliseconds: cues.last.endMs);
+      : Duration(
+          milliseconds: cues.fold<int>(
+            0,
+            (maxEnd, cue) => cue.endMs > maxEnd ? cue.endMs : maxEnd,
+          ),
+        );
 
   SubtitleDocument copyWith({
     List<Cue>? cues,
@@ -146,7 +154,14 @@ class SubtitleDocument {
 
     final ratio = cut / text.length;
     final mid = cue.startMs + (cue.durationMs * ratio).round();
-    final head = cue.copyWith(endMs: mid, source: text.substring(0, cut).trim());
+    // Editing the source invalidates any old translation/review state. A
+    // split cannot reliably divide a translation between the two new cues.
+    final head = cue.copyWith(
+      endMs: mid,
+      source: text.substring(0, cut).trim(),
+      clearTranslation: true,
+      reviewed: false,
+    );
     final tail = Cue(
       index: cue.index + 1,
       startMs: mid,
@@ -173,7 +188,8 @@ class SubtitleDocument {
       endMs: b.endMs,
       source: '${a.source}$join${b.source}',
       translation: a.hasTranslation || b.hasTranslation
-          ? '${a.translation ?? ''} ${b.translation ?? ''}'.trim()
+          ? '${a.translation ?? ''}${cjk ? '' : ' '}${b.translation ?? ''}'
+                .trim()
           : null,
       confidence: switch ((a.confidence, b.confidence)) {
         (final x?, final y?) => (x + y) / 2,

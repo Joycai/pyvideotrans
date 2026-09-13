@@ -30,8 +30,22 @@ void main() {
       expect(Srt.parseTimecode('1:2'), isNull);
     });
 
+    test('WebVTT 允许省略小时', () {
+      expect(Srt.parseTimecode('02:03.450'), 123450);
+      final cues = Srt.parse('''WEBVTT
+
+02:03.450 --> 02:05.000
+hello
+''');
+      expect(cues.single.startMs, 123450);
+      expect(cues.single.endMs, 125000);
+    });
+
     test('时长省略零小时', () {
-      expect(Srt.formatDuration(const Duration(minutes: 48, seconds: 12)), '48:12');
+      expect(
+        Srt.formatDuration(const Duration(minutes: 48, seconds: 12)),
+        '48:12',
+      );
       expect(
         Srt.formatDuration(const Duration(hours: 1, minutes: 32, seconds: 5)),
         '1:32:05',
@@ -137,15 +151,29 @@ void main() {
   group('序列化', () {
     test('原文往返一致', () {
       final cues = Srt.parse(_sample);
-      expect(Srt.parse(Srt.serialize(cues)).map((c) => c.source),
-          cues.map((c) => c.source));
+      expect(
+        Srt.parse(Srt.serialize(cues)).map((c) => c.source),
+        cues.map((c) => c.source),
+      );
     });
 
     test('译文缺失的条目被跳过并重新编号', () {
       final cues = [
-        const Cue(index: 1, startMs: 0, endMs: 1000, source: 'a', translation: 'A'),
+        const Cue(
+          index: 1,
+          startMs: 0,
+          endMs: 1000,
+          source: 'a',
+          translation: 'A',
+        ),
         const Cue(index: 2, startMs: 1000, endMs: 2000, source: 'b'),
-        const Cue(index: 3, startMs: 2000, endMs: 3000, source: 'c', translation: 'C'),
+        const Cue(
+          index: 3,
+          startMs: 2000,
+          endMs: 3000,
+          source: 'c',
+          translation: 'C',
+        ),
       ];
       final out = Srt.parse(Srt.serialize(cues, field: SrtField.translation));
       expect(out.map((c) => c.source), ['A', 'C']);
@@ -154,7 +182,13 @@ void main() {
 
     test('双语两种排版分别把译文放在上下', () {
       final cues = [
-        const Cue(index: 1, startMs: 0, endMs: 1000, source: '原', translation: '译'),
+        const Cue(
+          index: 1,
+          startMs: 0,
+          endMs: 1000,
+          source: '原',
+          translation: '译',
+        ),
       ];
       expect(
         Srt.serialize(cues, field: SrtField.bilingualTargetAbove),
@@ -167,9 +201,7 @@ void main() {
     });
 
     test('双语遇到缺译文的条目只写原文，不留空行', () {
-      final cues = [
-        const Cue(index: 1, startMs: 0, endMs: 1000, source: '原'),
-      ];
+      final cues = [const Cue(index: 1, startMs: 0, endMs: 1000, source: '原')];
       for (final field in [
         SrtField.bilingualTargetAbove,
         SrtField.bilingualTargetBelow,
@@ -225,6 +257,34 @@ void main() {
     test('合并最后一条是空操作', () {
       expect(doc.mergeWithNext(1).cues, hasLength(2));
     });
+
+    test('拆分会清掉无法对应的旧译文', () {
+      final translated = SubtitleDocument(
+        cues: [
+          const Cue(
+            index: 1,
+            startMs: 0,
+            endMs: 1000,
+            source: 'abcdef',
+            translation: 'translated',
+            reviewed: true,
+          ),
+        ],
+      );
+      final split = translated.splitAt(0, 3);
+      expect(split.cues.every((cue) => !cue.hasTranslation), isTrue);
+      expect(split.cues.every((cue) => !cue.reviewed), isTrue);
+    });
+
+    test('文档时长取最晚结束时间而非列表最后一条', () {
+      final document = SubtitleDocument(
+        cues: [
+          const Cue(index: 1, startMs: 0, endMs: 5000, source: 'late'),
+          const Cue(index: 2, startMs: 0, endMs: 1000, source: 'early'),
+        ],
+      );
+      expect(document.duration, const Duration(seconds: 5));
+    });
   });
 
   group('校对状态', () {
@@ -235,16 +295,25 @@ void main() {
 
     test('低置信度标为待校对', () {
       const cue = Cue(
-        index: 1, startMs: 0, endMs: 1, source: 'a',
-        translation: 'A', confidence: 0.58,
+        index: 1,
+        startMs: 0,
+        endMs: 1,
+        source: 'a',
+        translation: 'A',
+        confidence: 0.58,
       );
       expect(cue.state, CueState.review);
     });
 
     test('人工确认后不再是待校对', () {
       const cue = Cue(
-        index: 1, startMs: 0, endMs: 1, source: 'a',
-        translation: 'A', confidence: 0.58, reviewed: true,
+        index: 1,
+        startMs: 0,
+        endMs: 1,
+        source: 'a',
+        translation: 'A',
+        confidence: 0.58,
+        reviewed: true,
       );
       expect(cue.state, CueState.ok);
     });

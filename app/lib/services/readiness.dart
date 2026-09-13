@@ -55,7 +55,7 @@ abstract final class ProviderReadiness {
         hint: '重新选择一个识别服务。',
       );
     }
-    final basic = _checkEndpoint(info, settings);
+    final basic = _checkEndpoint(info, settings, model: model);
     if (basic != null) return basic;
 
     final chosen = model ?? settings.endpointFor(info).model;
@@ -87,7 +87,11 @@ abstract final class ProviderReadiness {
   }
 
   /// 翻译服务。
-  static Readiness translation(String id, AppSettings settings) {
+  static Readiness translation(
+    String id,
+    AppSettings settings, {
+    String? model,
+  }) {
     final info = Registry.translationInfo(id);
     if (info == null) {
       return Readiness(
@@ -96,18 +100,20 @@ abstract final class ProviderReadiness {
         hint: '重新选择一个翻译服务。',
       );
     }
-    return _checkEndpoint(info, settings) ?? Readiness.ok;
+    return _checkEndpoint(info, settings, model: model) ?? Readiness.ok;
   }
 
   /// 未实施 / 缺地址 / 缺密钥 —— 三种一定跑不起来的情况。
-  static Readiness? _checkEndpoint(ProviderInfo info, AppSettings settings) {
+  static Readiness? _checkEndpoint(
+    ProviderInfo info,
+    AppSettings settings, {
+    String? model,
+  }) {
     if (!info.implemented) {
       return Readiness(
         ReadinessLevel.blocked,
         message: '${info.name}尚未实施',
-        hint: info.runsLocally
-            ? '本地模型服务是第二期内容，先选一个在线服务。'
-            : '先选一个已实施的服务。',
+        hint: info.runsLocally ? '本地模型服务是第二期内容，先选一个在线服务。' : '先选一个已实施的服务。',
       );
     }
     final endpoint = settings.endpointFor(info);
@@ -116,6 +122,16 @@ abstract final class ProviderReadiness {
         ReadinessLevel.blocked,
         message: '${info.name}未填服务地址',
         hint: '去设置里填入 baseUrl 后可开始。',
+      );
+    }
+    final chosenModel = model?.trim().isNotEmpty == true
+        ? model!.trim()
+        : endpoint.model.trim();
+    if (chosenModel.isEmpty) {
+      return Readiness(
+        ReadinessLevel.blocked,
+        message: '${info.name}未选择模型',
+        hint: '去设置里填入模型名后可开始。',
       );
     }
     if (info.needsApiKey && endpoint.apiKey.trim().isEmpty) {

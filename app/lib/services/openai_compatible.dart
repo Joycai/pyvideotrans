@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -76,15 +77,13 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
 
     onProgress(0, 1, note: '上传音频至 ${info.vendor}');
 
-    final request = http.MultipartRequest(
-      'POST',
-      endpoint.resolve('/audio/transcriptions'),
-    )
-      ..headers.addAll(endpoint.authHeaders)
-      ..fields['model'] = endpoint.model
-      ..fields['response_format'] = 'verbose_json'
-      ..fields['timestamp_granularities[]'] = 'segment'
-      ..files.add(await http.MultipartFile.fromPath('file', audioPath));
+    final request =
+        http.MultipartRequest('POST', endpoint.resolve('/audio/transcriptions'))
+          ..headers.addAll(endpoint.authHeaders)
+          ..fields['model'] = endpoint.model
+          ..fields['response_format'] = 'verbose_json'
+          ..fields['timestamp_granularities[]'] = 'segment'
+          ..files.add(await http.MultipartFile.fromPath('file', audioPath));
 
     if (prompt.trim().isNotEmpty) request.fields['prompt'] = prompt.trim();
     // `auto` 表示交给服务端自动判定，不下发 language 参数。
@@ -102,6 +101,12 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
         '无法连接到 ${info.vendor}',
         detail: '${endpoint.baseUrl} · $e',
         hint: '检查网络与服务地址；已完成的阶段已保留，可从识别阶段继续。',
+      );
+    } on TimeoutException {
+      throw ProviderException(
+        '${info.vendor} 响应超时',
+        detail: '超过 ${endpoint.timeout.inSeconds} 秒没有返回',
+        hint: '检查网络；已完成的阶段已保留，可从识别阶段继续。',
       );
     }
 
@@ -121,7 +126,14 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
           hint: '确认音视频中确有人声，且所选语言与实际语言一致。',
         );
       }
-      return [Cue(index: 1, startMs: 0, endMs: 0, source: text)];
+      return [
+        Cue(
+          index: 1,
+          startMs: 0,
+          endMs: _seconds(body['duration']),
+          source: text,
+        ),
+      ];
     }
 
     final cues = <Cue>[];
@@ -141,10 +153,7 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
     }
 
     if (cues.isEmpty) {
-      throw const ProviderException(
-        '未识别到语音',
-        hint: '确认音视频中确有人声，且所选语言与实际语言一致。',
-      );
+      throw const ProviderException('未识别到语音', hint: '确认音视频中确有人声，且所选语言与实际语言一致。');
     }
     return cues;
   }
@@ -271,6 +280,12 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
             ? '确认本地服务已启动并监听该端口。'
             : '检查网络与服务地址；已翻译的条目已保留，可从翻译阶段继续。',
       );
+    } on TimeoutException {
+      throw ProviderException(
+        '${info.vendor} 响应超时',
+        detail: '超过 ${endpoint.timeout.inSeconds} 秒没有返回',
+        hint: '检查网络；已翻译的条目已保留，可从翻译阶段继续。',
+      );
     }
 
     token.throwIfCancelled();
@@ -302,7 +317,20 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
     if (choices is List && choices.isNotEmpty) {
       final first = choices.first;
       final message = first is Map ? first['message'] : null;
-      if (message is Map) content = message['content'] as String?;
+      if (message is Map) {
+        final rawContent = message['content'];
+        if (rawContent is String) {
+          content = rawContent;
+        } else if (rawContent is List) {
+          // Some compatible APIs return multimodal content parts even for a
+          // text-only completion. Preserve all text parts in order.
+          content = rawContent
+              .whereType<Map>()
+              .map((part) => part['text'])
+              .whereType<String>()
+              .join();
+        }
+      }
     }
 
     if (content == null || content.trim().isEmpty) {
@@ -317,7 +345,8 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
     if (decoded == null) {
       throw ProviderException(
         '译文与原文条数对不上',
-        detail: '期望 ${lines.length} 条，模型返回：\n'
+        detail:
+            '期望 ${lines.length} 条，模型返回：\n'
             '${content.length > 400 ? '${content.substring(0, 400)}…' : content}',
         hint: '模型合并或丢弃了字幕行。流水线会自动减半批量重试。',
         batchTooLarge: true,

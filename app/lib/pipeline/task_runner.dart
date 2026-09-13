@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import '../domain/cue.dart';
@@ -35,8 +36,7 @@ class TaskRunner {
     TranslationFactory? translationFactory,
   }) : media = media ?? Media(),
        _asrOverride = asrFactory,
-       _translationFactory =
-           translationFactory ?? _defaultTranslationFactory;
+       _translationFactory = translationFactory ?? _defaultTranslationFactory;
 
   final AppSettings settings;
 
@@ -180,7 +180,15 @@ class TaskRunner {
     task.recognition = null;
     if (task.kind == TaskKind.translate) {
       // 输入本来就是字幕，解析出来即可。
-      final text = await File(task.sourcePath).readAsString();
+      final bytes = await File(task.sourcePath).readAsBytes();
+      late String text;
+      try {
+        text = utf8.decode(bytes);
+      } on FormatException {
+        // Keep the parser useful for legacy single-byte subtitle files. The
+        // timestamps are ASCII even when the body encoding is not UTF-8.
+        text = latin1.decode(bytes);
+      }
       final cues = Srt.parse(text);
       if (cues.isEmpty) {
         throw const ProviderException(
@@ -235,8 +243,8 @@ class TaskRunner {
         checkpoint: checkpoint,
         onProgress: (done, total, {note}) {
           task.progress = total == 0 ? 0 : done / total;
-          task.stages[TaskStage.recognize] =
-              task.stages[TaskStage.recognize]!.copyWith(note: note);
+          task.stages[TaskStage.recognize] = task.stages[TaskStage.recognize]!
+              .copyWith(note: note);
           onChange();
         },
       );
@@ -250,18 +258,18 @@ class TaskRunner {
       final skipped = checkpoint.skippedCount;
       task.recognition = null;
 
-      final low = cues.where((c) => (c.confidence ?? 1) < Cue.lowConfidence).length;
+      final low = cues
+          .where((c) => (c.confidence ?? 1) < Cue.lowConfidence)
+          .length;
       task.stages[TaskStage.recognize] = task.stages[TaskStage.recognize]!
           .copyWith(
-            note: '${provider.info.name} · ${cues.length} 段'
+            note:
+                '${provider.info.name} · ${cues.length} 段'
                 '${skipped > 0 ? ' · 已跳过 $skipped 段' : ''}',
           );
       task.note('识别完成 ${cues.length} 段');
       if (skipped > 0) {
-        task.note(
-          '$skipped 段反复失败已跳过，留下空字幕待校对',
-          LogLevel.warn,
-        );
+        task.note('$skipped 段反复失败已跳过，留下空字幕待校对', LogLevel.warn);
       }
       if (low > 0) {
         task.note('$low 段置信度低于 ${Cue.lowConfidence}，已标记待校对', LogLevel.warn);
@@ -291,7 +299,8 @@ class TaskRunner {
             last.speaker == cue.speaker) {
           merged[merged.length - 1] = last.copyWith(
             endMs: cue.endMs,
-            source: '${last.source}'
+            source:
+                '${last.source}'
                 '${task.sourceLanguage.cjk ? '' : ' '}'
                 '${cue.source}',
           );
@@ -302,8 +311,9 @@ class TaskRunner {
       }
 
       task.document = task.document.copyWith(cues: merged);
-      task.stages[TaskStage.segment] = task.stages[TaskStage.segment]!
-          .copyWith(note: '${merged.length} 条');
+      task.stages[TaskStage.segment] = task.stages[TaskStage.segment]!.copyWith(
+        note: '${merged.length} 条',
+      );
       task.note('断句完成，合并短句 $joined 处');
     },
   );
@@ -363,6 +373,14 @@ class TaskRunner {
             targetLanguage: task.targetLanguage.name,
             token: token,
           );
+          if (result.length != lines.length) {
+            throw ProviderException(
+              '译文与原文条数对不上',
+              detail: '期望 ${lines.length} 条，实际收到 ${result.length} 条',
+              hint: '模型合并或丢弃了字幕行。流水线会自动减半批量重试。',
+              batchTooLarge: true,
+            );
+          }
         } on ProviderException catch (e) {
           // 只有「一批给太多了」才值得减半重试；网络和鉴权错误减半没有意义，
           // 直接失败让用户去修，已翻译的条目留在 document 里供续跑。
@@ -415,7 +433,9 @@ class TaskRunner {
 
     final dir = switch (options.outputLocation) {
       OutputLocation.custom =>
-        options.outputDir ?? File(task.sourcePath).parent.path,
+        options.outputDir?.trim().isNotEmpty == true
+            ? options.outputDir!.trim()
+            : File(task.sourcePath).parent.path,
       OutputLocation.besideSource => File(task.sourcePath).parent.path,
     };
     await Directory(dir).create(recursive: true);
@@ -496,8 +516,9 @@ class TaskRunner {
   /// 产物文件名里的语言标签：`demo.zh.srt`。
   ///
   /// 用语言代码而不是中文名 —— 中文名带不进跨平台安全的文件名。
-  static String _langTag(Language language) =>
-      language.isAuto ? 'src' : language.code.replaceAll(RegExp(r'[^\w-]+'), '_');
+  static String _langTag(Language language) => language.isAuto
+      ? 'src'
+      : language.code.replaceAll(RegExp(r'[^\w-]+'), '_');
 }
 
 /// 写进产物里的说话人标签。编号 0 起，显示 1 起。

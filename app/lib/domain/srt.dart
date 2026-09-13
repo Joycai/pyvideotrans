@@ -5,8 +5,8 @@ import 'cue.dart';
 /// 时间码格式 `00:00:01,200`（VTT 用 `.` 作小数点，解析时一并接受）。
 abstract final class Srt {
   static final _timeLine = RegExp(
-    r'(\d+):(\d{1,2}):(\d{1,2})[,.](\d{1,3})\s*-->\s*'
-    r'(\d+):(\d{1,2}):(\d{1,2})[,.](\d{1,3})',
+    r'^\s*((?:\d+:)?\d{1,2}:\d{1,2}[,.]\d{1,3})\s*-->\s*'
+    r'((?:\d+:)?\d{1,2}:\d{1,2}[,.]\d{1,3})(?:\s+.*)?\s*$',
   );
 
   /// 毫秒 → `00:00:01,200`。
@@ -22,10 +22,7 @@ abstract final class Srt {
 
   /// `01:02:03,450` → 毫秒。格式不合法时返回 null。
   static int? parseTimecode(String raw) {
-    final m = RegExp(r'^(\d+):(\d{1,2}):(\d{1,2})[,.](\d{1,3})$')
-        .firstMatch(raw.trim());
-    if (m == null) return null;
-    return _toMs(m, 1);
+    return _parseTimestamp(raw.trim());
   }
 
   /// 时长（不含毫秒），用于任务列表的 `48:12` / `1:32:05`。
@@ -59,8 +56,9 @@ abstract final class Srt {
       if (timeIndex < 0) continue;
 
       final m = _timeLine.firstMatch(lines[timeIndex])!;
-      final start = _toMs(m, 1);
-      final end = _toMs(m, 5);
+      final start = _parseTimestamp(m.group(1)!);
+      final end = _parseTimestamp(m.group(2)!);
+      if (start == null || end == null) continue;
 
       final body = lines.sublist(timeIndex + 1).join('\n').trim();
       if (body.isEmpty) continue;
@@ -128,7 +126,9 @@ abstract final class Srt {
     String Function(String)? wrapTranslation,
     String Function(int)? speakerLabel,
   }) {
-    final buffer = StringBuffer()..writeln('WEBVTT')..writeln();
+    final buffer = StringBuffer()
+      ..writeln('WEBVTT')
+      ..writeln();
     for (final cue in cues) {
       final text = textOf(
         cue,
@@ -171,8 +171,7 @@ abstract final class Srt {
     String Function(String)? wrapTranslation,
     String Function(int)? speakerLabel,
   }) {
-    String source() =>
-        wrapSource == null ? cue.source : wrapSource(cue.source);
+    String source() => wrapSource == null ? cue.source : wrapSource(cue.source);
     String translation() {
       final text = cue.translation ?? '';
       return wrapTranslation == null ? text : wrapTranslation(text);
@@ -209,13 +208,25 @@ abstract final class Srt {
     };
   }
 
-  static int _toMs(RegExpMatch m, int group) {
-    final frac = m.group(group + 3)!;
-    return int.parse(m.group(group)!) * 3600000 +
-        int.parse(m.group(group + 1)!) * 60000 +
-        int.parse(m.group(group + 2)!) * 1000 +
-        // VTT 允许 1–2 位小数，补齐到毫秒。
-        int.parse(frac.padRight(3, '0'));
+  static int? _parseTimestamp(String raw) {
+    final parts = raw.trim().split(RegExp(r'[:,.]'));
+    if (parts.length != 3 && parts.length != 4) return null;
+    final offset = parts.length == 4 ? 1 : 0;
+    final hours = offset == 1 ? int.tryParse(parts[0]) : 0;
+    final minutes = int.tryParse(parts[offset]);
+    final seconds = int.tryParse(parts[offset + 1]);
+    final fraction = int.tryParse(parts[offset + 2]);
+    if (hours == null ||
+        minutes == null ||
+        seconds == null ||
+        fraction == null) {
+      return null;
+    }
+    // SRT/VTT timestamps use 0..59 for minutes and seconds. Hours may grow
+    // beyond two digits for long recordings.
+    if (minutes > 59 || seconds > 59 || fraction > 999) return null;
+    final millis = int.parse(fraction.toString().padRight(3, '0'));
+    return hours * 3600000 + minutes * 60000 + seconds * 1000 + millis;
   }
 
   static String _pad(int v) => v.toString().padLeft(2, '0');

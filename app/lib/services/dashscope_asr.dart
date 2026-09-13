@@ -97,6 +97,9 @@ class DashScopeAsrProvider implements AsrProvider {
 
     onProgress(0, 1, note: '按静音切分音频');
     final clips = await splitter.split(audioPath, token: token);
+    if (clips.isEmpty) {
+      throw const ProviderException('未识别到语音', hint: '整段音频都是静音。确认音视频中确有人声。');
+    }
 
     final code = language.split('-').first.toLowerCase();
     final lang = code.isEmpty || code == 'auto' ? null : code;
@@ -189,7 +192,13 @@ class DashScopeAsrProvider implements AsrProvider {
     } finally {
       // 片段目录只是中转，识别完就删；续跑会重新切，切分点一样。
       final dir = File(clips.first.path).parent;
-      if (dir.existsSync()) dir.deleteSync(recursive: true);
+      if (dir.existsSync()) {
+        try {
+          dir.deleteSync(recursive: true);
+        } on FileSystemException {
+          // Cleanup failure must not hide the recognition result/error.
+        }
+      }
     }
 
     final failed = cp.pending.length;
