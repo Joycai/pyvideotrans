@@ -113,10 +113,7 @@ void main() {
       expect(find.text('a.srt'), findsOneWidget);
       expect(find.text('已选 2 个文件'), findsOneWidget);
       // 千位分隔：2416 和 2,416 的可读性差得很远。
-      expect(
-        find.textContaining('2 个文件 · 共 2,568 条'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('2 个文件 · 共 2,568 条'), findsOneWidget);
       expect(startEnabled(tester), isTrue);
     });
 
@@ -142,10 +139,7 @@ void main() {
       await open(tester, paths: ['/s/a.srt', '/s/broken.srt']);
       expect(find.text('已选 2 个文件，其中 1 个无法解析'), findsOneWidget);
       expect(find.text('无法解析，将跳过'), findsOneWidget);
-      expect(
-        find.textContaining('1 个文件 · 共 1,284 条'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('1 个文件 · 共 1,284 条'), findsOneWidget);
       expect(find.textContaining('1 个文件无法解析，将跳过'), findsOneWidget);
       expect(startEnabled(tester), isTrue);
     });
@@ -170,7 +164,8 @@ void main() {
       expect(find.text('已忽略 2 个音视频文件，音视频请用「新建转写」'), findsOneWidget);
       expect(find.text('已选 1 个文件'), findsOneWidget);
       expect(startEnabled(tester), isTrue);
-      expect(find.textContaining('已忽略 2 个音视频文件；'), findsOneWidget);
+      // 页脚不再重复「已忽略」：顶部提示条已经说过一次。
+      expect(find.textContaining('已忽略 2 个音视频文件；'), findsNothing);
     });
 
     testWidgets('「改用新建转写」把它们原样带过去', (tester) async {
@@ -216,9 +211,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('00:01:23,450 --> 00:01:26,100'), findsOneWidget);
 
-      final above = tester.widgetList<Text>(
-        find.textContaining('我们从第二章开始'),
-      );
+      final above = tester.widgetList<Text>(find.textContaining('我们从第二章开始'));
       expect(above, hasLength(1));
     });
 
@@ -235,7 +228,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('纯文本不保留双语排版'), findsOneWidget);
-      expect(find.text('00:01:23,450 --> 00:01:26,100'), findsNothing);
+      // 预览块还在，但回落成只剩译文一行。
+      expect(find.text("We'll start from chapter two"), findsNothing);
+      expect(find.text('我们从第二章开始'), findsOneWidget);
     });
 
     testWidgets('同目录时说清楚产物叫什么，双语带上两种语言', (tester) async {

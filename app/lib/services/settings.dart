@@ -64,6 +64,7 @@ class AppSettings extends ChangeNotifier {
   static const _kOutputFormat = 'outputFormat';
   static const _kBilingual = 'bilingualLayout';
   static const _kLastTranscribe = 'lastTranscribeOptions';
+  static const _kLastTranslate = 'lastTranslateOptions';
 
   Map<String, ProviderConfig> _configs = {};
 
@@ -94,8 +95,7 @@ class AppSettings extends ChangeNotifier {
   String get asrProviderId => _prefs.getString(_kAsrId) ?? 'openai';
   set asrProviderId(String v) => _write(_kAsrId, v);
 
-  String get translationProviderId =>
-      _prefs.getString(_kMtId) ?? 'deepseek';
+  String get translationProviderId => _prefs.getString(_kMtId) ?? 'deepseek';
   set translationProviderId(String v) => _write(_kMtId, v);
 
   String get sourceLanguage => _prefs.getString(_kSourceLang) ?? 'auto';
@@ -165,15 +165,28 @@ class AppSettings extends ChangeNotifier {
     cjkLineLength: cjkLineLength,
     latinLineLength: latinLineLength,
     format: outputFormat,
-    outputLocation:
-        outputDir == null ? OutputLocation.besideSource : OutputLocation.custom,
+    outputLocation: outputDir == null
+        ? OutputLocation.besideSource
+        : OutputLocation.custom,
     outputDir: outputDir,
   );
 
   /// 最近一次成功提交的「新建转写」参数，供页面上的「上次参数」整份填回。
   /// 只留最近一份；没有或存档损坏时为 null。
-  TaskOptions? get lastTranscribeOptions {
-    final raw = _prefs.getString(_kLastTranscribe);
+  TaskOptions? get lastTranscribeOptions => _readLastOptions(_kLastTranscribe);
+
+  set lastTranscribeOptions(TaskOptions? v) =>
+      _writeLastOptions(_kLastTranscribe, v);
+
+  /// 最近一次成功提交的「翻译」参数。与转写分开存：两边的语言方向、
+  /// 服务与排版习惯往往不同，共用一份会互相覆盖。
+  TaskOptions? get lastTranslateOptions => _readLastOptions(_kLastTranslate);
+
+  set lastTranslateOptions(TaskOptions? v) =>
+      _writeLastOptions(_kLastTranslate, v);
+
+  TaskOptions? _readLastOptions(String key) {
+    final raw = _prefs.getString(key);
     if (raw == null) return null;
     try {
       return TaskOptions.fromJson(
@@ -185,11 +198,11 @@ class AppSettings extends ChangeNotifier {
     }
   }
 
-  set lastTranscribeOptions(TaskOptions? v) {
+  void _writeLastOptions(String key, TaskOptions? v) {
     if (v == null) {
-      _prefs.remove(_kLastTranscribe);
+      _prefs.remove(key);
     } else {
-      _prefs.setString(_kLastTranscribe, jsonEncode(v.toJson()));
+      _prefs.setString(key, jsonEncode(v.toJson()));
     }
     // 不 notify：这份参数只被「上次参数」按钮读取，不影响任何常显内容。
   }
@@ -240,9 +253,7 @@ class AppSettings extends ChangeNotifier {
     };
     _prefs.setString(
       _kConfigs,
-      jsonEncode({
-        for (final e in _configs.entries) e.key: e.value.toJson(),
-      }),
+      jsonEncode({for (final e in _configs.entries) e.key: e.value.toJson()}),
     );
   }
 
@@ -253,9 +264,7 @@ class AppSettings extends ChangeNotifier {
     _configs = {..._configs, providerId: config};
     _prefs.setString(
       _kConfigs,
-      jsonEncode({
-        for (final e in _configs.entries) e.key: e.value.toJson(),
-      }),
+      jsonEncode({for (final e in _configs.entries) e.key: e.value.toJson()}),
     );
     notifyListeners();
   }

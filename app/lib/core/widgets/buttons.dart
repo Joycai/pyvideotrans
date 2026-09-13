@@ -297,6 +297,7 @@ class SegmentedToggle<T> extends StatelessWidget {
     required this.segments,
     required this.value,
     required this.onChanged,
+    this.fill = false,
   });
 
   /// [enabled] 为 false 的段仍然显示 —— 灰掉但可读，理由由调用方在旁边说明。
@@ -304,6 +305,10 @@ class SegmentedToggle<T> extends StatelessWidget {
   final List<({T value, String label, bool enabled})> segments;
   final T value;
   final ValueChanged<T> onChanged;
+
+  /// 撑满父级、各段等宽（页面 400px 参数面板里的用法）。这时不画选中对勾，
+  /// 「双语 · 译文在上」这样的长标签加上对勾会挤不下；选中态靠底色区分。
+  final bool fill;
 
   @override
   Widget build(BuildContext context) {
@@ -323,14 +328,13 @@ class SegmentedToggle<T> extends StatelessWidget {
         boxShadow: e.controlShadow,
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
         children: [
-          for (final (i, seg) in segments.indexed)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (i > 0) VerticalDivider(width: 1, color: cs.outlineVariant),
-                Material(
+          for (final (i, seg) in segments.indexed) ...[
+            if (i > 0) VerticalDivider(width: 1, color: cs.outlineVariant),
+            _maybeExpand(
+              fill,
+              Material(
                   color: seg.value == value
                       ? cs.secondaryContainer
                       : Colors.transparent,
@@ -343,14 +347,14 @@ class SegmentedToggle<T> extends StatelessWidget {
                       alpha: AppStateLayer.hover,
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      padding: EdgeInsets.symmetric(horizontal: fill ? 6 : 14),
                       child: SizedBox(
                         height: 34,
                         child: Center(
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (seg.value == value) ...[
+                              if (seg.value == value && !fill) ...[
                                 Icon(
                                   Symbols.check,
                                   size: 18,
@@ -359,16 +363,20 @@ class SegmentedToggle<T> extends StatelessWidget {
                                 ),
                                 const SizedBox(width: AppSpacing.s1 + 2),
                               ],
-                              Text(
-                                seg.label,
-                                style: context.texts.labelLarge?.copyWith(
-                                  color: seg.value == value
-                                      ? cs.onSecondaryContainer
-                                      : seg.enabled
-                                      ? cs.onSurface
-                                      : cs.onSurface.withValues(
-                                          alpha: AppStateLayer.disabledContent,
-                                        ),
+                              Flexible(
+                                child: Text(
+                                  seg.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: context.texts.labelLarge?.copyWith(
+                                    color: seg.value == value
+                                        ? cs.onSecondaryContainer
+                                        : seg.enabled
+                                        ? cs.onSurface
+                                        : cs.onSurface.withValues(
+                                            alpha: AppStateLayer.disabledContent,
+                                          ),
+                                  ),
                                 ),
                               ),
                             ],
@@ -378,12 +386,15 @@ class SegmentedToggle<T> extends StatelessWidget {
                     ),
                   ),
                 ),
-              ],
             ),
+          ],
         ],
       ),
     );
   }
+
+  static Widget _maybeExpand(bool fill, Widget child) =>
+      fill ? Expanded(child: child) : child;
 }
 
 /// 过滤筹码：选中用 secondaryContainer 实底 + 对勾，未选中用描边。
