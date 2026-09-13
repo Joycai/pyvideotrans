@@ -452,8 +452,9 @@ class TaskRunner {
 
     final wrapSource = wrapper(task.sourceLanguage);
     final wrapTranslation = wrapper(task.targetLanguage);
-    // 说话人标签跟着源语言走：中日韩「说话人1：」，其他「Speaker 1: 」。
-    final speakerLabel = speakerLabelFor(task.sourceLanguage);
+    // 说话人标签跟着源语言走：中日韩「说话人1：」，其他「Speaker 1: 」；
+    // 在编辑器里起过名字的写名字，关掉了标签就不写。
+    final speakerLabel = task.document.speakerLabeler(task.sourceLanguage);
 
     Future<void> write(String tag, SrtField field) async {
       final content = switch (format) {
@@ -518,7 +519,3 @@ class TaskRunner {
       ? 'src'
       : language.code.replaceAll(RegExp(r'[^\w-]+'), '_');
 }
-
-/// 写进产物里的说话人标签。编号 0 起，显示 1 起。
-String Function(int) speakerLabelFor(Language language) =>
-    language.cjk ? (n) => '说话人${n + 1}：' : (n) => 'Speaker ${n + 1}: ';

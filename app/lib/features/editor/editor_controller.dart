@@ -6,11 +6,12 @@ import '../../domain/cue.dart';
 import '../../domain/language.dart';
 import '../../domain/line_wrap.dart';
 import '../../domain/srt.dart';
-import '../../domain/task.dart';
 import '../../domain/task_options.dart';
+import '../../services/editor_store.dart';
 import '../../services/provider_api.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
+import 'editor_session.dart';
 
 /// 原文 / 译文 / 双语。
 enum CueView { source, translation, both }
@@ -19,24 +20,63 @@ enum CueView { source, translation, both }
 enum CueFilter {
   all('全部'),
   review('待校对'),
-  untranslated('未翻译');
+  untranslated('未翻译'),
+  unpaired('未配对');
 
   const CueFilter(this.label);
 
   final String label;
 }
 
+/// 界面上显示的状态。整份文档都没有译文时（只挂了原文），「未翻译」没有
+/// 意义，按置信度与校对标记显示成「待校对」或「已校对」。
+CueState displayStateOf(Cue cue, {required bool translated}) {
+  final state = cue.state;
+  if (translated || state != CueState.untranslated) return state;
+  final low = cue.confidence != null && cue.confidence! < Cue.lowConfidence;
+  return low && !cue.reviewed ? CueState.review : CueState.ok;
+}
+
+/// 名单上的一位说话人，带上界面要显示的统计。
+class SpeakerSummary {
+  const SpeakerSummary({
+    required this.id,
+    required this.name,
+    required this.named,
+    required this.cueCount,
+    required this.durationMs,
+  });
+
+  final int id;
+
+  /// 显示名：起过名字的用名字，否则「说话人N」。
+  final String name;
+
+  /// 用户（或导入的标签）起过名字。
+  final bool named;
+
+  final int cueCount;
+  final int durationMs;
+}
+
 /// 编辑器的状态与操作。文档是不可变的，每次改动换一份新的 —— 撤销栈因此
 /// 只需要存快照，不用记反向操作。
 class EditorController extends ChangeNotifier {
-  EditorController({required this.task, required this.settings});
+  EditorController({required this.session, required this.settings, this.store})
+    : _saved = session.document;
 
-  final SubtitleTask task;
+  final EditorSession session;
   final AppSettings settings;
+
+  /// 本地会话保存时顺带写附加状态；为空就不写。
+  final EditorStore? store;
 
   CueView view = CueView.both;
   CueFilter filter = CueFilter.all;
   String search = '';
+
+  /// 说话人筛选，可多选。空集表示不按说话人筛；集合里的 null 表示「无说话人」。
+  Set<int?> speakerFilter = {};
 
   /// 当前选中条在**完整文档**里的下标。
   int selected = 0;
@@ -47,19 +87,48 @@ class EditorController extends ChangeNotifier {
   final List<SubtitleDocument> _undo = [];
   static const _undoLimit = 50;
 
-  SubtitleDocument get document => task.document;
+  /// 上次保存时的文档。文档不可变，比较引用就知道有没有改过。
+  SubtitleDocument _saved;
+  int _editsSinceSave = 0;
+
+  SubtitleDocument get document => session.document;
 
   bool get canUndo => _undo.isNotEmpty;
 
+  /// 本地会话里还没保存的修改数。任务会话随任务自动写盘，恒为 0。
+  int get unsavedEdits {
+    if (session is! FileSession || identical(document, _saved)) return 0;
+    return _editsSinceSave < 1 ? 1 : _editsSinceSave;
+  }
+
+  /// 文档里有没有任何译文。只挂了原文的会话没有，这时「未翻译」不算一种
+  /// 状态，列表按有没有校对来显示。
+  bool get hasTranslations => document.cues.any((c) => c.hasTranslation);
+
+  /// 还没有译文、且有原文可翻的条数：「翻译未译 N 条」。
+  int get missingTranslationCount => document.cues
+      .where((c) => !c.hasTranslation && c.source.trim().isNotEmpty)
+      .length;
+
+  /// 界面上显示的状态。见 [displayStateOf]。
+  CueState displayState(Cue cue) =>
+      displayStateOf(cue, translated: hasTranslations);
+
   List<Cue> get visibleCues {
     final needle = search.trim().toLowerCase();
+    final translated = hasTranslations;
     return document.cues.where((cue) {
+      final state = displayStateOf(cue, translated: translated);
       final passesFilter = switch (filter) {
         CueFilter.all => true,
-        CueFilter.review => cue.state == CueState.review,
-        CueFilter.untranslated => cue.state == CueState.untranslated,
+        CueFilter.review => state == CueState.review,
+        CueFilter.untranslated => state == CueState.untranslated,
+        CueFilter.unpaired => state == CueState.unpaired,
       };
       if (!passesFilter) return false;
+      if (speakerFilter.isNotEmpty && !speakerFilter.contains(cue.speaker)) {
+        return false;
+      }
       if (needle.isEmpty) return true;
       return cue.source.toLowerCase().contains(needle) ||
           (cue.translation ?? '').toLowerCase().contains(needle);
@@ -70,11 +139,47 @@ class EditorController extends ChangeNotifier {
       ? document.cues[selected]
       : null;
 
-  int countOf(CueFilter f) => switch (f) {
-    CueFilter.all => document.cues.length,
-    CueFilter.review => document.reviewCount,
-    CueFilter.untranslated => document.untranslatedCount,
-  };
+  int countOf(CueFilter f) {
+    if (f == CueFilter.all) return document.cues.length;
+    final translated = hasTranslations;
+    final want = switch (f) {
+      CueFilter.review => CueState.review,
+      CueFilter.untranslated => CueState.untranslated,
+      _ => CueState.unpaired,
+    };
+    return document.cues
+        .where((c) => displayStateOf(c, translated: translated) == want)
+        .length;
+  }
+
+  /// 说话人名单，按编号排。
+  List<SpeakerSummary> get speakers {
+    final counts = <int, int>{};
+    final durations = <int, int>{};
+    for (final cue in document.cues) {
+      final s = cue.speaker;
+      if (s == null) continue;
+      counts[s] = (counts[s] ?? 0) + 1;
+      durations[s] = (durations[s] ?? 0) + cue.durationMs;
+    }
+    return [
+      for (final id in document.speakerIds)
+        SpeakerSummary(
+          id: id,
+          name: document.speakerName(id),
+          named: document.speakers.containsKey(id),
+          cueCount: counts[id] ?? 0,
+          durationMs: durations[id] ?? 0,
+        ),
+    ];
+  }
+
+  /// 当前条所在的同一人连续段有几条，给「连续 N 条」用。
+  int get currentRunLength {
+    if (current == null) return 0;
+    final run = document.speakerRun(selected);
+    return run.end - run.start + 1;
+  }
 
   void setView(CueView v) {
     view = v;
@@ -88,6 +193,18 @@ class EditorController extends ChangeNotifier {
 
   void setSearch(String s) {
     search = s;
+    notifyListeners();
+  }
+
+  void setSpeakerFilter(Set<int?> speakers) {
+    speakerFilter = {...speakers};
+    notifyListeners();
+  }
+
+  void toggleSpeakerFilter(int? speaker) {
+    final next = {...speakerFilter};
+    if (!next.remove(speaker)) next.add(speaker);
+    speakerFilter = next;
     notifyListeners();
   }
 
@@ -115,23 +232,30 @@ class EditorController extends ChangeNotifier {
 
   void _push() {
     _undo.add(document);
+    _editsSinceSave++;
     if (_undo.length > _undoLimit) _undo.removeAt(0);
+  }
+
+  /// 改文档的操作都走这里：先存快照再换新文档。没变化就什么都不做，
+  /// 免得撤销栈里堆一份一模一样的快照。
+  void _commit(SubtitleDocument next) {
+    if (identical(next, document)) return;
+    _push();
+    session.document = next;
+    notifyListeners();
   }
 
   void undo() {
     if (_undo.isEmpty) return;
-    task.document = _undo.removeLast();
+    session.document = _undo.removeLast();
+    if (_editsSinceSave > 0) _editsSinceSave--;
     selected = document.cues.isEmpty
         ? 0
         : selected.clamp(0, document.cues.length - 1);
     notifyListeners();
   }
 
-  void _replaceCurrent(Cue cue) {
-    _push();
-    task.document = document.replaceAt(selected, cue);
-    notifyListeners();
-  }
+  void _replaceCurrent(Cue cue) => _commit(document.replaceAt(selected, cue));
 
   void editSource(String text) {
     final cue = current;
@@ -170,19 +294,109 @@ class EditorController extends ChangeNotifier {
   void split() {
     final cue = current;
     if (cue == null || cue.source.length < 2) return;
-    _push();
-    task.document = document.splitAt(selected, cue.source.length ~/ 2);
-    notifyListeners();
+    _commit(document.splitAt(selected, cue.source.length ~/ 2));
   }
 
   void mergeWithNext() {
     if (selected >= document.cues.length - 1) return;
-    _push();
-    task.document = document.mergeWithNext(selected, cjk: _isCjk);
-    notifyListeners();
+    _commit(document.mergeWithNext(selected, cjk: _isCjk));
   }
 
-  bool get _isCjk => task.sourceLanguage.cjk;
+  /// 并入上一条 —— 未配对的译文行最常用。
+  void mergeWithPrevious() {
+    if (selected <= 0 || selected >= document.cues.length) return;
+    selected--;
+    mergeWithNext();
+  }
+
+  bool get _isCjk => session.sourceLanguage.cjk;
+
+  /// 改名。名字清空回到「说话人N」。
+  void renameSpeaker(int id, String name) =>
+      _commit(document.renameSpeaker(id, name));
+
+  /// 把 [from] 的字幕全部并到 [into] 名下；筛选里的 [from] 也跟着换成 [into]。
+  void mergeSpeaker(int from, int into) {
+    if (from == into) return;
+    if (speakerFilter.contains(from)) {
+      speakerFilter = {
+        for (final s in speakerFilter) s == from ? into : s,
+      };
+    }
+    _commit(document.mergeSpeaker(from, into));
+  }
+
+  /// 新增一位说话人，返回编号。名字为空时记成「说话人N」，否则一位没有
+  /// 字幕也没有名字的说话人在名单里无从存在。
+  int addSpeaker(String name) {
+    final id = document.nextSpeakerId;
+    final trimmed = name.trim();
+    _commit(
+      document.renameSpeaker(
+        id,
+        trimmed.isEmpty ? document.speakerName(id) : trimmed,
+      ),
+    );
+    return id;
+  }
+
+  /// 把当前条改给 [speaker]（null 为清除）。[run] 为真时改的是当前条所在的
+  /// 同一人连续段 —— 识别在换人处切歪时往往一连错好几条。
+  void assignSpeaker(int? speaker, {bool run = false}) {
+    if (current == null) return;
+    final range = run
+        ? document.speakerRun(selected)
+        : (start: selected, end: selected);
+    final positions = [
+      for (var i = range.start; i <= range.end; i++)
+        if (document.cues[i].speaker != speaker) i,
+    ];
+    if (positions.isEmpty) return;
+    _commit(document.assignSpeaker(positions, speaker));
+  }
+
+  /// 导出时是否写说话人标签。
+  void setSpeakerLabels(bool on) {
+    if (document.speakerLabels == on) return;
+    _commit(document.copyWith(speakerLabels: on));
+  }
+
+  /// 卸载译文：清空文档里的译文、删掉未配对行。可以撤销；译文文件本身不动。
+  void unmountTranslation() {
+    if (session is! FileSession) return;
+    if (!document.cues.any((c) => c.hasTranslation)) return;
+    _commit(document.withoutTranslations());
+    selected = document.cues.isEmpty
+        ? 0
+        : selected.clamp(0, document.cues.length - 1);
+  }
+
+  /// 保存本地会话，返回写了哪些文件。任务会话自动保存，这里什么都不做。
+  Future<List<String>> save() async {
+    final s = session;
+    if (s is! FileSession) return const [];
+    final saving = document;
+    final written = await s.save();
+    _saved = saving;
+    _editsSinceSave = 0;
+    await store?.saveFileState(
+      sourcePath: s.sourcePath,
+      translationPath: s.translationPath,
+      document: saving,
+    );
+    notifyListeners();
+    return written;
+  }
+
+  TranslationProvider _translationProvider() {
+    final options = session.options;
+    return Registry.buildTranslation(
+      options.translationProviderId,
+      settings,
+      model: options.translationModel,
+      guidance: options.translationGuidance,
+    );
+  }
 
   /// 重新翻译某一条。失败时把错误抛给调用方去弹 SnackBar。
   Future<void> retranslate(int indexInDocument) async {
@@ -190,16 +404,10 @@ class EditorController extends ChangeNotifier {
     translating.add(indexInDocument);
     notifyListeners();
     try {
-      final provider = Registry.buildTranslation(
-        task.translationProviderId,
-        settings,
-        model: task.options.translationModel,
-        guidance: task.options.translationGuidance,
-      );
-      final result = await provider.translateBatch(
+      final result = await _translationProvider().translateBatch(
         lines: [cue.source],
-        sourceLanguage: task.sourceLanguage.name,
-        targetLanguage: task.targetLanguage.name,
+        sourceLanguage: session.sourceLanguage.name,
+        targetLanguage: session.targetLanguage.name,
         token: CancellationToken(),
       );
       if (result.length != 1) {
@@ -208,10 +416,11 @@ class EditorController extends ChangeNotifier {
           hint: '模型没有返回恰好一条译文，请稍后重试。',
         );
       }
-      _push();
-      task.document = document.replaceAt(
-        indexInDocument,
-        cue.copyWith(translation: result.single, reviewed: false),
+      _commit(
+        document.replaceAt(
+          indexInDocument,
+          cue.copyWith(translation: result.single, reviewed: false),
+        ),
       );
     } finally {
       translating.remove(indexInDocument);
@@ -220,21 +429,18 @@ class EditorController extends ChangeNotifier {
   }
 
   /// 翻译所有还没有译文的条目。返回翻了多少条。
+  ///
+  /// 未配对行没有原文，不送去翻译；识别跳过留下的空原文同理。
   Future<int> translateMissing() async {
     final pending = [
       for (final (i, c) in document.cues.indexed)
-        if (!c.hasTranslation) i,
+        if (!c.hasTranslation && c.source.trim().isNotEmpty) i,
     ];
     if (pending.isEmpty) return 0;
 
-    final provider = Registry.buildTranslation(
-      task.translationProviderId,
-      settings,
-      model: task.options.translationModel,
-      guidance: task.options.translationGuidance,
-    );
+    final provider = _translationProvider();
     final token = CancellationToken();
-    final batchSize = task.options.translationBatchSize;
+    final batchSize = session.options.translationBatchSize;
     final cues = [...document.cues];
     _push();
 
@@ -245,8 +451,8 @@ class EditorController extends ChangeNotifier {
       );
       final result = await provider.translateBatch(
         lines: [for (final i in slice) cues[i].source],
-        sourceLanguage: task.sourceLanguage.name,
-        targetLanguage: task.targetLanguage.name,
+        sourceLanguage: session.sourceLanguage.name,
+        targetLanguage: session.targetLanguage.name,
         token: token,
       );
       if (result.length != slice.length) {
@@ -259,7 +465,7 @@ class EditorController extends ChangeNotifier {
       for (final (j, i) in slice.indexed) {
         cues[i] = cues[i].copyWith(translation: result[j]);
       }
-      task.document = document.copyWith(cues: cues);
+      session.document = document.copyWith(cues: cues);
       notifyListeners();
     }
     return pending.length;
@@ -267,22 +473,16 @@ class EditorController extends ChangeNotifier {
 
   /// 导出到源文件所在目录（或设置里指定的输出目录）。返回写出的路径。
   Future<List<String>> export(Set<SrtField> fields) async {
-    final options = task.options;
+    final options = session.options;
     if (!options.format.implemented) {
       throw const ProviderException(
         '当前字幕格式尚未实施',
         hint: '先在任务参数中选择 SRT、WebVTT 或纯文本。',
       );
     }
-    final dir = switch (options.outputLocation) {
-      OutputLocation.custom =>
-        options.outputDir?.trim().isNotEmpty == true
-            ? options.outputDir!.trim()
-            : File(task.sourcePath).parent.path,
-      OutputLocation.besideSource => File(task.sourcePath).parent.path,
-    };
+    final dir = session.exportDir;
     await Directory(dir).create(recursive: true);
-    final stem = task.fileName.replaceAll(RegExp(r'\.[^.]*$'), '');
+    final stem = session.exportStem;
     final written = <String>[];
 
     String Function(String) wrap(Language language) {
@@ -292,8 +492,9 @@ class EditorController extends ChangeNotifier {
       return (text) => LineWrap.wrap(text, limit: limit, cjk: language.cjk);
     }
 
-    final wrapSource = wrap(task.sourceLanguage);
-    final wrapTranslation = wrap(task.targetLanguage);
+    final wrapSource = wrap(session.sourceLanguage);
+    final wrapTranslation = wrap(session.targetLanguage);
+    final speakerLabel = document.speakerLabeler(session.sourceLanguage);
 
     for (final field in fields) {
       final content = switch (options.format) {
@@ -302,22 +503,29 @@ class EditorController extends ChangeNotifier {
           field: field,
           wrapSource: wrapSource,
           wrapTranslation: wrapTranslation,
+          speakerLabel: speakerLabel,
         ),
         SubtitleFormat.vtt => Srt.serializeVtt(
           document.cues,
           field: field,
           wrapSource: wrapSource,
           wrapTranslation: wrapTranslation,
+          speakerLabel: speakerLabel,
         ),
-        SubtitleFormat.txt => Srt.serializePlain(document.cues, field: field),
+        SubtitleFormat.txt => Srt.serializePlain(
+          document.cues,
+          field: field,
+          speakerLabel: speakerLabel,
+        ),
         SubtitleFormat.ass => '',
       };
       if (content.trim().isEmpty) continue;
       final suffix = switch (field) {
-        SrtField.source => _tag(task.sourceLanguage.code),
-        SrtField.translation => _tag(task.targetLanguage.code),
+        SrtField.source => _tag(session.sourceLanguage.code),
+        SrtField.translation => _tag(session.targetLanguage.code),
         SrtField.bilingualTargetAbove || SrtField.bilingualTargetBelow =>
-          '${_tag(task.sourceLanguage.code)}-${_tag(task.targetLanguage.code)}',
+          '${_tag(session.sourceLanguage.code)}-'
+              '${_tag(session.targetLanguage.code)}',
       };
       final path = '$dir/$stem.$suffix.${options.format.extension}';
       await File(path).writeAsString(content);

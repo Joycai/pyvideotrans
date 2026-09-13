@@ -143,6 +143,82 @@ abstract final class Languages {
     return byCode(value) ?? byName(value) ?? _legacy(value.trim()) ?? auto;
   }
 
+  /// 文件名里常见、但不是标准代码的语言段。
+  static const _fileTagAliases = {
+    'chs': 'zh',
+    'sc': 'zh',
+    'cn': 'zh',
+    'zh-cn': 'zh',
+    'zh-hans': 'zh',
+    'cht': 'zh-tw',
+    'tc': 'zh-tw',
+    'zh-hant': 'zh-tw',
+    'eng': 'en',
+    'jp': 'ja',
+    'jpn': 'ja',
+    'kr': 'ko',
+    'kor': 'ko',
+  };
+
+  /// 把文件名里的一段语言标签认成语言：`zh`、`en-US`、`chs`。认不出返回 null。
+  static Language? fromTag(String tag) {
+    final lower = tag.trim().toLowerCase().replaceAll('_', '-');
+    if (lower.isEmpty || lower == autoCode) return null;
+    final code = _fileTagAliases[lower] ?? lower;
+    return byCode(code) ?? byCode(code.split('-').first);
+  }
+
+  /// 从文件名认语言：`interview.zh.srt`、`demo.en-US.vtt`、`ep1.chs.srt`。
+  /// 只看主干之后、扩展名之前的那几段，从后往前找第一段认得出的。
+  static Language? fromFileName(String path) {
+    final parts = path.split(RegExp(r'[/\\]')).last.split('.');
+    if (parts.length < 3) return null;
+    for (final tag in parts.sublist(1, parts.length - 1).reversed) {
+      final language = fromTag(tag);
+      if (language != null) return language;
+    }
+    return null;
+  }
+
+  /// 按文字粗略猜语言：假名多 → 日语，谚文多 → 韩语，汉字为主 → 简体中文，
+  /// 常见英文虚词够多 → 英语。其余拉丁文字分不清，返回 null 让用户自己选。
+  static Language? guessFromText(String text) {
+    var han = 0;
+    var kana = 0;
+    var hangul = 0;
+    var letters = 0;
+    for (final rune in text.runes) {
+      if (rune >= 0x3040 && rune <= 0x30FF) {
+        kana++;
+      } else if (rune >= 0xAC00 && rune <= 0xD7AF) {
+        hangul++;
+      } else if (rune >= 0x4E00 && rune <= 0x9FFF) {
+        han++;
+      } else if ((rune | 0x20) >= 0x61 && (rune | 0x20) <= 0x7A) {
+        letters++;
+      }
+    }
+    final cjk = han + kana + hangul;
+    // 一个英文词平均四五个字母，中文里夹几个产品名不该把它判成英语。
+    if (cjk > 0 && cjk * 3 >= letters) {
+      if (kana * 10 >= cjk) return byCode('ja');
+      if (hangul * 2 >= cjk) return byCode('ko');
+      return byCode('zh');
+    }
+    final words = text
+        .toLowerCase()
+        .split(RegExp(r"[^a-z']+"))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    if (words.length < 5) return null;
+    const common = {
+      'the', 'and', 'to', 'of', 'a', 'is', 'you', 'that', //
+      'it', 'in', 'i', 'we', 'this', 'for', 'what',
+    };
+    final hits = words.where(common.contains).length;
+    return hits * 100 >= words.length * 12 ? byCode('en') : null;
+  }
+
   /// 旧版本设置里用过、但不在表里的写法。
   static Language? _legacy(String value) => switch (value) {
     '中文' || '中文（简体）' => byCode('zh'),
