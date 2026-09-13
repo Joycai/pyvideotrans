@@ -353,9 +353,10 @@ void main() {
     required PageChrome Function() chrome,
     required Widget child,
     String? note,
+    Size size = const Size(1440, 900),
   }) async {
     tester.view
-      ..physicalSize = const Size(1440, 900)
+      ..physicalSize = size
       ..devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
@@ -386,6 +387,7 @@ void main() {
     required Brightness brightness,
     required String file,
     bool withTranslation = true,
+    Size size = const Size(1440, 900),
   }) async {
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
@@ -404,6 +406,7 @@ void main() {
     await pumpShell(
       tester,
       brightness: brightness,
+      size: size,
       note: editorStatusNote(controller),
       chrome: () => PageChrome(
         title: '编辑器',
@@ -432,6 +435,15 @@ void main() {
 
   testWidgets('编辑器 · 本地会话 · 深色', (tester) async {
     await pumpLocal(tester, brightness: Brightness.dark, file: 'editor_local_dark');
+  });
+
+  testWidgets('编辑器 · 本地会话 · 窄窗口', (tester) async {
+    await pumpLocal(
+      tester,
+      brightness: Brightness.light,
+      file: 'editor_local_narrow',
+      size: const Size(1080, 760),
+    );
   });
 
   testWidgets('编辑器 · 只有原文', (tester) async {

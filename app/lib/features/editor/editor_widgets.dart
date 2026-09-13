@@ -285,6 +285,11 @@ class FileIconBox extends StatelessWidget {
   );
 }
 
+/// 窗口窄于 1100 时编辑页收紧：检视面板 380px、说话人列只留徽标、
+/// 原文 / 译文 / 双语收进「视图」下拉。按窗口算，顶栏与正文用同一个判断。
+bool isCompactEditor(BuildContext context) =>
+    MediaQuery.sizeOf(context).width < 1100;
+
 /// 相对时间的「现在」。截图测试把它钉死，否则「今天 / 昨天」每天都变。
 @visibleForTesting
 DateTime Function() editorClock = DateTime.now;
