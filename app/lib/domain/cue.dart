@@ -149,8 +149,10 @@ class SubtitleDocument {
   SubtitleDocument splitAt(int position, int charOffset) {
     final cue = cues[position];
     final text = cue.source;
-    final cut = charOffset.clamp(1, text.length - 1);
+    // 先判长度：不足两个字时 clamp 的下限会大于上限，直接抛 ArgumentError。
+    // 识别被跳过的段会留下空文本的占位条，正好会走到这里。
     if (text.length < 2) return this;
+    final cut = charOffset.clamp(1, text.length - 1);
 
     final ratio = cut / text.length;
     final mid = cue.startMs + (cue.durationMs * ratio).round();

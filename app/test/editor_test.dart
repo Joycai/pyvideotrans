@@ -153,6 +153,17 @@ void main() {
       expect(c.document.cues.first.source, '第一句话在这里');
     });
 
+    test('不足两个字的字幕拆分是空操作，不会抛异常', () {
+      const doc = SubtitleDocument(
+        cues: [
+          Cue(index: 1, startMs: 0, endMs: 1000, source: ''),
+          Cue(index: 2, startMs: 1000, endMs: 2000, source: '嗯'),
+        ],
+      );
+      expect(doc.splitAt(0, 0).cues, hasLength(2));
+      expect(doc.splitAt(1, 1).cues, hasLength(2));
+    });
+
     test('最后一条不能合并下一条', () async {
       final c = await _controller()
         ..select(2);
