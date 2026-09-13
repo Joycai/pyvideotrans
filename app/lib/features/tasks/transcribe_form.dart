@@ -334,9 +334,9 @@ class TranscribeFormController extends ChangeNotifier {
 // 平铺、用 1px 分隔线隔开（flat）。字段、文案、校验完全相同。
 // ═══════════════════════════════════════════════════════════════════════
 
-String serviceLabel(ProviderInfo? info, String? model) {
+String serviceLabel(ProviderInfo? info, String? model, AppSettings settings) {
   if (info == null) return '—';
-  final chosen = model ?? info.defaultModel ?? '';
+  final chosen = resolvedModel(info, model, settings);
   return chosen.isEmpty ? info.name : '${info.name} · $chosen';
 }
 
@@ -387,7 +387,7 @@ class TranscribeRecognizeSection extends StatelessWidget {
       child: AppDropdown<String>(
         value: o.asrProviderId,
         error: readiness.isBlocked,
-        display: serviceLabel(info, o.asrModel),
+        display: serviceLabel(info, o.asrModel, form.settings),
         groups: providerGroups(
           Registry.asr,
           (id) => ProviderReadiness.asr(id, form.settings),

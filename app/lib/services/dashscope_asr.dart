@@ -131,9 +131,7 @@ class DashScopeAsrProvider implements AsrProvider {
               final wait =
                   retryAfter ?? backoff[waits.clamp(0, backoff.length - 1)];
               waits++;
-              progress(
-                '${reason.title}，等待 ${wait.inSeconds} 秒后重试第 ${i + 1} 段',
-              );
+              progress('${reason.title}，等待 ${wait.inSeconds} 秒后重试第 ${i + 1} 段');
               await _sleep(wait, token);
             case _Failed(:final error, :final fatal):
               lastError = '第 ${i + 1} 段：${error.detail ?? error.title}';
@@ -180,7 +178,8 @@ class DashScopeAsrProvider implements AsrProvider {
       throw ProviderException(
         '有 $failed 段识别失败',
         detail: lastError,
-        hint: '从识别阶段继续只会重试失败的段；同一段失败 '
+        hint:
+            '从识别阶段继续只会重试失败的段；同一段失败 '
             '${RecognitionCheckpoint.maxFailures} 次后会跳过并留下待校对的空字幕。',
       );
     }
@@ -215,10 +214,7 @@ class DashScopeAsrProvider implements AsrProvider {
     }
 
     if (cues.isEmpty) {
-      throw const ProviderException(
-        '未识别到语音',
-        hint: '确认音视频中确有人声，且所选语言与实际语言一致。',
-      );
+      throw const ProviderException('未识别到语音', hint: '确认音视频中确有人声，且所选语言与实际语言一致。');
     }
     return cues;
   }
@@ -408,7 +404,8 @@ class DashScopeAsrProvider implements AsrProvider {
     }
   }
 
-  static String _clip(String s) => s.length > 600 ? '${s.substring(0, 600)}…' : s;
+  static String _clip(String s) =>
+      s.length > 600 ? '${s.substring(0, 600)}…' : s;
 
   static String _statusTitle(int status, String vendor) => switch (status) {
     401 || 403 => '$vendor 拒绝了密钥',
@@ -420,7 +417,10 @@ class DashScopeAsrProvider implements AsrProvider {
 
   static String? _statusHint(int status) => switch (status) {
     401 || 403 => '核对 API Key 是否正确、是否已开通百炼服务。',
-    404 => '核对服务地址：默认为 https://dashscope.aliyuncs.com/api/v1。',
+    // 有些网关（如阿里云百炼的 token-plan 专属域名）对不存在的模型也回 404。
+    404 =>
+      '核对模型名是否在该服务上可用，以及服务地址（默认为 '
+          'https://dashscope.aliyuncs.com/api/v1）。',
     429 => '稍后从识别阶段继续，已识别的阶段不会重做。',
     400 || 422 => '核对模型名与语言设置；该模型可能不支持所选语种。',
     _ => null,
