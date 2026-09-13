@@ -296,7 +296,7 @@ class TaskRunner {
       task.stages[TaskStage.segment] = task.stages[TaskStage.segment]!.copyWith(
         note: '${merged.length} 条',
       );
-      task.note('断句完成，合并短句 $joined 处');
+      task.note('断句完成，合并短句 $joined 处，拆分过长字幕 ${result.split} 处');
     },
   );
 
