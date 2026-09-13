@@ -1,6 +1,7 @@
 import '../domain/speech_segments.dart';
 import 'audio_splitter.dart';
 import 'dashscope_asr.dart';
+import 'dashscope_filetrans.dart';
 import 'media.dart';
 import 'openai_compatible.dart';
 import 'provider_api.dart';
@@ -67,6 +68,11 @@ abstract final class Registry {
         'qwen3-asr-flash',
         'qwen-audio-3.0-asr-flash',
         'fun-asr-flash-2026-06-15',
+        // 「-filetrans」结尾的是异步整文件转写：先把音频上传到百炼的临时
+        // 存储，再提交任务轮询结果；不切片，一次拿回带时间戳（和说话人）
+        // 的整份结果。见 DashScopeFileTransProvider。
+        'qwen-audio-3.0-asr-flash-filetrans',
+        'qwen3-asr-flash-filetrans',
       ],
       // 文档：说话人分离只有 Qwen-Audio-3.0-ASR 与 Fun-ASR 两族支持。
       supportsDiarization: true,
@@ -176,6 +182,15 @@ abstract final class Registry {
     }
     final endpoint = settings.endpointFor(info);
     if (info.id == 'dashscope_qwen_asr') {
+      final resolved = _withModel(endpoint, model);
+      if (DashScopeFileTransProvider.isFileTransModel(resolved.model)) {
+        return DashScopeFileTransProvider(
+          info: info,
+          endpoint: resolved,
+          diarize: diarize,
+          media: media ?? Media(),
+        );
+      }
       return DashScopeAsrProvider(
         info: info,
         endpoint: _withModel(endpoint, model),

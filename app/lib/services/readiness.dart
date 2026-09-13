@@ -79,7 +79,7 @@ abstract final class ProviderReadiness {
         return Readiness(
           ReadinessLevel.advisory,
           message: '$chosen 不支持说话人分离',
-          hint: '换 qwen-audio-3.0-asr-flash 或 fun-asr 系列模型。',
+          hint: '换 qwen-audio-3.0-asr-flash（或其 -filetrans 版）、fun-asr 系列模型。',
         );
       }
     }

@@ -446,24 +446,41 @@ class DashScopeAsrProvider implements AsrProvider {
         : json['sentence'] is Map
         ? json['sentence'] as Map
         : null;
-    int clampMs(int ms) => ms.clamp(clip.startMs, clip.endMs);
-    int? speakerOf(Map m) => switch (m['speaker_id']) {
-      final int id => id,
-      final String s => int.tryParse(s),
-      _ => null,
-    };
-
+    final fallback = SegmentPiece(
+      startMs: clip.startMs,
+      endMs: clip.endMs,
+      text: text,
+      speaker: sentence == null ? null : speakerOf(sentence),
+    );
     final words = sentence?['words'];
-    if (words is! List || words.isEmpty) {
-      return [
-        SegmentPiece(
-          startMs: clip.startMs,
-          endMs: clip.endMs,
-          text: text,
-          speaker: sentence == null ? null : speakerOf(sentence),
-        ),
-      ];
-    }
+    if (words is! List || words.isEmpty) return [fallback];
+    final pieces = splitWords(
+      words,
+      offsetMs: clip.fileStartMs,
+      minMs: clip.startMs,
+      maxMs: clip.endMs,
+    );
+    // 词全是空的：退回整段。
+    return pieces.isEmpty ? [fallback] : pieces;
+  }
+
+  /// 百炼两种接口里的 `speaker_id` 都可能是数字或数字字符串。
+  static int? speakerOf(Map m) => switch (m['speaker_id']) {
+    final int id => id,
+    final String s => int.tryParse(s),
+    _ => null,
+  };
+
+  /// 把一串带时间戳的词攒成小块：换说话人、句末标点、超过
+  /// [_maxPieceMs] / [_maxPieceChars] 处断开。词时间加上 [offsetMs]
+  /// 后夹在 [minMs]..[maxMs] 之间。同步接口与录音文件转写共用。
+  static List<SegmentPiece> splitWords(
+    List<Object?> words, {
+    required int offsetMs,
+    required int minMs,
+    required int maxMs,
+  }) {
+    int clampMs(int ms) => ms.clamp(minMs, maxMs);
 
     final pieces = <SegmentPiece>[];
     StringBuffer? buffer;
@@ -496,10 +513,10 @@ class DashScopeAsrProvider implements AsrProvider {
       final punct = (raw['punctuation'] as String? ?? '').trim();
       if (wordText.isEmpty && punct.isEmpty) continue;
       final begin = clampMs(
-        clip.fileStartMs + ((raw['begin_time'] as num?)?.toInt() ?? 0),
+        offsetMs + ((raw['begin_time'] as num?)?.toInt() ?? 0),
       );
       final end = clampMs(
-        clip.fileStartMs + ((raw['end_time'] as num?)?.toInt() ?? begin),
+        offsetMs + ((raw['end_time'] as num?)?.toInt() ?? begin),
       );
       final speaker = speakerOf(raw);
 
@@ -524,18 +541,6 @@ class DashScopeAsrProvider implements AsrProvider {
       endsSentence = _sentenceEnd.hasMatch(punct);
     }
     flush();
-
-    // 词全是空的：退回整段。
-    if (pieces.isEmpty) {
-      return [
-        SegmentPiece(
-          startMs: clip.startMs,
-          endMs: clip.endMs,
-          text: text,
-          speaker: speakerOf(sentence!),
-        ),
-      ];
-    }
     return pieces;
   }
 

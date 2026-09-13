@@ -58,6 +58,10 @@ class RecognitionCheckpoint {
   /// 所以「已完成 / 总数」要用它而不是 [length]。
   int? total;
 
+  /// 异步整文件转写（阿里百炼 filetrans）已提交的任务号。中途停下再继续时
+  /// 直接查这个任务，不重新上传、不重新提交。
+  String? asyncTaskId;
+
   /// 一段最多失败几次，之后放弃并跳过。
   static const maxFailures = 3;
 
@@ -95,6 +99,7 @@ class RecognitionCheckpoint {
   void clear() {
     _segments.clear();
     total = null;
+    asyncTaskId = null;
   }
 
   /// 记一次失败。达到上限就放弃这一段。返回是否已放弃。
