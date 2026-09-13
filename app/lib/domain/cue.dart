@@ -57,6 +57,17 @@ class Cue {
     return CueState.ok;
   }
 
+  /// 两条字幕合并后的置信度：取较低的一方。
+  ///
+  /// 取平均会把一段低置信度的内容「稀释」掉，合并后不再标待校对；而合并后
+  /// 的字幕里确实含有可疑内容，仍该让人看一眼。编辑器与断句阶段共用这条规则。
+  static double? mergedConfidence(double? a, double? b) => switch ((a, b)) {
+    (final x?, final y?) => x < y ? x : y,
+    (final x?, null) => x,
+    (null, final y?) => y,
+    _ => null,
+  };
+
   Cue copyWith({
     int? index,
     int? startMs,
@@ -193,12 +204,7 @@ class SubtitleDocument {
           ? '${a.translation ?? ''}${cjk ? '' : ' '}${b.translation ?? ''}'
                 .trim()
           : null,
-      confidence: switch ((a.confidence, b.confidence)) {
-        (final x?, final y?) => (x + y) / 2,
-        (final x?, null) => x,
-        (null, final y?) => y,
-        _ => null,
-      },
+      confidence: Cue.mergedConfidence(a.confidence, b.confidence),
       reviewed: a.reviewed && b.reviewed,
     );
 

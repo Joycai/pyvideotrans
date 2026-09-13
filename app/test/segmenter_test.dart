@@ -62,6 +62,26 @@ void main() {
       expect(_times(result.cues), [(0, 2400)]);
     });
 
+    test('合并后置信度取较低的一方，低置信度短句仍标待校对', () {
+      final result = const Segmenter().run([
+        const Cue(
+          index: 1,
+          startMs: 0,
+          endMs: 2000,
+          source: '你好',
+          confidence: 0.95,
+        ),
+        const Cue(
+          index: 2,
+          startMs: 2100,
+          endMs: 2400,
+          source: '啊',
+          confidence: 0.3,
+        ),
+      ], cjk: true);
+      expect(result.cues.single.confidence, 0.3);
+    });
+
     test('换说话人不并', () {
       final result = const Segmenter().run([
         _cue(0, 2000, '你好', speaker: 0),

@@ -164,6 +164,13 @@ void main() {
       expect(doc.splitAt(1, 1).cues, hasLength(2));
     });
 
+    test('合并后置信度取较低的一方', () async {
+      final c = await _controller()
+        ..select(0);
+      c.mergeWithNext();
+      expect(c.document.cues.first.confidence, 0.50);
+    });
+
     test('最后一条不能合并下一条', () async {
       final c = await _controller()
         ..select(2);

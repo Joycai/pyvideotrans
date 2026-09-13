@@ -28,6 +28,7 @@ class Segmenter {
         merged[merged.length - 1] = last.copyWith(
           endMs: cue.endMs,
           source: '${last.source}${cjk ? '' : ' '}${cue.source}',
+          confidence: Cue.mergedConfidence(last.confidence, cue.confidence),
         );
         joined++;
       } else {
