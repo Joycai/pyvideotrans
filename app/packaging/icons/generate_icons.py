@@ -4,6 +4,7 @@
 只依赖 Pillow。跑一次会覆盖：
   macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_*.png
   windows/runner/resources/app_icon.ico
+  linux/icons/hicolor/<n>x<n>/apps/subtitle_studio.png（freedesktop hicolor 主题）
   packaging/icons/app_icon.icns          （dmg 卷图标）
   packaging/icons/app_icon_1024.png      （macOS 版，带透明边距）
   packaging/icons/app_icon_square_1024.png（Windows / Linux 版，满幅圆角）
@@ -170,6 +171,14 @@ def main() -> None:
     print("wrote", ico_path)
     square_icon(1024).save(OUT / "app_icon_square_1024.png")
     print("wrote", OUT / "app_icon_square_1024.png")
+
+    # ---- Linux hicolor ----
+    hicolor = ROOT / "linux/icons/hicolor"
+    for n in [16, 22, 24, 32, 48, 64, 128, 256, 512]:
+        d = hicolor / f"{n}x{n}" / "apps"
+        d.mkdir(parents=True, exist_ok=True)
+        square_icon(n).save(d / "subtitle_studio.png")
+    print("wrote", hicolor)
 
 
 if __name__ == "__main__":

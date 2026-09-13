@@ -121,6 +121,13 @@ install(CODE "
 install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
+# 桌面图标与 .desktop 入口，随 bundle 一起放到 share/ 下，
+# packaging/linux/install.sh 会把它们复制到 XDG 数据目录。
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/icons"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}/share" COMPONENT Runtime)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/${BINARY_NAME}.desktop"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications" COMPONENT Runtime)
+
 # Install the AOT library on non-Debug builds only.
 if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
