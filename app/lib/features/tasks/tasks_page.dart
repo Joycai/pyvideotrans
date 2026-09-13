@@ -99,6 +99,8 @@ class TasksPageState extends State<TasksPage> {
         widget.queue.cancel(task.id);
       case TaskAction.resume:
         widget.queue.resume(task.id);
+      case TaskAction.resumeAuto:
+        widget.queue.resumeAuto(task.id);
       case TaskAction.prioritize:
         widget.queue.prioritize(task.id);
       case TaskAction.remove:

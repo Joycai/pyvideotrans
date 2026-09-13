@@ -301,12 +301,161 @@ void main() {
           isA<ProviderException>().having((e) => e.message, 'message', contains('限流')),
         ),
       );
-      // 限流后不再碰第三段。
+      // 限流后不再碰第三段；限流不是这一段的错，不计失败。
       expect(n, 2);
       expect(cp.doneCount, 1);
-      expect(cp.segment(1000, 1900).failures, 1);
+      expect(cp.segment(1000, 1900).failures, 0);
       expect(cp.segment(2000, 2900).failures, 0);
     });
+
+    test('没有人声的片段（400 ASR_RESPONSE_HAVE_NO_WORDS）当作没话，不算错', () async {
+      var n = 0;
+      final client = MockClient((_) async {
+        n++;
+        return n == 1
+            ? http.Response(
+                '{"code":"CLIENT_ERROR","message":"ASR_RESPONSE_HAVE_NO_WORDS"}',
+                400,
+              )
+            : _ok(_qwen3Reply('好的'));
+      });
+      final cues = await DashScopeAsrProvider(
+        info: _info,
+        endpoint: _endpoint(),
+        splitter: FakeSplitter(2),
+        client: client,
+      ).transcribe(
+        audioPath: audio,
+        language: 'zh',
+        token: CancellationToken(),
+        onProgress: _noProgress,
+      );
+      expect(cues.single.source, '好的');
+      expect(cues.single.startMs, 1000);
+    });
+  });
+
+  group('自动重试模式', () {
+    DashScopeAsrProvider provider(
+      MockClient client, {
+      int clips = 3,
+      List<Duration>? waits,
+    }) => DashScopeAsrProvider(
+      info: _info,
+      endpoint: _endpoint(),
+      splitter: FakeSplitter(clips),
+      client: client,
+      delay: (d) async => waits?.add(d),
+    );
+
+    test('失败的段原地重试，3 次后跳过，一轮跑完', () async {
+      var n = 0;
+      final client = MockClient((req) async {
+        n++;
+        final body = jsonDecode(req.body) as Map<String, Object?>;
+        final part =
+            ((((body['input'] as Map)['messages'] as List).last as Map)['content']
+                    as List)
+                .first as Map;
+        final first = (part['audio'] as String).endsWith('AAAA');
+        return first ? http.Response('busy', 503) : _ok(_qwen3Reply('好的'));
+      });
+      final cp = RecognitionCheckpoint()..autoRetry = true;
+      final notes = <String>[];
+      final cues = await provider(client).transcribe(
+        audioPath: audio,
+        language: 'zh',
+        token: CancellationToken(),
+        onProgress: (_, _, {note}) => notes.add(note ?? ''),
+        checkpoint: cp,
+      );
+      // 第 1 段试了 3 次，其余各 1 次。
+      expect(n, 5);
+      expect(cp.skippedCount, 1);
+      expect(cues.map((c) => c.source), ['', '好的', '好的']);
+      expect(notes, contains('第 1 段失败 3 次，已跳过'));
+    });
+
+    test('限流时按退避等待再试同一段，不计失败；Retry-After 优先', () async {
+      var n = 0;
+      final client = MockClient((_) async {
+        n++;
+        return switch (n) {
+          1 => http.Response('{"code":"Throttling.RateQuota"}', 429),
+          2 => http.Response(
+            '{"code":"Throttling.RateQuota"}',
+            429,
+            headers: {'retry-after': '7'},
+          ),
+          _ => _ok(_qwen3Reply('好的')),
+        };
+      });
+      final cp = RecognitionCheckpoint()..autoRetry = true;
+      final waits = <Duration>[];
+      final notes = <String>[];
+      final cues = await provider(client, clips: 1, waits: waits).transcribe(
+        audioPath: audio,
+        language: 'zh',
+        token: CancellationToken(),
+        onProgress: (_, _, {note}) => notes.add(note ?? ''),
+        checkpoint: cp,
+      );
+      expect(cues.single.source, '好的');
+      expect(n, 3);
+      expect(cp.segment(0, 900).failures, 0);
+      // 第一次没有 Retry-After 用阶梯第一档 5 秒，第二次用服务端给的 7 秒。
+      expect(waits.fold(Duration.zero, (a, b) => a + b), const Duration(seconds: 12));
+      expect(notes, contains('阿里百炼 限流，等待 5 秒后重试第 1 段'));
+      expect(notes, contains('阿里百炼 限流，等待 7 秒后重试第 1 段'));
+    });
+
+    test('等待中取消能立刻停下', () async {
+      final token = CancellationToken();
+      final client = MockClient(
+        (_) async => http.Response('{"code":"Throttling.RateQuota"}', 429),
+      );
+      final p = DashScopeAsrProvider(
+        info: _info,
+        endpoint: _endpoint(),
+        splitter: FakeSplitter(1),
+        client: client,
+        delay: (_) async => token.cancel(),
+      );
+      await expectLater(
+        p.transcribe(
+          audioPath: audio,
+          language: 'zh',
+          token: token,
+          onProgress: _noProgress,
+          checkpoint: RecognitionCheckpoint()..autoRetry = true,
+        ),
+        throwsA(isA<TaskCancelled>()),
+      );
+    });
+
+    test('鉴权错误在自动模式下也立即停', () async {
+      var n = 0;
+      final client = MockClient((_) async {
+        n++;
+        return http.Response('{"code":"InvalidApiKey"}', 401);
+      });
+      await expectLater(
+        provider(client).transcribe(
+          audioPath: audio,
+          language: 'zh',
+          token: CancellationToken(),
+          onProgress: _noProgress,
+          checkpoint: RecognitionCheckpoint()..autoRetry = true,
+        ),
+        throwsA(
+          isA<ProviderException>().having((e) => e.hint, 'hint', contains('API Key')),
+        ),
+      );
+      expect(n, 1);
+    });
+  });
+
+  group('阿里百炼识别 · 停止与取消', () {
 
     test('中途失败时记录少于切分段数，续跑仍沿用检查点', () async {
       var n = 0;

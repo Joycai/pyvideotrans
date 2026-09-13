@@ -441,6 +441,41 @@ void main() {
       expect(queue.tasks.every((t) => t.status == TaskStatus.done), isTrue);
     });
 
+    test('「自动重试」在检查点上打开自动模式，普通续跑关掉', () async {
+      final runner = TaskRunner(
+        settings: settings,
+        workDir: work.path,
+        asrFactory: (_, _, _) => FakeAsr(),
+        translationFactory: (_, _, _) => FakeTranslator(),
+      );
+      final queue = TaskQueue(runner: runner, settings: settings);
+      final task = queue.enqueue(
+        sourcePath: '${work.path}/nope.mp4',
+        options: testOptions(translate: false),
+      );
+      // 等它因为文件不存在而失败。
+      for (var i = 0; i < 200 && task.isActive; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      expect(task.status, TaskStatus.failed);
+      queue.cancel(task.id);
+
+      queue.resumeAuto(task.id);
+      expect(task.recognition?.autoRetry, isTrue);
+      expect(task.log.any((l) => l.message.startsWith('自动重试：')), isTrue);
+      queue.cancel(task.id);
+      for (var i = 0; i < 200 && task.isActive; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+
+      queue.resume(task.id);
+      expect(task.recognition?.autoRetry ?? false, isFalse);
+      queue.cancel(task.id);
+      for (var i = 0; i < 200 && task.isActive; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+    });
+
     test('排队中取消不会再开跑', () async {
       final runner = TaskRunner(
         settings: settings,

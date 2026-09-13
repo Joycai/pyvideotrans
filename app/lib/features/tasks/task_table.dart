@@ -61,7 +61,7 @@ class TaskTable extends StatelessWidget {
   }
 }
 
-enum TaskAction { cancel, resume, prioritize, remove, openEditor }
+enum TaskAction { cancel, resume, resumeAuto, prioritize, remove, openEditor }
 
 class _HeaderRow extends StatelessWidget {
   const _HeaderRow();

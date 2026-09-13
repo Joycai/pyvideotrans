@@ -42,6 +42,11 @@ class RecognitionCheckpoint {
   /// 一段最多失败几次，之后放弃并跳过。
   static const maxFailures = 3;
 
+  /// 「自动重试并跳过失败段」模式：失败的段在同一次运行里自动重试，
+  /// 达到 [maxFailures] 就跳过继续；限流与断网不算失败，等恢复后再试。
+  /// 用户点「从识别阶段继续」时关掉，点「自动重试」时打开。
+  bool autoRetry = false;
+
   int get length => _segments.length;
   Iterable<SegmentRecord> get segments => _segments.values;
 
