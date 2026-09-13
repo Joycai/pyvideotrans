@@ -308,6 +308,40 @@ void main() {
       expect(cp.segment(2000, 2900).failures, 0);
     });
 
+    test('中途失败时记录少于切分段数，续跑仍沿用检查点', () async {
+      var n = 0;
+      final client = MockClient((_) async {
+        n++;
+        // 第一轮：第 1 段成功，第 2 段 401 立即停，第 3 段没跑到。
+        if (n == 2) return http.Response('{"code":"InvalidApiKey"}', 401);
+        return _ok(_qwen3Reply('好的'));
+      });
+      final provider = DashScopeAsrProvider(
+        info: _info,
+        endpoint: _endpoint(),
+        splitter: FakeSplitter(3),
+        client: client,
+      );
+      final cp = RecognitionCheckpoint();
+      Future<List<Cue>> run() => provider.transcribe(
+        audioPath: audio,
+        language: 'zh',
+        token: CancellationToken(),
+        onProgress: _noProgress,
+        checkpoint: cp,
+      );
+      await expectLater(run(), throwsA(isA<ProviderException>()));
+      expect(cp.length, 2);
+      expect(cp.total, 3);
+      expect(cp.doneCount, 1);
+
+      final cues = await run();
+      // 续跑只补第 2、3 段，第 1 段不再请求。
+      expect(n, 4);
+      expect(cues, hasLength(3));
+      expect(cp.doneCount, 3);
+    });
+
     test('切分点对不上时检查点作废，从头识别', () async {
       final cp = RecognitionCheckpoint()..segment(0, 500).text = '旧的';
       var n = 0;

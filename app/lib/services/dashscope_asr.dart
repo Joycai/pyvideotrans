@@ -78,6 +78,7 @@ class DashScopeAsrProvider implements AsrProvider {
       // 切分点对不上：音频变了，之前的记录不能用。
       cp.clear();
     }
+    cp.total = clips.length;
     final resumedFrom = cp.doneCount;
 
     String? lastError;
