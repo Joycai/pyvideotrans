@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -21,19 +22,24 @@ import 'pipeline/task_runner.dart';
 import 'services/media.dart';
 import 'services/registry.dart';
 import 'services/settings.dart';
+import 'services/task_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final settings = await AppSettings.load();
-  final workDir = '${(await getApplicationSupportDirectory()).path}/work';
+  final support = (await getApplicationSupportDirectory()).path;
+  final workDir = '$support/work';
   await Directory(workDir).create(recursive: true);
 
   final media = Media();
   final queue = TaskQueue(
     runner: TaskRunner(settings: settings, workDir: workDir, media: media),
     settings: settings,
+    // 任务数据（参数、阶段、字幕文档、识别检查点）存成 JSON，重启后还在。
+    store: TaskStore('$support/tasks'),
   );
+  await queue.restore();
 
   runApp(SubtitleStudioApp(settings: settings, queue: queue, media: media));
 }
@@ -61,6 +67,9 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   AppSection _section = AppSection.tasks;
   EditorController? _editor;
 
+  /// 退出前把还没写盘的任务改动写掉。
+  late final AppLifecycleListener _lifecycle;
+
   /// 「新建转写」页的表单。挂在根节点上，切去设置页再回来文件与参数还在。
   late final _transcribeForm = TranscribeFormController(
     settings: widget.settings,
@@ -80,11 +89,20 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     // 由 [_live] 通过 ListenableBuilder 局部驱动顶栏、状态栏与任务页，
     // 否则每一次进度回调都会重建 MaterialApp 以下整棵树。
     widget.settings.addListener(_refresh);
+    _lifecycle = AppLifecycleListener(
+      onExitRequested: () async {
+        await widget.queue.flush();
+        return AppExitResponse.exit;
+      },
+      onPause: widget.queue.flush,
+      onDetach: widget.queue.flush,
+    );
   }
 
   @override
   void dispose() {
     widget.settings.removeListener(_refresh);
+    _lifecycle.dispose();
     _editor?.dispose();
     _transcribeForm.dispose();
     _translateForm.dispose();
@@ -113,7 +131,9 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
 
   void _openEditor(SubtitleTask task) {
     final previous = _editor;
-    final controller = EditorController(task: task, settings: widget.settings);
+    final controller = EditorController(task: task, settings: widget.settings)
+      // 编辑器里的改动（改字、改时间、拆分合并、重新翻译）跟着写盘。
+      ..addListener(() => widget.queue.persist(task));
     setState(() {
       _editor = controller;
       _section = AppSection.editor;
