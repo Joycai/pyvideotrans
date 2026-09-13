@@ -207,7 +207,7 @@ class EditorPageState extends State<EditorPage> {
         ),
         const SizedBox(width: AppSpacing.s3),
         SizedBox(
-          width: 440,
+          width: isCompactEditor(context) ? 380 : 440,
           child: Inspector(
             controller: controller,
             onRetranslate: retranslate,
@@ -355,15 +355,17 @@ class EditorPageActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SegmentedToggle<CueView>(
-          value: controller.view,
-          onChanged: controller.setView,
-          segments: const [
-            (value: CueView.source, label: '原文', enabled: true),
-            (value: CueView.translation, label: '译文', enabled: true),
-            (value: CueView.both, label: '双语', enabled: true),
-          ],
-        ),
+        if (isCompactEditor(context))
+          _ViewMenu(controller: controller)
+        else
+          SegmentedToggle<CueView>(
+            value: controller.view,
+            onChanged: controller.setView,
+            segments: [
+              for (final v in CueView.values)
+                (value: v, label: _viewLabels[v]!, enabled: true),
+            ],
+          ),
         const SizedBox(width: AppSpacing.s3),
         ControlButton(
           label: missing == 0 ? '全部已翻译' : '翻译未译 $missing 条',
@@ -382,6 +384,47 @@ class EditorPageActions extends StatelessWidget {
           onPressed: controller.document.cues.isEmpty ? null : onExport,
         ),
       ],
+    );
+  }
+}
+
+const _viewLabels = {
+  CueView.source: '原文',
+  CueView.translation: '译文',
+  CueView.both: '双语',
+};
+
+/// 窄窗口下代替分段控件的「视图」下拉。
+class _ViewMenu extends StatelessWidget {
+  const _ViewMenu({required this.controller});
+
+  final EditorController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.colors;
+    return AnchoredPopover(
+      width: 160,
+      anchor: (context, toggle, open) => ControlButton(
+        label: '视图 · ${_viewLabels[controller.view]}',
+        icon: open ? Symbols.expand_less : Symbols.expand_more,
+        onPressed: toggle,
+      ),
+      popover: (context, close) => GlassMenu(
+        children: [
+          for (final v in CueView.values)
+            MenuRow(
+              label: _viewLabels[v]!,
+              trailing: v == controller.view
+                  ? Icon(Symbols.check, size: 18, weight: 500, color: cs.primary)
+                  : null,
+              onTap: () {
+                controller.setView(v);
+                close();
+              },
+            ),
+        ],
+      ),
     );
   }
 }

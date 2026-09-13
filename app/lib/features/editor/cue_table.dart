@@ -38,7 +38,12 @@ class CueTable extends StatelessWidget {
     final speakers = doc.hasSpeakers;
     final isFile = controller.session is FileSession;
     final translated = controller.hasTranslations;
-    final columns = speakers ? _speakerColumns : _plainColumns;
+    final compact = isCompactEditor(context);
+    final columns = !speakers
+        ? _plainColumns
+        : compact
+        ? _compactSpeakerColumns
+        : _speakerColumns;
 
     return Container(
       clipBehavior: Clip.antiAlias,
@@ -58,6 +63,7 @@ class CueTable extends StatelessWidget {
           _HeaderRow(
             columns: columns,
             speakers: speakers,
+            compact: compact,
             onManageSpeakers: onManageSpeakers,
             onMountTranslation: isFile && !translated
                 ? onMountTranslation
@@ -88,6 +94,7 @@ class CueTable extends StatelessWidget {
                         state: displayStateOf(cue, translated: translated),
                         columns: columns,
                         speakers: speakers,
+                        compact: compact,
                         continuesSpeaker:
                             cue.speaker != null && cue.speaker == previous,
                         speakerName: cue.speaker == null
@@ -381,16 +388,21 @@ class _Check extends StatelessWidget {
 const _plainColumns = <double?>[52, 124, 124, null, null, 96];
 const _speakerColumns = <double?>[52, 124, 104, null, null, 72];
 
+/// 窄窗口：说话人列只留徽标，名字放进悬停提示。
+const _compactSpeakerColumns = <double?>[52, 124, 44, null, null, 72];
+
 class _HeaderRow extends StatelessWidget {
   const _HeaderRow({
     required this.columns,
     required this.speakers,
+    required this.compact,
     required this.onManageSpeakers,
     required this.onMountTranslation,
   });
 
   final List<double?> columns;
   final bool speakers;
+  final bool compact;
   final VoidCallback? onManageSpeakers;
   final VoidCallback? onMountTranslation;
 
@@ -412,7 +424,24 @@ class _HeaderRow extends StatelessWidget {
         children: [
           Text('#', style: style),
           Text('开始', style: style),
-          if (speakers)
+          if (speakers && compact)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Tooltip(
+                message: '说话人 · 管理',
+                child: InkWell(
+                  onTap: onManageSpeakers,
+                  borderRadius: BorderRadius.circular(AppRadius.xs),
+                  child: Icon(
+                    Symbols.record_voice_over,
+                    size: 18,
+                    weight: 400,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            )
+          else if (speakers)
             Row(
               children: [
                 Text('说话人', style: style),
@@ -470,6 +499,7 @@ class _CueRow extends StatefulWidget {
     required this.state,
     required this.columns,
     required this.speakers,
+    required this.compact,
     required this.continuesSpeaker,
     required this.speakerName,
     required this.speakerNamed,
@@ -482,6 +512,7 @@ class _CueRow extends StatefulWidget {
   final CueState state;
   final List<double?> columns;
   final bool speakers;
+  final bool compact;
 
   /// 和上一行同一个人：只画竖线，不重复徽标与名字。
   final bool continuesSpeaker;
@@ -561,6 +592,7 @@ class _CueRowState extends State<_CueRow> {
                     name: widget.speakerName,
                     named: widget.speakerNamed,
                     continues: widget.continuesSpeaker,
+                    badgeOnly: widget.compact,
                   )
                 else
                   Timecode(Srt.formatTimecode(cue.endMs)),
@@ -607,12 +639,14 @@ class _SpeakerCell extends StatelessWidget {
     required this.name,
     required this.named,
     required this.continues,
+    required this.badgeOnly,
   });
 
   final int? id;
   final String? name;
   final bool named;
   final bool continues;
+  final bool badgeOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -627,6 +661,15 @@ class _SpeakerCell extends StatelessWidget {
           width: 1,
           height: 40,
           color: cs.outlineVariant,
+        ),
+      );
+    }
+    if (badgeOnly) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Tooltip(
+          message: name!,
+          child: SpeakerBadge(id: id!, name: name!, named: named),
         ),
       );
     }

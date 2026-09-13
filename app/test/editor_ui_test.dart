@@ -91,6 +91,46 @@ void main() {
       expect(find.text('未翻译'), findsNothing);
     });
 
+    testWidgets('窄于 1100：说话人列只留徽标，视图切换收进下拉', (tester) async {
+      final c = await _controller();
+      tester.view
+        ..physicalSize = const Size(1080, 760)
+        ..devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: lightTheme,
+          home: Scaffold(
+            body: ListenableBuilder(
+              listenable: c,
+              builder: (context, _) => Column(
+                children: [
+                  EditorPageActions(
+                    controller: c,
+                    onTranslateMissing: () {},
+                    onExport: () {},
+                    onSave: () {},
+                  ),
+                  Expanded(child: EditorPage(controller: c)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('周老师'), findsNothing);
+      expect(find.text('双语'), findsNothing);
+      await tester.tap(find.text('视图 · 双语'));
+      await tester.pump();
+      await tester.tap(
+        find.descendant(of: find.byType(GlassMenu), matching: find.text('译文')),
+      );
+      await tester.pump();
+      expect(c.view, CueView.translation);
+      expect(find.text('视图 · 译文'), findsOneWidget);
+    });
+
     testWidgets('未配对行被选中时，原文框换成并入按钮', (tester) async {
       final c = await _controller();
       c.select(c.document.cues.indexWhere((x) => x.source.isEmpty));
