@@ -227,11 +227,14 @@ class Media {
     required CancellationToken token,
   }) async {
     await File(outputPath).parent.create(recursive: true);
+    // 用 -ss（输入选项）+ -t（时长）而不是 -to：-to 放在 -i 之前时，
+    // 不同 ffmpeg 版本里它相对的是输入起点还是 seek 之后并不一致，
+    // 切出来的长度会差出一个 startMs。wav 没有关键帧，输入端 seek 是逐样本精确的。
     await _runFfmpeg([
       '-y',
       '-ss', (startMs / 1000).toStringAsFixed(3),
-      '-to', (endMs / 1000).toStringAsFixed(3),
       '-i', sourcePath,
+      '-t', ((endMs - startMs) / 1000).toStringAsFixed(3),
       '-ac', '1',
       '-ar', '16000',
       '-c:a', 'pcm_s16le',
