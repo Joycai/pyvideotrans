@@ -426,7 +426,10 @@ class DashScopeAsrProvider implements AsrProvider {
 
   static String? _statusHint(int status) => switch (status) {
     401 || 403 => '核对 API Key 是否正确、是否已开通百炼服务。',
-    404 => '核对服务地址：默认为 https://dashscope.aliyuncs.com/api/v1。',
+    // 有些网关（如阿里云百炼的 token-plan 专属域名）对不存在的模型也回 404。
+    404 =>
+      '核对模型名是否在该服务上可用，以及服务地址（默认为 '
+          'https://dashscope.aliyuncs.com/api/v1）。',
     429 => '稍后从识别阶段继续，已识别的阶段不会重做。',
     400 || 422 => '核对模型名与语言设置；该模型可能不支持所选语种。',
     _ => null,

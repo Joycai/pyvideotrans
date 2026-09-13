@@ -138,9 +138,7 @@ void main() {
     });
 
     test('401 给出核对密钥的建议', () async {
-      final provider = build(
-        MockClient((_) async => http.Response('no', 401)),
-      );
+      final provider = build(MockClient((_) async => http.Response('no', 401)));
       expect(
         () => provider.translateBatch(
           lines: ['a'],
@@ -245,10 +243,41 @@ void main() {
       expect(endpoint.baseUrl, 'https://api.deepseek.com/v1');
     });
 
+    test('模型框用逗号写多个：第一个是默认，其余进候选', () async {
+      final settings = await _settings();
+      final info = Registry.asrInfo('dashscope_qwen_asr')!;
+
+      // 没填时候选来自登记表。
+      expect(settings.modelsFor(info), info.models);
+
+      settings.setConfig(
+        'dashscope_qwen_asr',
+        const ProviderConfig(
+          model: ' qwen-audio-3.0-asr-flash ,fun-asr-flash，qwen-audio-3.0-asr-flash,, ',
+          apiKey: 'sk-x',
+        ),
+      );
+      expect(settings.modelsFor(info), [
+        'qwen-audio-3.0-asr-flash',
+        'fun-asr-flash',
+      ]);
+      expect(settings.endpointFor(info).model, 'qwen-audio-3.0-asr-flash');
+
+      // 只有逗号和空白等于没填。
+      expect(ProviderConfig.splitModels(' , ，'), isEmpty);
+      expect(ProviderConfig.splitModels(null), isEmpty);
+    });
+
     test('缺密钥时算未配置，本地服务不需要密钥', () async {
       final settings = await _settings();
-      expect(settings.isConfigured(Registry.translationInfo('deepseek')!), isFalse);
-      expect(settings.isConfigured(Registry.translationInfo('ollama')!), isTrue);
+      expect(
+        settings.isConfigured(Registry.translationInfo('deepseek')!),
+        isFalse,
+      );
+      expect(
+        settings.isConfigured(Registry.translationInfo('ollama')!),
+        isTrue,
+      );
     });
 
     test('每批条数被夹在合理区间', () async {

@@ -46,7 +46,11 @@ List<DropdownGroup<String>> providerGroups(
   ];
 }
 
-/// 模型选择。能列模型的给下拉，自定义接口给输入框，不能换模型的灰掉并说明。
+/// 模型选择。有候选的给下拉，没有候选的给输入框，不能换模型的灰掉并说明。
+///
+/// 候选来自设置里逗号分隔的那串（[AppSettings.modelsFor]），没填才用登记表的
+/// 常用列表。下拉的当前值与实际发出去的模型一致：任务里没覆盖时就是设置里
+/// 的第一个 —— 之前这里显示登记表默认值，而请求却用设置里的值，两处对不上。
 Widget modelField({
   required ProviderInfo? info,
   required String? model,
@@ -66,32 +70,39 @@ Widget modelField({
       ),
     );
   }
-  if (info.models.isEmpty) {
+  final candidates = settings.modelsFor(info);
+  if (candidates.isEmpty) {
     final example = info.defaultModel ?? '';
     return LabeledField(
       label: '模型',
       child: ModelTextField(
-        value: model ?? settings.configFor(info.id).model ?? '',
+        value: model ?? settings.endpointFor(info).model,
         hint: example.isEmpty ? '填写模型名' : '填写模型名，例 $example',
         onChanged: onChanged,
       ),
     );
   }
-  final current = model ?? info.defaultModel ?? info.models.first;
+  final current = resolvedModel(info, model, settings);
+  // 「上次参数」可能带来一个已不在候选里的模型名：照样列出来，别让下拉崩掉。
+  final entries = [if (!candidates.contains(current)) current, ...candidates];
   return LabeledField(
     label: '模型',
     child: AppDropdown<String>(
       value: current,
       groups: [
         DropdownGroup(
-          entries: [
-            for (final m in info.models) DropdownEntry(value: m, label: m),
-          ],
+          entries: [for (final m in entries) DropdownEntry(value: m, label: m)],
         ),
       ],
       onChanged: onChanged,
     ),
   );
+}
+
+/// 这次任务实际会用的模型名：任务里覆盖的优先，否则是设置解析出来的。
+String resolvedModel(ProviderInfo info, String? model, AppSettings settings) {
+  final chosen = model?.trim() ?? '';
+  return chosen.isNotEmpty ? chosen : settings.endpointFor(info).model;
 }
 
 /// 自定义接口的模型名：没有候选可列，只能让用户自己写。

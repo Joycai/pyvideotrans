@@ -150,7 +150,10 @@ class ProviderSection extends StatelessWidget {
         ),
         SettingsRow(
           label: '模型',
-          note: info.models.isEmpty ? '填写模型名' : '常用：${info.models.join(' / ')}',
+          note: info.models.isEmpty
+              ? '填写模型名；多个用逗号分隔，第一个为默认，新建时可选'
+              : '多个用逗号分隔，第一个为默认，新建时可选。'
+                    '常用：${info.models.join(' / ')}',
           stacked: stacked,
           child: SettingsTextField(
             key: ValueKey('${info.id}-model'),

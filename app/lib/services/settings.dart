@@ -14,8 +14,24 @@ class ProviderConfig {
   const ProviderConfig({this.baseUrl, this.model, this.apiKey});
 
   final String? baseUrl;
+
+  /// 模型名。可以用逗号写多个（中英文逗号都认），第一个是默认值，
+  /// 其余在「新建转写」「新建翻译」的模型下拉里可选。
   final String? model;
   final String? apiKey;
+
+  /// [model] 拆成的列表：去空白、去空项、去重，保持书写顺序。
+  List<String> get models => splitModels(model);
+
+  /// 逗号分隔的模型名 → 列表。中英文逗号都认。
+  static List<String> splitModels(String? raw) {
+    if (raw == null) return const [];
+    final seen = <String>{};
+    return [
+      for (final part in raw.split(RegExp(r'[,，]')))
+        if (part.trim().isNotEmpty && seen.add(part.trim())) part.trim(),
+    ];
+  }
 
   ProviderConfig copyWith({String? baseUrl, String? model, String? apiKey}) =>
       ProviderConfig(
@@ -270,13 +286,21 @@ class AppSettings extends ChangeNotifier {
   }
 
   /// 用户填的值优先，没填就用登记表里的默认值。
+  /// 模型框里写了多个时，取第一个作为默认模型。
   Endpoint endpointFor(ProviderInfo info) {
     final config = configFor(info.id);
     return Endpoint(
       baseUrl: _firstNonEmpty(config.baseUrl, info.defaultBaseUrl) ?? '',
-      model: _firstNonEmpty(config.model, info.defaultModel) ?? '',
+      model: _firstNonEmpty(config.models.firstOrNull, info.defaultModel) ?? '',
       apiKey: config.apiKey ?? '',
     );
+  }
+
+  /// 「新建转写」「新建翻译」模型下拉的候选：用户在设置里填的那串优先，
+  /// 没填才用登记表里的常用列表。为空表示没有候选，只能手填。
+  List<String> modelsFor(ProviderInfo info) {
+    final own = configFor(info.id).models;
+    return own.isNotEmpty ? own : info.models;
   }
 
   /// 配置是否足以发起请求。设置页用它来标注「未配置」。
