@@ -285,7 +285,10 @@ class TaskRunner {
     onChange,
     skip: !task.kind.needsRecognition,
     () async {
-      final result = const Segmenter().run(
+      final result = Segmenter(
+        minDurationMs: task.options.minCueMs,
+        maxDurationMs: task.options.maxCueMs,
+      ).run(
         task.document.cues,
         cjk: task.sourceLanguage.cjk,
       );

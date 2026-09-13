@@ -77,6 +77,8 @@ class AppSettings extends ChangeNotifier {
   static const _kOutputDir = 'outputDir';
   static const _kCjkLineLength = 'cjkLineLength';
   static const _kLatinLineLength = 'latinLineLength';
+  static const _kMinCueMs = 'minCueMs';
+  static const _kMaxCueMs = 'maxCueMs';
   static const _kOutputFormat = 'outputFormat';
   static const _kBilingual = 'bilingualLayout';
   static const _kLastTranscribe = 'lastTranscribeOptions';
@@ -159,6 +161,20 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 断句的字幕时长下限（毫秒）。短于它且紧跟上一条的并进上一条。
+  int get minCueMs => _prefs.getInt(_kMinCueMs) ?? 500;
+  set minCueMs(int v) {
+    _prefs.setInt(_kMinCueMs, v.clamp(0, 3000));
+    notifyListeners();
+  }
+
+  /// 断句的字幕时长上限（毫秒）。长于它的按标点拆开。
+  int get maxCueMs => _prefs.getInt(_kMaxCueMs) ?? 10000;
+  set maxCueMs(int v) {
+    _prefs.setInt(_kMaxCueMs, v.clamp(2000, 60000));
+    notifyListeners();
+  }
+
   SubtitleFormat get outputFormat =>
       SubtitleFormat.byExtension(_prefs.getString(_kOutputFormat) ?? 'srt');
   set outputFormat(SubtitleFormat v) => _write(_kOutputFormat, v.extension);
@@ -180,6 +196,8 @@ class AppSettings extends ChangeNotifier {
     bilingual: bilingual,
     cjkLineLength: cjkLineLength,
     latinLineLength: latinLineLength,
+    minCueMs: minCueMs,
+    maxCueMs: maxCueMs,
     format: outputFormat,
     outputLocation: outputDir == null
         ? OutputLocation.besideSource
