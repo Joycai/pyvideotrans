@@ -59,6 +59,7 @@ class AppSettings extends ChangeNotifier {
   static const _kLatinLineLength = 'latinLineLength';
   static const _kOutputFormat = 'outputFormat';
   static const _kBilingual = 'bilingualLayout';
+  static const _kLastTranscribe = 'lastTranscribeOptions';
 
   Map<String, ProviderConfig> _configs = {};
 
@@ -164,6 +165,30 @@ class AppSettings extends ChangeNotifier {
         outputDir == null ? OutputLocation.besideSource : OutputLocation.custom,
     outputDir: outputDir,
   );
+
+  /// 最近一次成功提交的「新建转写」参数，供页面上的「上次参数」整份填回。
+  /// 只留最近一份；没有或存档损坏时为 null。
+  TaskOptions? get lastTranscribeOptions {
+    final raw = _prefs.getString(_kLastTranscribe);
+    if (raw == null) return null;
+    try {
+      return TaskOptions.fromJson(
+        jsonDecode(raw) as Map<String, Object?>,
+        fallback: defaultTaskOptions(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  set lastTranscribeOptions(TaskOptions? v) {
+    if (v == null) {
+      _prefs.remove(_kLastTranscribe);
+    } else {
+      _prefs.setString(_kLastTranscribe, jsonEncode(v.toJson()));
+    }
+    // 不 notify：这份参数只被「上次参数」按钮读取，不影响任何常显内容。
+  }
 
   ProviderConfig configFor(String providerId) =>
       _configs[providerId] ?? const ProviderConfig();

@@ -141,6 +141,84 @@ class TaskOptions {
   TaskKind get kind =>
       translate ? TaskKind.transcribeAndTranslate : TaskKind.transcribe;
 
+  /// 持久化用。语言只存代码，读回时按代码解析；未知服务 id 原样保留，
+  /// 由就绪检查在界面上指出「服务不存在」。
+  Map<String, Object?> toJson() => {
+    'sourceLanguage': sourceLanguage.code,
+    'asrProviderId': asrProviderId,
+    'asrModel': asrModel,
+    'asrPrompt': asrPrompt,
+    'translate': translate,
+    'targetLanguage': targetLanguage.code,
+    'translationProviderId': translationProviderId,
+    'translationModel': translationModel,
+    'translationBatchSize': translationBatchSize,
+    'translationGuidance': translationGuidance,
+    'bilingual': bilingual.name,
+    'cjkLineLength': cjkLineLength,
+    'latinLineLength': latinLineLength,
+    'format': format.extension,
+    'outputLocation': outputLocation.name,
+    'outputDir': outputDir,
+  };
+
+  /// 缺字段或类型不对的项回落到 [fallback] 里的值，绝不因为一份旧存档抛异常。
+  factory TaskOptions.fromJson(
+    Map<String, Object?> json, {
+    required TaskOptions fallback,
+  }) {
+    T pick<T>(String key, T orElse) {
+      final v = json[key];
+      return v is T ? v : orElse;
+    }
+
+    final location = OutputLocation.values.firstWhere(
+      (l) => l.name == json['outputLocation'],
+      orElse: () => fallback.outputLocation,
+    );
+    final dir = pick<String?>('outputDir', fallback.outputDir);
+    return TaskOptions(
+      sourceLanguage: Languages.resolve(
+        pick('sourceLanguage', fallback.sourceLanguage.code),
+      ),
+      asrProviderId: pick('asrProviderId', fallback.asrProviderId),
+      asrModel: pick<String?>('asrModel', fallback.asrModel),
+      asrPrompt: pick('asrPrompt', fallback.asrPrompt),
+      translate: pick('translate', fallback.translate),
+      targetLanguage: Languages.resolve(
+        pick('targetLanguage', fallback.targetLanguage.code),
+      ),
+      translationProviderId: pick(
+        'translationProviderId',
+        fallback.translationProviderId,
+      ),
+      translationModel: pick<String?>(
+        'translationModel',
+        fallback.translationModel,
+      ),
+      translationBatchSize: pick(
+        'translationBatchSize',
+        fallback.translationBatchSize,
+      ).clamp(1, 100),
+      translationGuidance: pick(
+        'translationGuidance',
+        fallback.translationGuidance,
+      ),
+      bilingual: BilingualLayout.byName(pick('bilingual', fallback.bilingual.name)),
+      cjkLineLength: pick('cjkLineLength', fallback.cjkLineLength).clamp(4, 60),
+      latinLineLength: pick(
+        'latinLineLength',
+        fallback.latinLineLength,
+      ).clamp(8, 120),
+      format: SubtitleFormat.byExtension(pick('format', fallback.format.extension)),
+      // 指定目录却没有目录，等于没指定。
+      outputLocation: location == OutputLocation.custom && dir == null
+          ? OutputLocation.besideSource
+          : location,
+      outputDir: dir,
+    );
+  }
+
   TaskOptions copyWith({
     Language? sourceLanguage,
     String? asrProviderId,

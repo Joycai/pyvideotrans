@@ -20,6 +20,7 @@ Future<AppSettings> freshSettings() async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  _jsonTests();
 
   late Directory work;
 
@@ -252,6 +253,59 @@ void main() {
         (await AppSettings.load()).defaultTaskOptions().bilingual,
         BilingualLayout.targetAbove,
       );
+    });
+  });
+}
+
+// ——— 持久化 ————————————————————————————————————————————————
+void _jsonTests() {
+  group('JSON', () {
+    test('来回一致', () async {
+      final s = await freshSettings();
+      final o = s.defaultTaskOptions().copyWith(
+        asrModel: 'whisper-1',
+        asrPrompt: '专有名词',
+        translate: false,
+        translationBatchSize: 7,
+        bilingual: BilingualLayout.targetAbove,
+        cjkLineLength: 20,
+        format: SubtitleFormat.vtt,
+        outputLocation: OutputLocation.custom,
+        outputDir: '/out',
+      );
+      final back = TaskOptions.fromJson(
+        o.toJson(),
+        fallback: s.defaultTaskOptions(),
+      );
+      expect(back.toJson(), o.toJson());
+      expect(back.sourceLanguage.code, o.sourceLanguage.code);
+      expect(back.format, SubtitleFormat.vtt);
+      expect(back.outputDir, '/out');
+    });
+
+    test('缺字段与坏类型回落到默认，指定目录却没目录则回到同目录', () async {
+      final s = await freshSettings();
+      final fallback = s.defaultTaskOptions();
+      final o = TaskOptions.fromJson({
+        'translationBatchSize': 'many',
+        'cjkLineLength': 999,
+        'format': 'ass',
+        'outputLocation': 'custom',
+      }, fallback: fallback);
+      expect(o.translationBatchSize, fallback.translationBatchSize);
+      expect(o.cjkLineLength, 60);
+      expect(o.format, SubtitleFormat.ass);
+      expect(o.outputLocation, OutputLocation.besideSource);
+      expect(o.outputDir, isNull);
+    });
+
+    test('设置里的「上次参数」坏了就当没有', () async {
+      final s = await freshSettings();
+      expect(s.lastTranscribeOptions, isNull);
+      s.lastTranscribeOptions = s.defaultTaskOptions().copyWith(translate: false);
+      expect(s.lastTranscribeOptions!.translate, isFalse);
+      s.lastTranscribeOptions = null;
+      expect(s.lastTranscribeOptions, isNull);
     });
   });
 }

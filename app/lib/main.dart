@@ -11,7 +11,9 @@ import 'features/editor/editor_controller.dart';
 import 'features/editor/editor_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/shell/status_bar.dart';
+import 'features/tasks/new_transcribe_page.dart';
 import 'features/tasks/tasks_page.dart';
+import 'features/tasks/transcribe_form.dart';
 import 'pipeline/task_queue.dart';
 import 'pipeline/task_runner.dart';
 import 'services/media.dart';
@@ -58,6 +60,12 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   AppSection _section = AppSection.tasks;
   EditorController? _editor;
 
+  /// 「新建转写」页的表单。挂在根节点上，切去设置页再回来文件与参数还在。
+  late final _transcribeForm = TranscribeFormController(
+    settings: widget.settings,
+    media: widget.media,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +79,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   void dispose() {
     widget.settings.removeListener(_refresh);
     _editor?.dispose();
+    _transcribeForm.dispose();
     super.dispose();
   }
 
@@ -83,6 +92,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   Listenable get _live => Listenable.merge([
     widget.queue,
     widget.settings,
+    _transcribeForm,
     ?_editor,
   ]);
 
@@ -157,6 +167,8 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
             ),
           ],
         );
+      case AppSection.newTranscribe:
+        return newTranscribeChrome(_transcribeForm);
       case AppSection.editor:
         final editor = _editor;
         if (editor == null) {
@@ -217,6 +229,12 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
         onOpenSettings: () =>
             setState(() => _section = AppSection.settings),
       ),
+    ),
+    AppSection.newTranscribe => NewTranscribePage(
+      form: _transcribeForm,
+      queue: widget.queue,
+      onOpenSettings: () => setState(() => _section = AppSection.settings),
+      onOpenTasks: () => setState(() => _section = AppSection.tasks),
     ),
     AppSection.settings => SettingsPage(settings: widget.settings),
     AppSection.editor when _editor != null => EditorPage(
