@@ -10,6 +10,9 @@ abstract final class MediaKinds {
   };
   static const subtitle = {'srt', 'vtt', 'ass', 'ssa'};
 
+  /// 只有声音、没有画面的那些；预览时不画视频，只放声音。
+  static const audio = {'mp3', 'm4a', 'wav', 'flac', 'aac', 'ogg', 'opus'};
+
   static String extensionOf(String path) {
     final name = path.split(RegExp(r'[/\\]')).last;
     final dot = name.lastIndexOf('.');
@@ -17,6 +20,7 @@ abstract final class MediaKinds {
   }
 
   static bool isMedia(String path) => media.contains(extensionOf(path));
+  static bool isAudio(String path) => audio.contains(extensionOf(path));
   static bool isSubtitle(String path) => subtitle.contains(extensionOf(path));
   static bool isSupported(String path) => isMedia(path) || isSubtitle(path);
 }

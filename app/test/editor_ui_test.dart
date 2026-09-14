@@ -57,6 +57,9 @@ void main() {
       expect(find.text('周老师'), findsNWidgets(4));
       expect(find.text('说话人'), findsWidgets);
       expect(find.text('结束'), findsWidgets); // 检视面板里的时间码标签
+      // 没有配套视频：只预览字幕样式，并给出手动关联的入口。
+      expect(find.text('未关联视频 · 只预览字幕样式'), findsOneWidget);
+      expect(find.text('关联视频…'), findsOneWidget);
     });
 
     testWidgets('说话人筛选：多选，chip 文案跟着变', (tester) async {
