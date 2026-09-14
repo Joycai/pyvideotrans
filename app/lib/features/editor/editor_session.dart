@@ -36,14 +36,18 @@ sealed class EditorSession {
   /// 打开会话时由 [locateMedia] 找一次，之后用户也可以手动关联。
   String? mediaPath;
 
-  /// 字幕所在的路径，用来在旁边找同名音视频。
-  String get _subtitlePath;
+  /// 字幕所在的路径：手动关联的音视频按它记，也在它旁边找同名文件。
+  String get subtitlePath;
 
-  /// 找预览用的音视频。任务的源文件本身是媒体时直接用它；否则在字幕旁边
-  /// 找去掉语言段后同名的音视频。找不到时保持 null。
-  Future<String?> locateMedia() async {
+  /// 找预览用的音视频，依次取：[linked]（上次手动关联的，文件还在才算）、
+  /// 任务的源文件（本身是媒体时）、字幕旁边去掉语言段后同名的音视频。
+  /// 都没有时保持 null。
+  Future<String?> locateMedia({String? linked}) async {
+    if (linked != null && await File(linked).exists()) {
+      return mediaPath = linked;
+    }
     if (mediaPath != null && await File(mediaPath!).exists()) return mediaPath;
-    return mediaPath = await findSiblingMedia(_subtitlePath, exportStem);
+    return mediaPath = await findSiblingMedia(subtitlePath, exportStem);
   }
 }
 
@@ -100,11 +104,14 @@ class TaskSession extends EditorSession {
   String get exportStem => _withoutExtension(task.fileName);
 
   @override
-  String get _subtitlePath => task.sourcePath;
+  String get subtitlePath => task.sourcePath;
 
   /// 转写任务的源文件就是音视频，不用找。
   @override
-  Future<String?> locateMedia() async {
+  Future<String?> locateMedia({String? linked}) async {
+    if (linked != null && await File(linked).exists()) {
+      return mediaPath = linked;
+    }
     if (MediaKinds.isMedia(task.sourcePath) &&
         await File(task.sourcePath).exists()) {
       return mediaPath = task.sourcePath;
@@ -260,7 +267,7 @@ class FileSession extends EditorSession {
   String get exportDir => _outputDir(options, sourcePath);
 
   @override
-  String get _subtitlePath => sourcePath;
+  String get subtitlePath => sourcePath;
 
   /// `interview_ep12.zh.srt` → `interview_ep12`：语言段也去掉，导出时再按
   /// 实际语言加回来。

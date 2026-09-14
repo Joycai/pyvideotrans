@@ -74,6 +74,33 @@ class EditorStore {
     }
   }
 
+  File get _mediaFile => File('$dir${Platform.pathSeparator}media.json');
+
+  /// 用户在编辑器里手动关联给某份字幕（或任务源文件）的音视频。
+  /// 按字幕路径记，下次打开同一份字幕时优先用它。
+  Future<void> saveMediaLink(String subtitlePath, String mediaPath) async {
+    final links = await _loadMediaLinks();
+    links[subtitlePath] = mediaPath;
+    await _writeJson(_mediaFile, links);
+  }
+
+  /// 读回手动关联的音视频路径；没记过时为 null。文件是否还在由调用方核对。
+  Future<String?> loadMediaLink(String subtitlePath) async =>
+      (await _loadMediaLinks())[subtitlePath];
+
+  Future<Map<String, String>> _loadMediaLinks() async {
+    try {
+      final json = jsonDecode(await _mediaFile.readAsString());
+      if (json is! Map) return {};
+      return {
+        for (final MapEntry(:key, :value) in json.entries)
+          if (key is String && value is String) key: value,
+      };
+    } on Object {
+      return {};
+    }
+  }
+
   /// 最近打开的会话，新的在前。读不了时返回空列表。
   Future<List<RecentSession>> loadRecents() async {
     try {
