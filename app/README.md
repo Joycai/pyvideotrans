@@ -24,10 +24,11 @@ brew install ffmpeg
 Windows 把 `ffmpeg.exe` 放进应用目录下的 `ffmpeg` 文件夹即可。
 
 编辑器里的预览用 [media_kit](https://pub.dev/packages/media_kit) 播放音视频。
-macOS 与 Windows 的播放库随应用打包；Linux 要装系统的 libmpv：
+macOS 与 Windows 的播放库随应用打包；Linux 要装系统的 libmpv
+（`packaging/linux/install.sh` 会自动装，手动跑 `flutter run -d linux` 时自己装一次）：
 
 ```bash
-sudo apt install libmpv-dev mpv    # Debian / Ubuntu
+sudo apt install libmpv-dev mpv    # Debian / Ubuntu；Fedora 用 mpv-libs-devel，Arch 用 mpv
 ```
 
 首次使用先去**设置**里填识别与翻译服务的地址、模型和密钥。

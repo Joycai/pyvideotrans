@@ -47,4 +47,6 @@ packaging/linux/install.sh            # 装到 ~/.local，当前用户
 sudo packaging/linux/install.sh --system   # 装到 /opt 与 /usr/share
 ```
 
-它会复制 bundle、注册 hicolor 图标和 .desktop，并刷新图标缓存。
+它会先按发行版的包管理器装好 libmpv（编辑器预览播放音视频要用；apt / dnf /
+pacman / zypper，已装则跳过，`SKIP_DEPS=1` 可跳过这一步），然后复制 bundle、
+注册 hicolor 图标和 .desktop，并刷新图标缓存。
