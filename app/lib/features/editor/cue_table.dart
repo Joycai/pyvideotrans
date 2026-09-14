@@ -79,35 +79,13 @@ class CueTable extends StatelessWidget {
                       ),
                     ),
                   )
-                : ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: visible.length,
-                    itemBuilder: (context, i) {
-                      final cue = visible[i];
-                      final position = doc.cues.indexWhere(
-                        (c) => c.index == cue.index,
-                      );
-                      // 连续说话人按看得见的上一行算：筛选后行与行不一定相邻。
-                      final previous = i > 0 ? visible[i - 1].speaker : null;
-                      return _CueRow(
-                        cue: cue,
-                        state: displayStateOf(cue, translated: translated),
-                        columns: columns,
-                        speakers: speakers,
-                        compact: compact,
-                        continuesSpeaker:
-                            cue.speaker != null && cue.speaker == previous,
-                        speakerName: cue.speaker == null
-                            ? null
-                            : doc.speakerName(cue.speaker!),
-                        speakerNamed:
-                            cue.speaker != null &&
-                            doc.speakers.containsKey(cue.speaker),
-                        view: controller.view,
-                        selected: position == controller.selected,
-                        onTap: () => controller.select(position),
-                      );
-                    },
+                : _CueList(
+                    controller: controller,
+                    visible: visible,
+                    columns: columns,
+                    speakers: speakers,
+                    compact: compact,
+                    translated: translated,
                   ),
           ),
           _Footer(
@@ -118,6 +96,107 @@ class CueTable extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 字幕行列表。行高固定 40，选中条变化时（J/K、播放跟随）把它滚进视野；
+/// 已经看得见就不动，免得点一下就跳。
+class _CueList extends StatefulWidget {
+  const _CueList({
+    required this.controller,
+    required this.visible,
+    required this.columns,
+    required this.speakers,
+    required this.compact,
+    required this.translated,
+  });
+
+  final EditorController controller;
+  final List<Cue> visible;
+  final List<double?> columns;
+  final bool speakers;
+  final bool compact;
+  final bool translated;
+
+  static const rowHeight = 40.0;
+
+  @override
+  State<_CueList> createState() => _CueListState();
+}
+
+class _CueListState extends State<_CueList> {
+  final _scroll = ScrollController();
+  int? _lastSelected;
+
+  @override
+  void didUpdateWidget(_CueList old) {
+    super.didUpdateWidget(old);
+    final selected = widget.controller.selected;
+    if (selected == _lastSelected) return;
+    _lastSelected = selected;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
+  }
+
+  void _reveal() {
+    if (!mounted || !_scroll.hasClients) return;
+    final cue = widget.controller.current;
+    if (cue == null) return;
+    final row = widget.visible.indexWhere((c) => c.index == cue.index);
+    if (row < 0) return;
+    final top = row * _CueList.rowHeight;
+    final bottom = top + _CueList.rowHeight;
+    final position = _scroll.position;
+    final viewTop = position.pixels;
+    final viewBottom = viewTop + position.viewportDimension;
+    if (top >= viewTop && bottom <= viewBottom) return;
+    // 往下走时贴在底部，往上走时贴在顶部；跟着播放时每次只挪一行。
+    final target = top < viewTop ? top : bottom - position.viewportDimension;
+    _scroll.animateTo(
+      target.clamp(0, position.maxScrollExtent).toDouble(),
+      duration: AppDuration.short,
+      curve: kEasingStandard,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = widget.controller;
+    final doc = controller.document;
+    final visible = widget.visible;
+    return ListView.builder(
+      controller: _scroll,
+      padding: EdgeInsets.zero,
+      itemExtent: _CueList.rowHeight,
+      itemCount: visible.length,
+      itemBuilder: (context, i) {
+        final cue = visible[i];
+        final position = doc.cues.indexWhere((c) => c.index == cue.index);
+        // 连续说话人按看得见的上一行算：筛选后行与行不一定相邻。
+        final previous = i > 0 ? visible[i - 1].speaker : null;
+        return _CueRow(
+          cue: cue,
+          state: displayStateOf(cue, translated: widget.translated),
+          columns: widget.columns,
+          speakers: widget.speakers,
+          compact: widget.compact,
+          continuesSpeaker: cue.speaker != null && cue.speaker == previous,
+          speakerName: cue.speaker == null
+              ? null
+              : doc.speakerName(cue.speaker!),
+          speakerNamed:
+              cue.speaker != null && doc.speakers.containsKey(cue.speaker),
+          view: controller.view,
+          selected: position == controller.selected,
+          onTap: () => controller.select(position),
+        );
+      },
     );
   }
 }

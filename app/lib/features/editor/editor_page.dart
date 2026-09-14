@@ -1,4 +1,5 @@
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
@@ -6,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
+import '../../domain/media_kinds.dart';
 import '../../domain/srt.dart';
 import '../../domain/subtitle_pairing.dart';
 import '../../services/provider_api.dart';
@@ -15,6 +17,7 @@ import 'editor_open_form.dart';
 import 'editor_session.dart';
 import 'editor_widgets.dart';
 import 'inspector.dart';
+import 'preview_playback.dart';
 import 'speaker_manager.dart';
 
 /// 编辑器页：字幕表 + 检视面板。
@@ -44,6 +47,9 @@ class EditorPageState extends State<EditorPage> {
   /// 拖文件进来时悬停在哪一半；null 表示没在拖。
   OpenSlot? _dropSlot;
 
+  /// 检视面板的播放器；会话没有音视频时为 null。
+  PreviewPlayback? _playback;
+
   EditorController get controller => widget.controller;
 
   @override
@@ -52,6 +58,7 @@ class EditorPageState extends State<EditorPage> {
     controller.addListener(_refresh);
     // 进页面就接管键盘，J/K 不用先点一下列表才生效。
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+    _locateMedia();
   }
 
   @override
@@ -60,14 +67,54 @@ class EditorPageState extends State<EditorPage> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_refresh);
       widget.controller.addListener(_refresh);
+      _closePlayback();
+      _locateMedia();
     }
   }
 
   @override
   void dispose() {
     controller.removeListener(_refresh);
+    _closePlayback();
     _focus.dispose();
     super.dispose();
+  }
+
+  void _closePlayback() {
+    _playback?.dispose();
+    _playback = null;
+  }
+
+  /// 找会话配套的音视频；找到就开播放器。异步的，找的期间先显示样式预览。
+  Future<void> _locateMedia() async {
+    final session = controller.session;
+    final path = await session.locateMedia();
+    if (!mounted || controller.session != session || path == null) return;
+    _openPlayback(path);
+  }
+
+  void _openPlayback(String path) {
+    _closePlayback();
+    final playback = PreviewPlayback(controller: controller, mediaPath: path);
+    _playback = playback;
+    setState(() {});
+    playback.open().catchError((Object e) {
+      if (mounted && _playback == playback) {
+        _report('打不开 ${baseName(path)}：$e');
+      }
+    });
+  }
+
+  /// 「关联视频…」：手动挑一个音视频文件给这个会话预览。
+  Future<void> attachMedia() async {
+    final picked = await openFile(
+      acceptedTypeGroups: [
+        XTypeGroup(label: '音视频', extensions: MediaKinds.media.toList()),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    controller.session.mediaPath = picked.path;
+    _openPlayback(picked.path);
   }
 
   void _refresh() {
@@ -177,6 +224,15 @@ class EditorPageState extends State<EditorPage> {
       case LogicalKeyboardKey.keyZ when command:
         controller.undo();
         return KeyEventResult.handled;
+      case LogicalKeyboardKey.space when _playback != null:
+        _playback!.toggle();
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowLeft when _playback != null:
+        _playback!.nudge(const Duration(seconds: -1));
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowRight when _playback != null:
+        _playback!.nudge(const Duration(seconds: 1));
+        return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }
@@ -213,6 +269,8 @@ class EditorPageState extends State<EditorPage> {
             onRetranslate: retranslate,
             onManageSpeakers: manageSpeakers,
             onMountTranslation: widget.onMountTranslation,
+            playback: _playback,
+            onAttachMedia: attachMedia,
           ),
         ),
       ],

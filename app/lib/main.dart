@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart' show MediaKit;
 import 'package:path_provider/path_provider.dart';
 
 import 'core/theme/app_theme.dart';
@@ -31,6 +32,8 @@ import 'services/task_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 编辑器预览用 media_kit 播放音视频，得在建播放器之前初始化一次。
+  MediaKit.ensureInitialized();
 
   final settings = await AppSettings.load();
   final support = (await getApplicationSupportDirectory()).path;

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../../domain/cue.dart';
 import '../../domain/language.dart';
+import '../../domain/media_kinds.dart';
 import '../../domain/srt.dart';
 import '../../domain/subtitle_pairing.dart';
 import '../../domain/task.dart';
@@ -29,6 +30,49 @@ sealed class EditorSession {
 
   /// 导出文件名的主干，不含语言段与扩展名。
   String get exportStem;
+
+  /// 检视面板预览用的音视频文件；没有就只预览字幕样式。
+  ///
+  /// 打开会话时由 [locateMedia] 找一次，之后用户也可以手动关联。
+  String? mediaPath;
+
+  /// 字幕所在的路径，用来在旁边找同名音视频。
+  String get _subtitlePath;
+
+  /// 找预览用的音视频。任务的源文件本身是媒体时直接用它；否则在字幕旁边
+  /// 找去掉语言段后同名的音视频。找不到时保持 null。
+  Future<String?> locateMedia() async {
+    if (mediaPath != null && await File(mediaPath!).exists()) return mediaPath;
+    return mediaPath = await findSiblingMedia(_subtitlePath, exportStem);
+  }
+}
+
+/// 在 [subtitlePath] 所在目录里找与之配套的音视频：主干等于 [stem]（语言段
+/// 已去掉）或等于字幕自己去掉扩展名后的名字。视频优先于音频，同类里按名字排。
+/// 目录读不了（不存在、无权限）时返回 null。
+Future<String?> findSiblingMedia(String subtitlePath, String stem) async {
+  final dir = File(subtitlePath).parent;
+  final ownStem = _withoutExtension(_fileName(subtitlePath));
+  final stems = {stem, ownStem};
+  final candidates = <(int, String, String)>[];
+  try {
+    await for (final entry in dir.list(followLinks: false)) {
+      if (entry is! File) continue;
+      final name = _fileName(entry.path);
+      if (!MediaKinds.isMedia(name)) continue;
+      if (!stems.contains(_withoutExtension(name))) continue;
+      final rank = MediaKinds.isAudio(name) ? 1 : 0;
+      candidates.add((rank, name.toLowerCase(), entry.path));
+    }
+  } on FileSystemException {
+    return null;
+  }
+  if (candidates.isEmpty) return null;
+  candidates.sort((a, b) {
+    final byRank = a.$1.compareTo(b.$1);
+    return byRank != 0 ? byRank : a.$2.compareTo(b.$2);
+  });
+  return candidates.first.$3;
 }
 
 /// 从任务打开。文档就是任务的文档，参数是任务入队时定下的那份。
@@ -54,6 +98,19 @@ class TaskSession extends EditorSession {
 
   @override
   String get exportStem => _withoutExtension(task.fileName);
+
+  @override
+  String get _subtitlePath => task.sourcePath;
+
+  /// 转写任务的源文件就是音视频，不用找。
+  @override
+  Future<String?> locateMedia() async {
+    if (MediaKinds.isMedia(task.sourcePath) &&
+        await File(task.sourcePath).exists()) {
+      return mediaPath = task.sourcePath;
+    }
+    return super.locateMedia();
+  }
 }
 
 /// 读进来、还没配对的一份本地字幕。
@@ -201,6 +258,9 @@ class FileSession extends EditorSession {
 
   @override
   String get exportDir => _outputDir(options, sourcePath);
+
+  @override
+  String get _subtitlePath => sourcePath;
 
   /// `interview_ep12.zh.srt` → `interview_ep12`：语言段也去掉，导出时再按
   /// 实际语言加回来。
