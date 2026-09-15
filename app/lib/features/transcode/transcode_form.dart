@@ -202,6 +202,17 @@ class TranscodeFormController extends ChangeNotifier {
     if (notify) _notify();
   }
 
+  /// 换容器。新容器装不下当前音频编码（MOV 不收 Opus）时改成 AAC ——
+  /// 与设计稿一致：不留一个必然被拦下的选择让用户回头去找。
+  void setContainer(OutputContainer container) {
+    if (container == _options.container) return;
+    final audio = container.acceptsAudio(_options.audioCodec)
+        ? _options.audioCodec
+        : AudioCodec.aac;
+    _options = _options.copyWith(container: container, audioCodec: audio);
+    _notify();
+  }
+
   Future<void> pickOutputDir() async {
     final dir = await getDirectoryPath();
     if (dir == null || _disposed) return;

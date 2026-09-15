@@ -50,7 +50,7 @@ C 组件。动手前先读 `readme.md`、`M-TranslatePage.dc.html`、`M-TasksBoa
 
 ### 分区二「视频」
 
-- 编码：分段控件 4 段「H.264 / HEVC / AV1 / 复制」。（初版设计稿里的 VC-1 段已决定不做：FFmpeg 没有 VC-1 编码器。）
+- 编码：分段控件 4 段「H.264 / HEVC / AV1 / 复制」。
 - 编码器：单选卡片列表，每张 48px：左侧 radio，中间两行（第一行「VideoToolbox · Apple」body-medium；第二行 mono body-small `hevc_videotoolbox`），右侧状态 chip：
   - 可用（success-container，`check`）
   - 检测中（surface-container，`progress_activity`）
@@ -75,7 +75,7 @@ P6c 的标注指向：同一个「H.264」在 x264 与 NVENC 下参数完全不�
 
 ### 分区三「音频」
 
-- 编码：分段「AAC / MP3 / Opus / 复制」。MOV 下 Opus 禁用 38% 并在下方说明。（初版设计稿里的 Vorbis 段已决定不做：MP4 / MOV 都装不下。）
+- 编码：分段「AAC / MP3 / Opus / 复制」。MOV 下 Opus 禁用 38%，下方说明「MOV 装不下 Opus，换成 MP4 或 AAC」；已选 Opus 时切到 MOV，音频自动改成 AAC。
 - 码率 select 96 / 128 / 160 / 192 / 256 / 320 kbps（默认 160），声道 select 保持 / 立体声 / 单声道 两列。
 
 ### 分区四「高级」（可折叠；折叠摘要「与源文件同目录 · 后缀 .hevc · 快速启动」）

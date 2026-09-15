@@ -1126,7 +1126,7 @@ class _OutputSection extends StatelessWidget {
               for (final c in OutputContainer.values)
                 (value: c, label: c.label, enabled: true),
             ],
-            onChanged: (c) => form.update((o) => o.copyWith(container: c)),
+            onChanged: form.setContainer,
           ),
         ),
       ],

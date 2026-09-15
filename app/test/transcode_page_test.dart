@@ -157,6 +157,25 @@ void main() {
     expect(form.options.audioCodec, AudioCodec.aac);
   });
 
+  testWidgets('选了 Opus 再切到 MOV：音频自动改成 AAC，开始不被拦', (tester) async {
+    await pumpPage(tester);
+    await tester.ensureVisible(find.text('Opus'));
+    await tester.tap(find.text('Opus'));
+    await tester.pumpAndSettle();
+    expect(form.options.audioCodec, AudioCodec.opus);
+
+    await tester.ensureVisible(find.text('MOV'));
+    await tester.tap(find.text('MOV'));
+    await tester.pumpAndSettle();
+    expect(form.options.container, OutputContainer.mov);
+    expect(form.options.audioCodec, AudioCodec.aac);
+    expect(form.blocker, isNull);
+
+    // 切回 MP4 不会把 AAC 再改回去。
+    form.setContainer(OutputContainer.mp4);
+    expect(form.options.audioCodec, AudioCodec.aac);
+  });
+
   testWidgets('加文件、跳过不兼容的、开始后入队并清空列表', (tester) async {
     await pumpPage(tester);
     // add 里读文件大小是真 IO，在测试的假时钟里不会完成，得放到 runAsync 里。
