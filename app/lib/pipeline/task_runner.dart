@@ -608,6 +608,7 @@ class TaskRunner {
     );
     final encoderId = job.encoder?.id ?? 'copy';
     task.progress = 0;
+    job.speed = null;
     task.note('开始转码 · $encoderId');
     await Directory(File(output).parent.path).create(recursive: true);
 
@@ -659,10 +660,12 @@ class TaskRunner {
         // 没生成过临时文件。
       }
       rethrow;
+    } finally {
+      // 失败或取消后重试时，别让上一次的速度残留在任务行上。
+      job.speed = null;
     }
     task.progress = 1;
     task.eta = null;
-    job.speed = null;
   });
 
   Future<void> _finishTranscode(SubtitleTask task, void Function() onChange) =>
