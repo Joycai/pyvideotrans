@@ -225,6 +225,90 @@ void main() {
     }, skip: winSkip, timeout: const Timeout(Duration(minutes: 2)));
   }
 
+  for (final (codec, encoder, params) in [
+    (VideoCodec.h264, 'libx264', const {'preset': 'veryslow', 'crf': 18}),
+    (VideoCodec.h264, 'h264_videotoolbox', const <String, Object>{}),
+    (VideoCodec.hevc, 'hevc_videotoolbox', const <String, Object>{}),
+  ]) {
+  test('转码中取消（$encoder）：几秒内停下、记为取消、不留临时文件', () async {
+    final src = '${dir.path}/long.mkv';
+    await ffmpeg([
+      '-f', 'lavfi', '-i', 'testsrc2=s=1920x1080:r=30:d=120',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', src,
+    ]);
+    final task = queue.enqueueTranscode([src], options: TranscodeOptions(
+      videoCodec: codec,
+      encoderId: encoder,
+      encoderParams: params,
+    )).single;
+    var deadline = DateTime.now().add(const Duration(seconds: 30));
+    while (!(task.stage == TaskStage.transcode && task.progress > 0) &&
+        task.isActive &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    expect(task.stage, TaskStage.transcode, reason: task.error?.detail);
+
+    queue.cancel(task.id);
+    deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (task.isActive && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    expect(task.status, TaskStatus.cancelled);
+    expect(File('${task.transcode!.outputPath}.part').existsSync(), isFalse);
+  },
+      skip: encoder.endsWith('_videotoolbox') ? macSkip : skip,
+      timeout: const Timeout(Duration(minutes: 2)));
+  }
+
+  // Scoop / Chocolatey 的 ffmpeg.exe 是 shim，真 ffmpeg 是它的子进程。
+  // 这里用不 exec 的 shell 包装器模拟同样的进程树。
+  test('ffmpeg 是包装器时取消：连子进程一起停，任务不卡在转码中', () async {
+    final wrapper = File('${dir.path}/ffmpeg-shim');
+    await wrapper.writeAsString('#!/bin/sh\n"${media.ffmpeg}" "\$@"\n');
+    await Process.run('chmod', ['+x', wrapper.path]);
+    final shimmed = Media(ffmpegPath: wrapper.path, ffprobePath: media.ffprobe);
+    final settings = await AppSettings.load();
+    final shimQueue = TaskQueue(
+      runner: TaskRunner(
+        settings: settings,
+        workDir: dir.path,
+        media: shimmed,
+        transcoder: Transcoder(media: shimmed),
+      ),
+      settings: settings,
+    );
+
+    final src = '${dir.path}/long.mkv';
+    await ffmpeg([
+      '-f', 'lavfi', '-i', 'testsrc2=s=1280x720:r=30:d=120',
+      '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', src,
+    ]);
+    final task = shimQueue.enqueueTranscode([src], options: const TranscodeOptions(
+      videoCodec: VideoCodec.h264,
+      encoderId: 'libx264',
+      encoderParams: {'preset': 'veryslow', 'crf': 18},
+    )).single;
+    var deadline = DateTime.now().add(const Duration(seconds: 30));
+    while (!(task.stage == TaskStage.transcode && task.progress > 0) &&
+        task.isActive &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    expect(task.stage, TaskStage.transcode, reason: task.error?.detail);
+
+    shimQueue.cancel(task.id);
+    deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (task.isActive && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    expect(task.status, TaskStatus.cancelled);
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    final left = await Process.run('pgrep', ['-f', '${task.transcode!.outputPath}.part']);
+    expect('${left.stdout}'.trim(), isEmpty, reason: '子进程 ffmpeg 还在跑');
+  }, skip: skip != false ? skip : Platform.isWindows ? '用 shell 包装器模拟，Windows 上不适用' : false,
+      timeout: const Timeout(Duration(minutes: 2)));
+
   test('编码器检测：CPU 编码器可用，不存在的硬件编码器不会被当成可用', () async {
     await transcoder.refresh();
     expect(transcoder.ffmpegProblem, isNull);
