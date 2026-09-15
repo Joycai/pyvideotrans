@@ -1,11 +1,12 @@
 name: Compile Python
-on: [push]
+# Python 代码已移入 archive/python，sp.spec 与 requirements 不在根目录，push 触发必然失败，改为仅手动运行
+on: [workflow_dispatch]
 jobs:
   pyinstaller-build:
     runs-on: windows-latest
     steps:
       - name: Versatile PyInstaller
-        uses: sayyid5416/pyinstaller@v1.6.0    
+        uses: sayyid5416/pyinstaller@v1.8.0    
         with: 
          python_ver: '3.10'
          pyinstaller_ver: '==6.3.0'
