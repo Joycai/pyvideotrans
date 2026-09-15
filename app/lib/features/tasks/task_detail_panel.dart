@@ -9,7 +9,9 @@ import '../../core/widgets/glass_panel.dart';
 import '../../core/widgets/indicators.dart';
 import '../../domain/srt.dart';
 import '../../domain/task.dart';
+import '../../services/media.dart';
 import '../../services/registry.dart';
+import '../../services/reveal.dart';
 
 /// 右侧 400px 详情面板：标签、错误、各阶段耗时、产物、日志。
 class TaskDetailPanel extends StatefulWidget {
@@ -20,12 +22,16 @@ class TaskDetailPanel extends StatefulWidget {
     required this.onResume,
     required this.onOpenEditor,
     this.onResumeAuto,
+    this.onReveal,
   });
 
   final SubtitleTask task;
   final VoidCallback onClose;
   final VoidCallback onResume;
   final VoidCallback onOpenEditor;
+
+  /// 在文件管理器里显示产物。只有转码任务用。
+  final VoidCallback? onReveal;
 
   /// 「自动重试并跳过失败段」。只对识别阶段有意义，为 null 就不显示。
   final VoidCallback? onResumeAuto;
@@ -56,7 +62,27 @@ class _TaskDetailPanelState extends State<TaskDetailPanel> {
               title: '各阶段耗时',
               child: _StageTimings(task: task),
             ),
-            _Section(title: '产物', child: _Outputs(task: task)),
+            _Section(
+              title: '产物',
+              child: task.transcode == null
+                  ? _Outputs(task: task)
+                  : _TranscodeOutput(task: task, onReveal: widget.onReveal),
+            ),
+            if (task.transcode?.command case final command?)
+              _Section(
+                title: 'FFmpeg 命令',
+                trailing: QuietButton(
+                  label: '复制',
+                  height: 24,
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: command));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('命令已复制')),
+                    );
+                  },
+                ),
+                child: CommandBlock(command: command, lowest: true),
+              ),
             _Section(
               title: '日志 ${task.log.length}',
               leading: _logOpen ? Symbols.expand_more : Symbols.chevron_right,
@@ -101,6 +127,10 @@ class _Header extends StatelessWidget {
     final mt = Registry.translationInfo(task.translationProviderId);
     final runsLocally =
         (task.kind.needsRecognition ? asr : mt)?.runsLocally ?? false;
+    final job = task.transcode;
+    final length = task.mediaDuration != null
+        ? Srt.formatDuration(task.mediaDuration!)
+        : '${task.document.cues.length} 条';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(
@@ -129,9 +159,14 @@ class _Header extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${task.kind.label} · '
-                      '${task.mediaDuration != null ? Srt.formatDuration(task.mediaDuration!) : '${task.document.cues.length} 条'}'
-                      ' · ${task.sourceLanguage.name} → ${task.targetLanguage.name}',
+                      job != null
+                          ? [
+                              task.kind.label,
+                              if (task.mediaDuration != null) length,
+                              job.direction,
+                            ].join(' · ')
+                          : '${task.kind.label} · $length'
+                                ' · ${task.sourceLanguage.name} → ${task.targetLanguage.name}',
                       style: context.texts.bodySmall?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
@@ -151,11 +186,27 @@ class _Header extends StatelessWidget {
             spacing: AppSpacing.s1 + 2,
             runSpacing: AppSpacing.s1 + 2,
             children: [
-              StatusTag(
-                label: runsLocally ? '本地' : '云端',
-                icon: runsLocally ? Symbols.computer : Symbols.cloud,
-                tone: TagTone.service,
-              ),
+              if (job != null)
+                StatusTag(
+                  label: switch (job.encoder) {
+                    null => job.options.remux ? '仅重混流' : '复制视频流',
+                    final e when e.backend.isHardware =>
+                      '硬件编码 · ${e.backend.label}',
+                    _ => 'CPU 编码',
+                  },
+                  icon: switch (job.encoder) {
+                    null => Symbols.content_copy,
+                    final e when e.backend.isHardware => Symbols.memory,
+                    _ => Symbols.computer,
+                  },
+                  tone: TagTone.service,
+                )
+              else
+                StatusTag(
+                  label: runsLocally ? '本地' : '云端',
+                  icon: runsLocally ? Symbols.computer : Symbols.cloud,
+                  tone: TagTone.service,
+                ),
               if (task.kind == TaskKind.transcribeAndTranslate)
                 StatusTag(
                   label: '${mt?.name ?? ''} 翻译',
@@ -327,7 +378,7 @@ class _StageTimings extends StatelessWidget {
     final ext = context.ext;
     return Column(
       children: [
-        for (final stage in TaskStage.values)
+        for (final stage in task.kind.stages)
           Builder(
             builder: (context) {
               final record = task.stages[stage]!;
@@ -476,6 +527,137 @@ class _Outputs extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.s1 + 2),
         ],
+      ],
+    );
+  }
+}
+
+/// 转码任务的产物：一个视频文件。完成后可以在文件管理器里定位它。
+class _TranscodeOutput extends StatelessWidget {
+  const _TranscodeOutput({required this.task, this.onReveal});
+
+  final SubtitleTask task;
+  final VoidCallback? onReveal;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.colors;
+    final job = task.transcode!;
+    final done = task.status == TaskStatus.done;
+    final path = job.outputPath;
+    final meta = done && job.outputBytes != null
+        ? MediaFileInfo(path: path ?? '', sizeBytes: job.outputBytes!).sizeLabel
+        : task.status == TaskStatus.running && task.stage == TaskStage.transcode
+        ? '转码中 · ${task.percentLabel}'
+        : '尚未生成';
+    final fg = done ? cs.onSurface : cs.onSurfaceVariant;
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.only(left: AppSpacing.s3, right: AppSpacing.s1),
+      decoration: BoxDecoration(
+        color: done ? cs.surfaceContainerLowest : null,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Icon(Symbols.movie, size: 18, weight: 400, color: fg),
+          const SizedBox(width: AppSpacing.s2 + 2),
+          Expanded(
+            child: Text(
+              path == null
+                  ? '视频 · ${job.options.container.label}'
+                  : path.split(RegExp(r'[/\\]')).last,
+              overflow: TextOverflow.ellipsis,
+              style: kTimecodeStyle.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: fg,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.s2),
+          Text(
+            meta,
+            style: context.texts.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          if (done && onReveal != null)
+            IconActionButton(
+              icon: Symbols.folder_open,
+              tooltip: Reveal.label,
+              iconSize: 18,
+              onPressed: onReveal,
+            )
+          else
+            const SizedBox(width: AppSpacing.s2),
+        ],
+      ),
+    );
+  }
+}
+
+/// 等宽的命令块。可选中复制，自动换行。
+///
+/// 设计稿里两处样式不同：转码页的预览是 surface-container 底、复制按钮压在
+/// 右上角（传 [onCopy]）；详情面板里是 surface-container-lowest 底、复制放在
+/// 分区标题行。
+class CommandBlock extends StatelessWidget {
+  const CommandBlock({
+    super.key,
+    required this.command,
+    this.maxHeight = 140,
+    this.onCopy,
+    this.lowest = false,
+  });
+
+  final String command;
+  final double maxHeight;
+  final VoidCallback? onCopy;
+  final bool lowest;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.colors;
+    return Stack(
+      children: [
+        Container(
+          width: double.infinity,
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.s3,
+            AppSpacing.s2 + 2,
+            onCopy == null ? AppSpacing.s3 : 40,
+            AppSpacing.s2 + 2,
+          ),
+          decoration: BoxDecoration(
+            color: lowest ? cs.surfaceContainerLowest : cs.surfaceContainer,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: cs.outlineVariant),
+          ),
+          child: SingleChildScrollView(
+            child: SelectableText(
+              command,
+              style: kTimecodeStyle.copyWith(
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                height: 1.5,
+                color: cs.onSurface,
+              ),
+            ),
+          ),
+        ),
+        if (onCopy != null)
+          Positioned(
+            top: 3,
+            right: 3,
+            child: IconActionButton(
+              icon: Symbols.content_copy,
+              tooltip: '复制命令',
+              size: 32,
+              iconSize: 18,
+              onPressed: onCopy,
+            ),
+          ),
       ],
     );
   }
