@@ -620,6 +620,7 @@ class TaskRunner {
         encoderId: encoderId,
         token: token,
         onProgress: (p) {
+          job.speed = p.speed;
           if (total != null && total.inMilliseconds > 0) {
             task.progress = (p.position.inMilliseconds / total.inMilliseconds)
                 .clamp(0.0, 1.0);
@@ -661,6 +662,7 @@ class TaskRunner {
     }
     task.progress = 1;
     task.eta = null;
+    job.speed = null;
   });
 
   Future<void> _finishTranscode(SubtitleTask task, void Function() onChange) =>

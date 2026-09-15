@@ -668,7 +668,12 @@ class _FileRowState extends State<_FileRow> {
           top ?? '—',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: kTimecodeStyle.copyWith(fontSize: 13, color: numberColor),
+          style: kTimecodeStyle.copyWith(
+            fontSize: 12,
+            height: 16 / 12,
+            fontWeight: FontWeight.w500,
+            color: numberColor,
+          ),
         ),
         if (bottom != null && bottom.isNotEmpty)
           Text(
@@ -676,7 +681,8 @@ class _FileRowState extends State<_FileRow> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: kTimecodeStyle.copyWith(
-              fontSize: 11,
+              fontSize: 12,
+              height: 16 / 12,
               fontWeight: FontWeight.w400,
               color: cs.onSurfaceVariant,
             ),
@@ -796,7 +802,7 @@ class _StateChip extends StatelessWidget {
       ),
       StagedVideoState.incompatible => (
         '不兼容',
-        Symbols.error,
+        Symbols.block,
         cs.errorContainer,
         cs.onErrorContainer,
       ),
@@ -1249,7 +1255,7 @@ class _EncoderList extends StatelessWidget {
             selected: encoder.id == form.options.encoderId,
             onTap: () => form.selectEncoder(encoder.id),
           ),
-          const SizedBox(height: AppSpacing.s2),
+          const SizedBox(height: 6),
         ],
         Row(
           children: [
@@ -1292,9 +1298,10 @@ class _EncoderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = context.colors;
     final ext = context.ext;
-    // 检测中的也允许选：结果出来之前不该拦着用户，开始按钮会再核对一次。
-    final enabled = status.state == EncoderState.available ||
-        status.state == EncoderState.probing;
+    // 设计稿：检测中的卡片不变淡，但要等结果出来才能选。
+    final enabled = status.state == EncoderState.available;
+    final dimmed = status.state == EncoderState.notCompiled ||
+        status.state == EncoderState.failed;
     final (chipBg, chipFg, chipIcon) = switch (status.state) {
       EncoderState.available => (
         ext.successContainer,
@@ -1324,10 +1331,7 @@ class _EncoderCard extends StatelessWidget {
 
     final card = Container(
       constraints: const BoxConstraints(minHeight: 48),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.s3,
-        vertical: AppSpacing.s1 + 2,
-      ),
+      padding: const EdgeInsets.fromLTRB(12, 4, 10, 4),
       decoration: BoxDecoration(
         color: selected
             ? Color.alphaBlend(
@@ -1343,7 +1347,7 @@ class _EncoderCard extends StatelessWidget {
       child: Row(
         children: [
           _Radio(selected: selected),
-          const SizedBox(width: AppSpacing.s3),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1384,7 +1388,7 @@ class _EncoderCard extends StatelessWidget {
     );
 
     return Opacity(
-      opacity: enabled ? 1 : AppStateLayer.disabledContent,
+      opacity: dimmed ? AppStateLayer.disabledContent : 1,
       child: MouseRegion(
         cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.forbidden,
         child: GestureDetector(
@@ -1443,41 +1447,44 @@ class _EncoderParams extends StatelessWidget {
     final cs = context.colors;
     final values = form.options.resolvedParams;
     final visible = encoder.params.where((p) => p.isVisible(values));
-    return Column(
+    // 设计稿：参数区是一块 surface-container-low 底的圆角块，与上面的编码器
+    // 卡片区分开 —— 这一块的内容整个随编码器换。
+    return Container(
       key: ValueKey('params-${encoder.id}'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Text(
-              '编码器参数',
-              style: context.texts.labelMedium?.copyWith(
-                color: cs.onSurfaceVariant,
+      padding: const EdgeInsets.all(AppSpacing.s3),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppRadius.md + 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text('编码器参数', style: context.texts.titleSmall),
+              const Spacer(),
+              Text(
+                encoder.id,
+                style: kTimecodeStyle.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                  color: cs.onSurfaceVariant,
+                ),
               ),
-            ),
-            const Spacer(),
-            Text(
-              encoder.id,
-              style: kTimecodeStyle.copyWith(
-                fontSize: 12,
-                fontWeight: FontWeight.w400,
-                color: cs.onSurfaceVariant,
-              ),
+            ],
+          ),
+          for (final param in visible) ...[
+            const SizedBox(height: AppSpacing.s3),
+            EncoderParamField(
+              key: ValueKey('${encoder.id}.${param.key}'),
+              param: param,
+              value: values[param.key]!,
+              onChanged: (v, {bool notify = true}) =>
+                  form.setParam(param.key, v, notify: notify),
             ),
           ],
-        ),
-        const SizedBox(height: AppSpacing.s2),
-        for (final param in visible) ...[
-          EncoderParamField(
-            key: ValueKey('${encoder.id}.${param.key}'),
-            param: param,
-            value: values[param.key]!,
-            onChanged: (v, {bool notify = true}) =>
-                form.setParam(param.key, v, notify: notify),
-          ),
-          const SizedBox(height: AppSpacing.s3),
         ],
-      ],
+      ),
     );
   }
 }
@@ -1782,32 +1789,19 @@ class _AdvancedSection extends StatelessWidget {
                 ),
               ),
               const _Hint('原样追加在输出文件前，参数错误会在任务日志里看到 FFmpeg 的报错'),
-              Row(
-                children: [
-                  Text(
-                    '命令预览',
-                    style: context.texts.labelMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconActionButton(
-                    icon: Symbols.content_copy,
-                    tooltip: '复制命令',
-                    size: 28,
-                    iconSize: 16,
-                    onPressed: () {
-                      Clipboard.setData(
-                        ClipboardData(text: form.commandPreview),
-                      );
-                      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                        const SnackBar(content: Text('命令已复制')),
-                      );
-                    },
-                  ),
-                ],
+              LabeledField(
+                label: '命令预览',
+                child: CommandBlock(
+                  command: form.commandPreview,
+                  maxHeight: 200,
+                  onCopy: () {
+                    Clipboard.setData(ClipboardData(text: form.commandPreview));
+                    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                      const SnackBar(content: Text('命令已复制')),
+                    );
+                  },
+                ),
               ),
-              CommandBlock(command: form.commandPreview, maxHeight: 200),
             ],
     );
   }

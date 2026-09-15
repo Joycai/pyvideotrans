@@ -321,6 +321,9 @@ class SubtitleTask {
 
   /// 界面上阶段一行的文案，规则来自设计稿。
   String get stageLabel => switch (status) {
+    TaskStatus.running when transcode?.speed != null &&
+        stage == TaskStage.transcode =>
+      '${stage.label} · ${transcode!.speed}x',
     TaskStatus.running => stage.label,
     TaskStatus.queued => '排队中',
     TaskStatus.paused => '已暂停 · ${stage.label}',

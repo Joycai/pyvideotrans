@@ -2,6 +2,8 @@
 
 > 在 Claude Design 项目「桌面字幕工具 · 设计系统」（`a18fe120-0675-45f9-bda3-1eeb471bb364`）里使用。
 > Flutter 实现：`app/lib/features/transcode/`，参数模型：`app/lib/domain/transcode.dart`。
+> 产出的设计稿：`P6a Transcode Page Light` / `P6b Transcode Page Dark` / `P6c Transcode Encoders` / `P6d Transcode Task`，
+> 模块 `M-TranscodePage` / `M-TranscodeTask`（https://claude.ai/design/p/a18fe120-0675-45f9-bda3-1eeb471bb364?file=P6a+Transcode+Page+Light.dc.html）。
 
 ---
 

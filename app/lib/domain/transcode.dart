@@ -342,11 +342,11 @@ ChoiceParam _profile(VideoCodec codec, {bool baseline = true}) => ChoiceParam(
   },
 );
 
-BoolParam _hwdec(String label, {bool def = false}) => BoolParam(
+BoolParam _hwdec(String label, String flag, {bool def = false}) => BoolParam(
   key: 'hwdec',
   label: label,
   defaultBool: def,
-  hint: '解码也交给硬件。个别源文件硬件解不了时关掉它再试。',
+  hint: '解码也交给硬件（-hwaccel $flag）。个别源文件硬件解不了时关掉它再试。',
 );
 
 List<String> _profileArgs(Map<String, Object> v) =>
@@ -568,7 +568,7 @@ VideoEncoder _videotoolbox(VideoCodec codec) => VideoEncoder(
       label: '允许回退到软件编码',
       hint: '硬件忙或不支持当前分辨率时，由系统改用软件编码，不报错。',
     ),
-    _hwdec('硬件解码', def: true),
+    _hwdec('硬件解码', 'videotoolbox', def: true),
   ],
   build: (v) => (
     input: v['hwdec'] == true ? const ['-hwaccel', 'videotoolbox'] : const [],
@@ -663,7 +663,7 @@ VideoEncoder _nvenc(VideoCodec codec) => VideoEncoder(
     ),
     const BoolParam(key: 'spatialAq', label: '空间自适应量化 AQ'),
     if (codec != VideoCodec.av1) _profile(codec),
-    _hwdec('CUDA 硬件解码'),
+    _hwdec('CUDA 硬件解码', 'cuda'),
   ],
   build: (v) => (
     input: v['hwdec'] == true ? const ['-hwaccel', 'cuda'] : const [],
@@ -735,7 +735,7 @@ VideoEncoder _qsv(VideoCodec codec) => VideoEncoder(
         hint: '码率分配更合理，速度稍慢。',
       ),
     if (codec != VideoCodec.av1) _profile(codec),
-    _hwdec('QSV 硬件解码'),
+    _hwdec('QSV 硬件解码', 'qsv'),
   ],
   build: (v) => (
     input: v['hwdec'] == true ? const ['-hwaccel', 'qsv'] : const [],
@@ -802,7 +802,7 @@ VideoEncoder _amf(VideoCodec codec) => VideoEncoder(
         defaultOption: 'auto',
         options: [('auto', '自动'), ('main', 'main'), ('high', 'high')],
       ),
-    _hwdec('D3D11 硬件解码'),
+    _hwdec('D3D11 硬件解码', 'd3d11va'),
   ],
   build: (v) => (
     input: v['hwdec'] == true ? const ['-hwaccel', 'd3d11va'] : const [],
@@ -1277,6 +1277,9 @@ class TranscodeJob {
 
   /// 完成后的产物大小。
   int? outputBytes;
+
+  /// 转码中的倍速，运行时状态，不存。任务行里显示成「转码 · 2.4x」。
+  double? speed;
 
   /// 「HEVC → MP4」：源视频编码 → 目标。
   String get direction {
