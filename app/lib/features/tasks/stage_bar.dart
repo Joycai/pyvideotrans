@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../domain/task.dart';
 
-/// 六段阶段条。一眼看出任务走到哪、哪一段出了事、哪一段被跳过。
+/// 阶段条：字幕任务六段，转码任务四段。一眼看出任务走到哪、哪一段出了事、
+/// 哪一段被跳过。
 ///
 /// 配色规则（与设计稿一致）：
 /// - 任务整体完成 → 六段全绿
@@ -21,7 +22,7 @@ class StageBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (final (i, stage) in TaskStage.values.indexed) ...[
+        for (final (i, stage) in task.kind.stages.indexed) ...[
           if (i > 0) const SizedBox(width: 3),
           Expanded(child: _Segment(task: task, stage: stage)),
         ],

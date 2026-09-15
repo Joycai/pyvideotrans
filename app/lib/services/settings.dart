@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/language.dart';
 import '../domain/task_options.dart';
+import '../domain/transcode.dart';
 import 'openai_compatible.dart';
 import 'provider_api.dart';
 import 'registry.dart';
@@ -83,6 +84,7 @@ class AppSettings extends ChangeNotifier {
   static const _kBilingual = 'bilingualLayout';
   static const _kLastTranscribe = 'lastTranscribeOptions';
   static const _kLastTranslate = 'lastTranslateOptions';
+  static const _kLastTranscode = 'lastTranscodeOptions';
 
   Map<String, ProviderConfig> _configs = {};
 
@@ -218,6 +220,25 @@ class AppSettings extends ChangeNotifier {
 
   set lastTranslateOptions(TaskOptions? v) =>
       _writeLastOptions(_kLastTranslate, v);
+
+  /// 最近一次成功提交的「转码」参数（含当时所选编码器的参数值）。
+  TranscodeOptions? get lastTranscodeOptions {
+    final raw = _prefs.getString(_kLastTranscode);
+    if (raw == null) return null;
+    try {
+      return TranscodeOptions.fromJson(jsonDecode(raw) as Map<String, Object?>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  set lastTranscodeOptions(TranscodeOptions? v) {
+    if (v == null) {
+      _prefs.remove(_kLastTranscode);
+    } else {
+      _prefs.setString(_kLastTranscode, jsonEncode(v.toJson()));
+    }
+  }
 
   TaskOptions? _readLastOptions(String key) {
     final raw = _prefs.getString(key);

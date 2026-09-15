@@ -5,6 +5,7 @@ import '../../core/widgets/buttons.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/task.dart';
 import '../../pipeline/task_queue.dart';
+import '../../services/reveal.dart';
 import 'new_transcribe_dialog.dart';
 import 'new_translate_dialog.dart';
 import 'task_table.dart';
@@ -108,6 +109,8 @@ class TasksPageState extends State<TasksPage> {
         if (_selectedId == task.id) setState(() => _selectedId = null);
       case TaskAction.openEditor:
         widget.onOpenEditor(task);
+      case TaskAction.reveal:
+        if (task.transcode?.outputPath case final path?) Reveal.show(path);
     }
   }
 
