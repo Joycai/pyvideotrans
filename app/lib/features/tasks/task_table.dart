@@ -8,7 +8,9 @@ import '../../core/widgets/indicators.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/srt.dart';
 import '../../domain/task.dart';
+import '../../domain/transcode.dart';
 import '../../services/registry.dart';
+import '../../services/reveal.dart';
 import 'stage_bar.dart';
 
 /// 列宽与设计稿一致：文件占剩余宽度，其余固定。
@@ -61,7 +63,17 @@ class TaskTable extends StatelessWidget {
   }
 }
 
-enum TaskAction { cancel, resume, resumeAuto, prioritize, remove, openEditor }
+enum TaskAction {
+  cancel,
+  resume,
+  resumeAuto,
+  prioritize,
+  remove,
+  openEditor,
+
+  /// 在文件管理器里显示转码产物。
+  reveal,
+}
 
 class _HeaderRow extends StatelessWidget {
   const _HeaderRow();
@@ -258,7 +270,8 @@ class _FileCell extends StatelessWidget {
               const SizedBox(width: AppSpacing.s2),
               Expanded(
                 child: Text(
-                  '${task.sourceLanguage.name} → ${task.targetLanguage.name}',
+                  task.transcode?.direction ??
+                      '${task.sourceLanguage.name} → ${task.targetLanguage.name}',
                   overflow: TextOverflow.ellipsis,
                   style: context.texts.bodySmall?.copyWith(
                     color: cs.onSurfaceVariant,
@@ -281,6 +294,8 @@ class _ServiceCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
+    final job = task.transcode;
+    if (job != null) return _TranscodeServiceCell(job: job);
     final asr = Registry.asrInfo(task.asrProviderId);
     final mt = Registry.translationInfo(task.translationProviderId);
 
@@ -320,6 +335,63 @@ class _ServiceCell extends StatelessWidget {
             secondary,
             overflow: TextOverflow.ellipsis,
             style: context.texts.bodySmall?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 转码任务的「服务 / 模型」列：谁在编码（CPU / 哪家硬件），用的哪个编码器。
+class _TranscodeServiceCell extends StatelessWidget {
+  const _TranscodeServiceCell({required this.job});
+
+  final TranscodeJob job;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.colors;
+    final encoder = job.encoder;
+    final (icon, title, detail) = switch (encoder) {
+      null => (
+        Symbols.content_copy,
+        job.options.remux ? '仅重混流' : '复制视频流',
+        '-c copy',
+      ),
+      final e => (
+        e.backend.isHardware ? Symbols.memory : Symbols.computer,
+        e.backend.label,
+        e.id,
+      ),
+    };
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 14, weight: 400, color: cs.onSurfaceVariant),
+            const SizedBox(width: AppSpacing.s1),
+            Expanded(
+              child: Text(
+                title,
+                overflow: TextOverflow.ellipsis,
+                style: context.texts.bodySmall,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Padding(
+          padding: const EdgeInsets.only(left: 18),
+          child: Text(
+            detail,
+            overflow: TextOverflow.ellipsis,
+            style: kTimecodeStyle.copyWith(
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
               color: cs.onSurfaceVariant,
             ),
           ),
@@ -387,14 +459,17 @@ class _ActionsCell extends StatelessWidget {
     }
 
     if (task.status == TaskStatus.done) {
+      final transcode = task.kind == TaskKind.transcode;
       return Row(
         children: [
           Flexible(
             child: ControlButton(
-              label: '打开编辑器',
-              icon: Symbols.edit_note,
+              label: transcode ? Reveal.label : '打开编辑器',
+              icon: transcode ? Symbols.folder_open : Symbols.edit_note,
               dense: true,
-              onPressed: () => onAction(TaskAction.openEditor),
+              onPressed: () => onAction(
+                transcode ? TaskAction.reveal : TaskAction.openEditor,
+              ),
             ),
           ),
           IconActionButton(
@@ -419,13 +494,14 @@ class _ActionsCell extends StatelessWidget {
           tooltip: '取消',
           onPressed: () => onAction(TaskAction.cancel),
         ),
-        IconActionButton(
-          icon: Symbols.edit_note,
-          tooltip: '打开编辑器',
-          onPressed: task.document.cues.isEmpty
-              ? null
-              : () => onAction(TaskAction.openEditor),
-        ),
+        if (task.kind != TaskKind.transcode)
+          IconActionButton(
+            icon: Symbols.edit_note,
+            tooltip: '打开编辑器',
+            onPressed: task.document.cues.isEmpty
+                ? null
+                : () => onAction(TaskAction.openEditor),
+          ),
       ],
     );
   }
