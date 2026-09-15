@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -251,6 +252,38 @@ class Media {
     ], token: token, what: '切分音频');
   }
 
+  /// 连子进程一起杀。Scoop / Chocolatey 装的 ffmpeg.exe 是个 shim，真正干活
+  /// 的 ffmpeg 是它的子进程，只杀 shim 的话 ffmpeg 照跑。子进程要先杀：父进程
+  /// 一死，taskkill /T 就找不到这棵树了。
+  static Future<void> killTree(Process process) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.run('taskkill', ['/PID', '${process.pid}', '/T', '/F']);
+      } else {
+        await Process.run('pkill', ['-KILL', '-P', '${process.pid}']);
+      }
+    } on ProcessException {
+      // 没有 taskkill / pkill 时退回只杀直接子进程。
+    }
+    process.kill();
+  }
+
+  /// 取消后每 200ms 杀一次 [process] 的进程树，直到返回的订阅被取消。
+  static StreamSubscription<void> killOnCancel(
+    Process process,
+    CancellationToken token,
+  ) {
+    var killing = false;
+    return Stream<void>.periodic(const Duration(milliseconds: 200)).listen((
+      _,
+    ) async {
+      if (!token.isCancelled || killing) return;
+      killing = true;
+      await killTree(process);
+      killing = false;
+    });
+  }
+
   /// 跑一次 ffmpeg，返回 stderr（ffmpeg 把进度与滤镜输出都写在那里）。
   /// 取消时杀掉子进程；非零退出码报错并附上 stderr 末尾。
   Future<String> _runFfmpeg(
@@ -262,11 +295,7 @@ class Media {
     final process = await Process.start(ffmpeg, args);
     final stderr = StringBuffer();
     final drain = process.stderr.map(String.fromCharCodes).listen(stderr.write);
-    final watchdog = Stream.periodic(const Duration(milliseconds: 200)).listen(
-      (_) {
-        if (token.isCancelled) process.kill();
-      },
-    );
+    final watchdog = killOnCancel(process, token);
     final exitCode = await process.exitCode;
     await drain.cancel();
     await watchdog.cancel();
@@ -317,11 +346,7 @@ class Media {
         .listen(stderr.write);
 
     // 取消时杀掉子进程，不然它会一直跑到文件结束。
-    final watchdog = Stream.periodic(const Duration(milliseconds: 200)).listen((
-      _,
-    ) {
-      if (token.isCancelled) process.kill();
-    });
+    final watchdog = killOnCancel(process, token);
 
     final exitCode = await process.exitCode;
     await drain.cancel();

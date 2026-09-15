@@ -279,7 +279,7 @@ class Transcoder extends ChangeNotifier {
     final stderr = StringBuffer();
     // 完成信号在订阅时就取：等进程退出后再调 asFuture，流若已经结束，
     // 那个 future 永远不会完成，任务会一直卡在「转码中」。
-    final errDone = process.stderr
+    final errSub = process.stderr
         .transform(const Utf8Decoder(allowMalformed: true))
         .listen((chunk) {
           stderr.write(chunk);
@@ -290,10 +290,10 @@ class Transcoder extends ChangeNotifier {
               ..clear()
               ..write(tail);
           }
-        })
-        .asFuture<void>();
+        });
+    final errDone = errSub.asFuture<void>();
     final block = <String, String>{};
-    final outDone = process.stdout
+    final outSub = process.stdout
         .transform(const Utf8Decoder(allowMalformed: true))
         .transform(const LineSplitter())
         .listen((line) {
@@ -305,21 +305,20 @@ class Transcoder extends ChangeNotifier {
             onProgress(TranscodeProgress.parse(block));
             block.clear();
           }
-        })
-        .asFuture<void>();
-    final watchdog = Stream.periodic(const Duration(milliseconds: 200)).listen(
-      (_) {
-        if (token.isCancelled) process.kill();
-      },
-    );
+        });
+    final outDone = outSub.asFuture<void>();
+    final watchdog = Media.killOnCancel(process, token);
     final exitCode = await process.exitCode;
     await watchdog.cancel();
+    if (token.isCancelled) {
+      // 被杀的若只是包装器，漏网的子进程还攥着管道，等管道关上要等到它转完。
+      await (outSub.cancel(), errSub.cancel()).wait;
+      throw const TaskCancelled();
+    }
     await outDone.catchError((_) {});
     await errDone.catchError((_) {});
-    token.throwIfCancelled();
     if (exitCode != 0) throw describeFailure(stderr.toString(), encoderId);
   }
-
   /// ffmpeg 退出码非零时的报错。
   @visibleForTesting
   static ProviderException describeFailure(String stderr, String encoderId) {
