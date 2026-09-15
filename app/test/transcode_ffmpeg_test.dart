@@ -21,6 +21,11 @@ void main() {
       : Platform.isMacOS
       ? false
       : '只在 macOS 上跑';
+  final Object winSkip = skip != false
+      ? skip
+      : Platform.isWindows
+      ? false
+      : '只在 Windows 上跑';
 
   late Directory dir;
   late TaskQueue queue;
@@ -173,6 +178,51 @@ void main() {
         expect('${tag.stdout}'.trim(), 'hvc1');
       }
     }, skip: macSkip, timeout: const Timeout(Duration(minutes: 2)));
+  }
+
+  // Windows 上的 NVENC / AMF：只在检测为可用时跑，没有对应显卡就跳过。
+  // 开着硬件解码，连 -hwaccel 那一段一起验；HEVC 同样要带 hvc1 标签。
+  for (final (id, codec, hwaccel) in [
+    ('h264_nvenc', 'h264', 'cuda'),
+    ('hevc_nvenc', 'hevc', 'cuda'),
+    ('av1_nvenc', 'av1', 'cuda'),
+    ('h264_amf', 'h264', 'd3d11va'),
+    ('hevc_amf', 'hevc', 'd3d11va'),
+  ]) {
+    test('Windows 硬件编码：$id + -hwaccel $hwaccel', () async {
+      await transcoder.refresh();
+      if (!transcoder.status(id).usable) {
+        markTestSkipped('$id 在这台电脑上不可用：${transcoder.status(id).reason}');
+        return;
+      }
+      final src = '${dir.path}/clip.mkv';
+      await ffmpeg([
+        '-f', 'lavfi', '-i', 'testsrc2=s=1280x720:r=30:d=2',
+        '-f', 'lavfi', '-i', 'sine=d=2',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', src,
+      ]);
+      final encoder = VideoEncoders.byId(id)!;
+      final task = await run(
+        src,
+        TranscodeOptions(
+          videoCodec: encoder.codec,
+          encoderId: id,
+          encoderParams: {...encoder.defaults, 'hwdec': true},
+        ),
+      );
+      expect(task.status, TaskStatus.done, reason: task.error?.detail);
+      expect(task.transcode!.command, contains('-hwaccel $hwaccel'));
+      final out = task.transcode!.outputPath!;
+      final streams = (await probe(out))['streams']! as List;
+      expect(streams.map((s) => (s as Map)['codec_name']), contains(codec));
+      if (codec == 'hevc') {
+        final tag = await Process.run(media.ffprobe, [
+          '-v', 'error', '-select_streams', 'v:0',
+          '-show_entries', 'stream=codec_tag_string', '-of', 'csv=p=0', out,
+        ]);
+        expect('${tag.stdout}'.trim(), 'hvc1');
+      }
+    }, skip: winSkip, timeout: const Timeout(Duration(minutes: 2)));
   }
 
   test('编码器检测：CPU 编码器可用，不存在的硬件编码器不会被当成可用', () async {

@@ -203,6 +203,11 @@ class Transcoder extends ChangeNotifier {
         if (s.contains('amf') && (s.contains('dll') || s.contains('load'))) {
           return '没有找到 AMD 显卡或驱动';
         }
+        // 显卡本身不支持这种编码时，AMF 建不出组件，ffmpeg 报
+        // 「CreateComponent(...) failed」；-v error 下只剩「Encoder not found」。
+        if (s.contains('createcomponent') || s.contains('encoder not found')) {
+          return '显卡不支持 ${enc.codec.label} 编码';
+        }
       case EncoderBackend.videotoolbox:
         return '这台 Mac 不支持用硬件编码 ${enc.codec.label}';
       case EncoderBackend.cpu:

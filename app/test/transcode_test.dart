@@ -374,6 +374,24 @@ Encoders:
         ),
         '没有找到 NVIDIA 显卡或驱动',
       );
+      // AMD 核显不支持 AV1：-v error 下 stderr 末行是「Nothing was written」，
+      // 不能把那句原样给用户。
+      expect(
+        Transcoder.explainEncoderFailure(
+          VideoEncoders.byId('av1_amf')!,
+          '[vf#0:0 @ 0x1] Terminating thread with return code -1129203192 (Encoder not found)\n'
+          '[vost#0:0/av1_amf @ 0x1] [enc:av1_amf @ 0x1] Could not open encoder before EOF\n'
+          '[out#0/null @ 0x1] Nothing was written into output file, because at least one of its streams received no packets.',
+        ),
+        '显卡不支持 AV1 编码',
+      );
+      expect(
+        Transcoder.explainEncoderFailure(
+          VideoEncoders.byId('av1_amf')!,
+          '[av1_amf @ 0x1] CreateComponent(AMFVideoEncoderHW_AV1) failed with error 30',
+        ),
+        '显卡不支持 AV1 编码',
+      );
     });
   });
 
