@@ -17,7 +17,7 @@ TranscodeOptions _opts({
   int? fps,
   String extra = '',
 }) {
-  // VC-1 没有编码器，这时 enc 为 null。
+  // 复制视频时没有编码器，这时 enc 为 null。
   final enc = encoder == null
       ? VideoEncoders.defaultFor(codec)
       : VideoEncoders.byId(encoder)!;
@@ -48,7 +48,7 @@ String? _after(List<String> args, String flag) {
 
 void main() {
   group('编码器目录', () {
-    test('每种编码都有 CPU 编码器排第一，VC-1 没有编码器', () {
+    test('每种编码都有 CPU 编码器排第一，复制没有编码器', () {
       for (final codec in [VideoCodec.h264, VideoCodec.hevc, VideoCodec.av1]) {
         expect(VideoEncoders.defaultFor(codec)!.backend, EncoderBackend.cpu);
         final backends = VideoEncoders.forCodec(codec).map((e) => e.backend);
@@ -56,7 +56,7 @@ void main() {
           (b) => !(codec == VideoCodec.av1 && b == EncoderBackend.videotoolbox),
         )));
       }
-      expect(VideoEncoders.forCodec(VideoCodec.vc1), isEmpty);
+      expect(VideoEncoders.forCodec(VideoCodec.copy), isEmpty);
     });
 
     test('同是 H.264，x264 与 NVENC 的参数表不同', () {
@@ -243,19 +243,25 @@ void main() {
   });
 
   group('容器兼容', () {
-    test('参数本身的问题：VC-1、MOV 里的 AV1、Vorbis、MOV 里的 Opus', () {
-      expect(_opts(codec: VideoCodec.vc1).problem, contains('VC-1'));
+    test('参数本身的问题：MOV 里的 AV1、MOV 里的 Opus', () {
       expect(
         _opts(codec: VideoCodec.av1, container: OutputContainer.mov).problem,
         contains('AV1'),
       );
-      expect(_opts(audio: AudioCodec.vorbis).problem, contains('Vorbis'));
       expect(
         _opts(audio: AudioCodec.opus, container: OutputContainer.mov).problem,
-        isNotNull,
+        contains('Opus'),
       );
       expect(_opts(audio: AudioCodec.opus).problem, isNull);
-      expect(_opts(mode: TranscodeMode.remux, audio: AudioCodec.vorbis).problem, isNull);
+      // 重混流不重新编码音频，所选音频编码不起作用。
+      expect(
+        _opts(
+          mode: TranscodeMode.remux,
+          container: OutputContainer.mov,
+          audio: AudioCodec.opus,
+        ).problem,
+        isNull,
+      );
     });
 
     test('复制流时按源文件编码判断（名单来自本机实测）', () {

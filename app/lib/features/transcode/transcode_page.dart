@@ -1144,10 +1144,8 @@ class _VideoSection extends StatelessWidget {
     final o = form.options;
     final codec = o.videoCodec;
     final encoder = o.encoder;
-    final transcoding = codec != VideoCodec.copy && codec != VideoCodec.vc1;
+    final transcoding = codec != VideoCodec.copy;
     final codecHint = switch (codec) {
-      VideoCodec.vc1 =>
-        'FFmpeg 没有 VC-1 编码器，VC-1 源文件可以用「复制」或「仅重混流」',
       VideoCodec.av1 when o.container == OutputContainer.mov =>
         'MOV 装不下 AV1 视频，换成 MP4',
       VideoCodec.copy => '视频流原样复制，分辨率与帧率不能改',
@@ -1166,9 +1164,7 @@ class _VideoSection extends StatelessWidget {
                 (
                   value: c,
                   label: c.label,
-                  enabled:
-                      c != VideoCodec.vc1 &&
-                      (c == VideoCodec.copy || o.container.acceptsVideo(c)),
+                  enabled: c == VideoCodec.copy || o.container.acceptsVideo(c),
                 ),
             ],
             onChanged: form.setVideoCodec,
@@ -1600,13 +1596,10 @@ class _AudioSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final o = form.options;
     final hint = switch (o.audioCodec) {
-      AudioCodec.vorbis =>
-        'MP4 与 MOV 都装不下 Vorbis（OGG 音频），要 OGG 系音频请选 Opus，仅 MP4 支持',
       AudioCodec.opus when o.container == OutputContainer.mov =>
         'MOV 装不下 Opus，换成 MP4 或 AAC',
-      _ when o.container == OutputContainer.mov =>
-        'Vorbis 与 Opus 放不进 MOV，已禁用',
-      _ => 'Vorbis（OGG 音频）放不进 MP4 / MOV，已禁用；要 OGG 系音频请选 Opus',
+      _ when o.container == OutputContainer.mov => 'Opus 放不进 MOV，已禁用',
+      _ => null,
     };
     return _Section(
       title: '音频',
@@ -1627,7 +1620,8 @@ class _AudioSection extends StatelessWidget {
             onChanged: (c) => form.update((o) => o.copyWith(audioCodec: c)),
           ),
         ),
-        _Hint(hint, error: !o.container.acceptsAudio(o.audioCodec)),
+        if (hint != null)
+          _Hint(hint, error: !o.container.acceptsAudio(o.audioCodec)),
         if (o.audioCodec != AudioCodec.copy)
           Row(
             children: [

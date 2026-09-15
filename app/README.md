@@ -11,9 +11,9 @@
 导航栏「翻译」下面的「转码」页。
 
 - 视频编码：H.264、HEVC、AV1，或原样复制；也可以「仅重混流」，不重新编码只换容器。
-  VC-1 列出但不可选 —— FFmpeg 只有 VC-1 解码器，VC-1 源文件用复制或重混流。
-- 音频编码：AAC、MP3、Opus、Vorbis，或复制。MP4 / MOV 都装不下 Vorbis（OGG 音频），
-  界面上灰显；要 OGG 系音频选 Opus（仅 MP4）。
+  不提供 VC-1（FFmpeg 只有 VC-1 解码器）；VC-1 源文件可以复制或重混流。
+- 音频编码：AAC、MP3、Opus，或复制。不提供 Vorbis（OGG 音频），MP4 / MOV 都装不下它；
+  Opus 只能放进 MP4。
 - 容器：MP4、MOV。
 - 编码器：CPU（x264 / x265 / SVT-AV1 / libaom）、VideoToolbox（Apple）、NVENC（NVIDIA）、
   QSV（Intel）、AMF（AMD）。**每个编码器用自己的一套参数**（x264 的 CRF 与 preset、

@@ -32,16 +32,14 @@ enum OutputContainer {
   final String label;
   final String extension;
 
-  /// 能不能装下这种**编码出来的**视频。VC-1 本来就没有编码器，这里不管。
-  /// MOV 装不下 AV1（ffmpeg 的 mov 封装器不收）。
+  /// 能不能装下这种**编码出来的**视频。MOV 装不下 AV1（ffmpeg 的 mov 封装器不收）。
   bool acceptsVideo(VideoCodec codec) => switch (codec) {
     VideoCodec.av1 => this == mp4,
     _ => true,
   };
 
-  /// Vorbis 两种容器都装不下；Opus 只有 MP4 收。
+  /// Opus 只有 MP4 收。
   bool acceptsAudio(AudioCodec codec) => switch (codec) {
-    AudioCodec.vorbis => false,
     AudioCodec.opus => this == mp4,
     _ => true,
   };
@@ -88,10 +86,6 @@ enum VideoCodec {
   hevc('HEVC', 'H.265 · x265'),
   av1('AV1', 'AOMedia Video 1'),
 
-  /// FFmpeg 没有 VC-1 编码器，只能解码。列出来是为了说清楚为什么选不了，
-  /// 以及 VC-1 源文件该怎么办（复制 / 仅重混流）。
-  vc1('VC-1', 'SMPTE 421M'),
-
   /// 视频流原样复制，只转音频或只换容器。
   copy('复制', '不重新编码');
 
@@ -115,11 +109,8 @@ enum AudioCodec {
   aac('AAC', 'aac'),
   mp3('MP3', 'libmp3lame'),
 
-  /// Ogg 家族里能放进 MP4 的那个。
+  /// 只有 MP4 收。不提供 Vorbis（OGG 音频）：MP4 / MOV 都装不下它。
   opus('Opus', 'libopus'),
-
-  /// 即 OGG 音频。MP4 / MOV 都装不下，界面上灰显并说明。
-  vorbis('Vorbis', 'libvorbis'),
   copy('复制', 'copy');
 
   const AudioCodec(this.label, this.encoder);
@@ -129,11 +120,10 @@ enum AudioCodec {
   /// 首选的 ffmpeg 编码器名。
   final String encoder;
 
-  /// 首选编码器没编进来时的替补，以及它需要的额外参数。
-  /// Homebrew 的 ffmpeg 就没带 libvorbis，只有标记为实验性的原生 vorbis。
+  /// 首选编码器没编进来时的替补，以及它需要的额外参数（原生 opus 编码器
+  /// 标记为实验性）。
   (String, List<String>)? get fallback => switch (this) {
     AudioCodec.opus => ('opus', ['-strict', '-2']),
-    AudioCodec.vorbis => ('vorbis', ['-strict', '-2']),
     _ => null,
   };
 
@@ -1081,9 +1071,6 @@ class TranscodeOptions {
   /// 这份参数本身有没有问题（与具体文件无关）。null 表示没问题。
   String? get problem {
     if (remux) return null;
-    if (videoCodec == VideoCodec.vc1) {
-      return 'FFmpeg 没有 VC-1 编码器，VC-1 源文件请用「复制」或「仅重混流」';
-    }
     if (videoCodec != VideoCodec.copy) {
       if (encoder == null) return '没有选择编码器';
       if (!container.acceptsVideo(videoCodec)) {
@@ -1091,9 +1078,7 @@ class TranscodeOptions {
       }
     }
     if (!container.acceptsAudio(audioCodec)) {
-      return audioCodec == AudioCodec.vorbis
-          ? 'MP4 与 MOV 都装不下 Vorbis（OGG 音频），换成 Opus 或 AAC'
-          : '${container.label} 装不下 ${audioCodec.label} 音频，换成 MP4 或 AAC';
+      return '${container.label} 装不下 ${audioCodec.label} 音频，换成 MP4 或 AAC';
     }
     return null;
   }

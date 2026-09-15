@@ -140,11 +140,10 @@ void main() {
     expect(form.options.encoderId, 'libx264');
   });
 
-  testWidgets('VC-1 不能选；MOV 下 AV1 与 Opus 灰掉', (tester) async {
+  testWidgets('不提供 VC-1 与 Vorbis；MOV 下 AV1 与 Opus 灰掉', (tester) async {
     await pumpPage(tester);
-    await tester.tap(find.text('VC-1'));
-    await tester.pumpAndSettle();
-    expect(form.options.videoCodec, VideoCodec.h264);
+    expect(find.text('VC-1'), findsNothing);
+    expect(find.text('Vorbis'), findsNothing);
 
     await tester.tap(find.text('MOV'));
     await tester.pumpAndSettle();
