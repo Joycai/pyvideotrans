@@ -1,8 +1,7 @@
 name: Auto Close Inactive Issues
 
+# owner/repo 写死为上游 jianchang512/pyvideotrans，在 fork 上跑会失败，停用定时触发，仅保留手动运行
 on:
-  schedule:
-    - cron: "0 2 * * *"
   workflow_dispatch:
 
 permissions:
