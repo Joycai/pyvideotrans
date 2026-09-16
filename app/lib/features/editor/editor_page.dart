@@ -86,9 +86,11 @@ class EditorPageState extends State<EditorPage> {
   }
 
   /// 找会话配套的音视频；找到就开播放器。异步的，找的期间先显示样式预览。
+  /// 上次手动关联过的优先。
   Future<void> _locateMedia() async {
     final session = controller.session;
-    final path = await session.locateMedia();
+    final linked = await controller.store?.loadMediaLink(session.subtitlePath);
+    final path = await session.locateMedia(linked: linked);
     if (!mounted || controller.session != session || path == null) return;
     _openPlayback(path);
   }
@@ -113,8 +115,13 @@ class EditorPageState extends State<EditorPage> {
       ],
     );
     if (picked == null || !mounted) return;
-    controller.session.mediaPath = picked.path;
+    final session = controller.session;
+    session.mediaPath = picked.path;
     _openPlayback(picked.path);
+    // 记下来，下次打开同一份字幕不用再选。写不进去也不影响这次预览。
+    controller.store
+        ?.saveMediaLink(session.subtitlePath, picked.path)
+        .catchError((Object _) {});
   }
 
   void _refresh() {
@@ -123,9 +130,8 @@ class EditorPageState extends State<EditorPage> {
 
   void _report(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// provider 的报错本来就带 hint，直接原样展示给用户。
@@ -156,9 +162,7 @@ class EditorPageState extends State<EditorPage> {
         SrtField.source,
         if (controller.hasTranslations) SrtField.translation,
       });
-      _report(
-        written.isEmpty ? '没有可导出的内容' : '已导出 ${written.length} 个文件到源文件目录',
-      );
+      _report(written.isEmpty ? '没有可导出的内容' : '已导出 ${written.length} 个文件到源文件目录');
     } catch (e) {
       _report('导出失败：${_describe(e)}');
     }
@@ -353,7 +357,12 @@ class _DropOverlay extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             spacing: AppSpacing.s2,
             children: [
-              Icon(icon, size: 40, weight: 400, color: hot ? cs.primary : cs.onSurfaceVariant),
+              Icon(
+                icon,
+                size: 40,
+                weight: 400,
+                color: hot ? cs.primary : cs.onSurfaceVariant,
+              ),
               Text(title, style: context.texts.titleMedium),
               Text(
                 '松开后先确认配对，不会立即写入',
@@ -433,7 +442,11 @@ class EditorPageActions extends StatelessWidget {
         if (controller.session is FileSession) ...[
           const SizedBox(width: AppSpacing.s3),
           // 没有修改时禁用而不是隐藏，位置不跳。
-          _SaveButton(dirty: dirty, dot: cs.primary, onPressed: dirty ? onSave : null),
+          _SaveButton(
+            dirty: dirty,
+            dot: cs.primary,
+            onPressed: dirty ? onSave : null,
+          ),
         ],
         const SizedBox(width: AppSpacing.s3),
         PrimaryButton(
@@ -474,7 +487,12 @@ class _ViewMenu extends StatelessWidget {
             MenuRow(
               label: _viewLabels[v]!,
               trailing: v == controller.view
-                  ? Icon(Symbols.check, size: 18, weight: 500, color: cs.primary)
+                  ? Icon(
+                      Symbols.check,
+                      size: 18,
+                      weight: 500,
+                      color: cs.primary,
+                    )
                   : null,
               onTap: () {
                 controller.setView(v);
@@ -516,7 +534,9 @@ class _SaveButton extends StatelessWidget {
           border: Border.all(
             color: enabled
                 ? cs.outlineVariant
-                : cs.onSurface.withValues(alpha: AppStateLayer.disabledContainer),
+                : cs.onSurface.withValues(
+                    alpha: AppStateLayer.disabledContainer,
+                  ),
           ),
           boxShadow: enabled ? e.controlShadow : null,
         ),
@@ -535,7 +555,10 @@ class _SaveButton extends StatelessWidget {
                     Container(
                       width: 6,
                       height: 6,
-                      decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+                      decoration: BoxDecoration(
+                        color: dot,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                     const SizedBox(width: 6),
                   ],
@@ -596,7 +619,12 @@ class EditorTitleTrailing extends StatelessWidget {
           TaskSession() => Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Symbols.check, size: 16, weight: 400, color: cs.onSurfaceVariant),
+              Icon(
+                Symbols.check,
+                size: 16,
+                weight: 400,
+                color: cs.onSurfaceVariant,
+              ),
               const SizedBox(width: AppSpacing.s1),
               Text(
                 '已自动保存',
@@ -657,7 +685,12 @@ class _SourceChip extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Symbols.description, size: 16, weight: 400, color: cs.onSurfaceVariant),
+                  Icon(
+                    Symbols.description,
+                    size: 16,
+                    weight: 400,
+                    color: cs.onSurfaceVariant,
+                  ),
                   const SizedBox(width: AppSpacing.s1),
                   Text('本地 · $fileCount 个文件', style: context.texts.labelMedium),
                   Icon(
@@ -689,11 +722,18 @@ class _SourceChip extends StatelessWidget {
             children: [
               Text(
                 head,
-                style: context.texts.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                style: context.texts.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
               ),
               Row(
                 children: [
-                  Icon(Symbols.subtitles, size: 18, weight: 400, color: cs.onSurfaceVariant),
+                  Icon(
+                    Symbols.subtitles,
+                    size: 18,
+                    weight: 400,
+                    color: cs.onSurfaceVariant,
+                  ),
                   const SizedBox(width: AppSpacing.s2),
                   Expanded(
                     child: Text(
@@ -729,7 +769,9 @@ class _SourceChip extends StatelessWidget {
                 '${parentDir(path)} · $count 条',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: context.texts.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                style: context.texts.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
               ),
             ],
           ),
@@ -757,19 +799,30 @@ class _SourceChip extends StatelessWidget {
               SizedBox(
                 height: 36,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.s2,
+                  ),
                   child: Row(
                     children: [
-                      Icon(Symbols.link, size: 18, weight: 400, color: cs.onSurfaceVariant),
+                      Icon(
+                        Symbols.link,
+                        size: 18,
+                        weight: 400,
+                        color: cs.onSurfaceVariant,
+                      ),
                       const SizedBox(width: AppSpacing.s2),
                       Expanded(
                         child: Text(
                           [
                             if (pairing != null)
-                              pairing.mode == PairingMode.byIndex ? '按序号配对' : '按时间轴配对',
+                              pairing.mode == PairingMode.byIndex
+                                  ? '按序号配对'
+                                  : '按时间轴配对',
                             if (pairing != null) '${pairing.paired} 条',
-                            if (doc.unpairedCount > 0) '${doc.unpairedCount} 条未配对',
-                            if (pairing == null && doc.unpairedCount == 0) '已配对',
+                            if (doc.unpairedCount > 0)
+                              '${doc.unpairedCount} 条未配对',
+                            if (pairing == null && doc.unpairedCount == 0)
+                              '已配对',
                           ].join(' · '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -790,7 +843,12 @@ class _SourceChip extends StatelessWidget {
                 ),
               ),
             MenuRow(
-              leading: Icon(Symbols.folder_open, size: 18, weight: 400, color: cs.onSurfaceVariant),
+              leading: Icon(
+                Symbols.folder_open,
+                size: 18,
+                weight: 400,
+                color: cs.onSurfaceVariant,
+              ),
               label: '打开其他字幕…',
               onTap: () {
                 close();
@@ -801,7 +859,9 @@ class _SourceChip extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
               child: Text(
                 '⌘S 会覆盖上面 $fileCount 个文件。想保留原文件，请用「导出」。',
-                style: context.texts.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                style: context.texts.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
               ),
             ),
           ],
@@ -812,7 +872,11 @@ class _SourceChip extends StatelessWidget {
 }
 
 class _TextAction extends StatelessWidget {
-  const _TextAction({required this.label, required this.color, required this.onTap});
+  const _TextAction({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
 
   final String label;
   final Color color;
@@ -827,7 +891,10 @@ class _TextAction extends StatelessWidget {
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
       alignment: Alignment.center,
-      child: Text(label, style: context.texts.labelMedium?.copyWith(color: color)),
+      child: Text(
+        label,
+        style: context.texts.labelMedium?.copyWith(color: color),
+      ),
     ),
   );
 }
@@ -875,7 +942,10 @@ Future<bool> confirmLeaveEditor(
                     style: context.texts.bodyMedium,
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: cs.surfaceContainer,
                       borderRadius: BorderRadius.circular(AppRadius.md),
@@ -894,17 +964,20 @@ Future<bool> confirmLeaveEditor(
                         _TextAction(
                           label: '不保存',
                           color: cs.error,
-                          onTap: () => Navigator.of(context).pop(_LeaveChoice.discard),
+                          onTap: () =>
+                              Navigator.of(context).pop(_LeaveChoice.discard),
                         ),
                         const Spacer(),
                         ControlButton(
                           label: '取消',
-                          onPressed: () => Navigator.of(context).pop(_LeaveChoice.cancel),
+                          onPressed: () =>
+                              Navigator.of(context).pop(_LeaveChoice.cancel),
                         ),
                         const SizedBox(width: AppSpacing.s2),
                         PrimaryButton(
                           label: '保存并打开',
-                          onPressed: () => Navigator.of(context).pop(_LeaveChoice.save),
+                          onPressed: () =>
+                              Navigator.of(context).pop(_LeaveChoice.save),
                         ),
                       ],
                     ),
@@ -925,9 +998,8 @@ Future<bool> confirmLeaveEditor(
         return true;
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('保存失败：$e')));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('保存失败：$e')));
         }
         return false;
       }

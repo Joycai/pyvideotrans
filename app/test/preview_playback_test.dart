@@ -5,6 +5,7 @@ import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/preview_playback.dart';
+import 'package:subtitle_studio/services/editor_store.dart';
 
 import 'helpers.dart';
 
@@ -81,6 +82,38 @@ void main() {
       expect(await session.locateMedia(), mp4.path);
       session.mediaPath = '${dir.path}/gone.mp4';
       expect(await session.locateMedia(), mp4.path);
+    });
+
+    test('手动关联过的优先于旁边的同名文件；文件没了就回落', () async {
+      final dir = await Directory.systemTemp.createTemp('preview_link');
+      addTearDown(() => dir.delete(recursive: true));
+      final srt = File('${dir.path}/a.srt')..writeAsStringSync('');
+      final sibling = File('${dir.path}/a.mp4')..writeAsStringSync('');
+      final linked = File('${dir.path}/other.mkv')..writeAsStringSync('');
+      FileSession open() => FileSession.open(
+        source: LocalSubtitleFile(path: srt.path, cues: [_cue(1, 0, 1000)]),
+        defaults: _defaults(),
+      );
+      expect(await open().locateMedia(linked: linked.path), linked.path);
+      expect(
+        await open().locateMedia(linked: '${dir.path}/gone.mkv'),
+        sibling.path,
+      );
+    });
+  });
+
+  group('EditorStore 的音视频关联', () {
+    test('按字幕路径存取，读不到时为 null', () async {
+      final dir = await Directory.systemTemp.createTemp('preview_store');
+      addTearDown(() => dir.delete(recursive: true));
+      final store = EditorStore('${dir.path}/editor');
+      expect(await store.loadMediaLink('/x/a.srt'), isNull);
+      await store.saveMediaLink('/x/a.srt', '/x/a.mp4');
+      await store.saveMediaLink('/x/b.srt', '/x/b.mkv');
+      expect(await store.loadMediaLink('/x/a.srt'), '/x/a.mp4');
+      expect(await store.loadMediaLink('/x/b.srt'), '/x/b.mkv');
+      await store.saveMediaLink('/x/a.srt', '/y/a.mov');
+      expect(await store.loadMediaLink('/x/a.srt'), '/y/a.mov');
     });
   });
 }

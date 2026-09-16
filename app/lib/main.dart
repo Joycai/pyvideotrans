@@ -238,6 +238,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     final controller = EditorController(
       session: TaskSession(task),
       settings: widget.settings,
+      store: widget.editorStore,
     )
       // 编辑器里的改动（改字、改时间、拆分合并、重新翻译）跟着写盘。
       ..addListener(() => widget.queue.persist(task));
