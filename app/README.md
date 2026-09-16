@@ -1,9 +1,33 @@
 # 字幕工具 · Flutter 客户端
 
-跨平台桌面应用（macOS / Windows / Linux）。两项核心能力：
+跨平台桌面应用（macOS / Windows / Linux）。核心能力：
 
 1. **音视频语音生成字幕** —— 抽音 → 识别 → 断句
 2. **字幕翻译** —— 大模型按批翻译，条数严格一一对应
+3. **视频转码** —— FFmpeg 的图形外壳，任务同样进任务队列
+
+## 视频转码
+
+导航栏「翻译」下面的「转码」页。
+
+- 视频编码：H.264、HEVC、AV1，或原样复制；也可以「仅重混流」，不重新编码只换容器。
+  不提供 VC-1（FFmpeg 只有 VC-1 解码器）；VC-1 源文件可以复制或重混流。
+- 音频编码：AAC、MP3、Opus，或复制。不提供 Vorbis（OGG 音频），MP4 / MOV 都装不下它；
+  Opus 只能放进 MP4。
+- 容器：MP4、MOV。
+- 编码器：CPU（x264 / x265 / SVT-AV1 / libaom）、VideoToolbox（Apple）、NVENC（NVIDIA）、
+  QSV（Intel）、AMF（AMD）。**每个编码器用自己的一套参数**（x264 的 CRF 与 preset、
+  NVENC 的 CQ 与 p1–p7、QSV 的 ICQ、AMF 的 CQP……），不做通用的「质量 / 速度」映射。
+  参数表定义在 `lib/domain/transcode.dart` 的 `VideoEncoders`。
+- 可用性检测：先看 `ffmpeg -encoders` 有没有编入，再对硬件编码器试编码 1 帧。
+  编入了但没有对应显卡的会标「设备不可用」并写明原因。
+- 产物写到 `原文件名.hevc.mp4`（后缀可改），已存在时加序号，不覆盖；先写 `.part`，
+  成功后才改名。高级里能看到并复制完整的 ffmpeg 命令。
+- 复制流时按源文件编码核对容器兼容（名单经本机 ffmpeg 实测），放不进的文件在列表里
+  标「不兼容」并跳过。
+
+硬件编码的端到端测试（`test/transcode_ffmpeg_test.dart`）在本机没有 ffmpeg 时跳过，
+VideoToolbox 用例只在 macOS 上跑。
 
 UI 遵循 Claude Design 项目「桌面字幕工具 · 设计系统」。
 
@@ -14,14 +38,21 @@ cd app
 flutter run -d macos      # 或 -d windows / -d linux
 ```
 
-需要 `ffmpeg`（用来抽音）。应用会依次在「应用目录/ffmpeg」、Homebrew 与
-`/usr/local/bin`、PATH 里找它：
+需要 `ffmpeg`（用来抽音与转码）。macOS / Linux 用包管理器装上就行：
 
 ```bash
-brew install ffmpeg
+brew install ffmpeg                # macOS
+sudo apt install ffmpeg            # Debian / Ubuntu
 ```
 
-Windows 把 `ffmpeg.exe` 放进应用目录下的 `ffmpeg` 文件夹即可。
+Windows 装 ffmpeg 通常卡在「该放哪、怎么配环境变量」上，所以应用里留了条不用配的路：
+**设置 → 环境 → 打开目录**，把 `ffmpeg.exe` 和 `ffprobe.exe` 拖进去，再点「重新检测」。
+那个目录在应用支持目录下（不是安装目录 —— 安装目录在 Program Files 里，往里拖文件要过 UAC）。
+
+完整查找顺序：投放目录 → 应用目录/ffmpeg（随包分发时放这儿）→
+Homebrew 与 `/usr/local/bin` 等系统位置（Windows 上是 `C:\ffmpeg\bin`、winget、
+scoop、choco 的落点）→ PATH。macOS 上 GUI 应用拿不到用户 shell 的 PATH，
+所以必须显式找 Homebrew。
 
 编辑器里的预览用 [media_kit](https://pub.dev/packages/media_kit) 播放音视频。
 macOS 与 Windows 的播放库随应用打包；Linux 要装系统的 libmpv

@@ -1,0 +1,54 @@
+{
+  "skill_name": "bump-versions",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "把 app 的版本号升到 1.1.0，所有写着版本号的地方都要改到，包括打包脚本和各平台的工程配置。仓库在 app/ 目录，是个 Flutter 桌面项目。不要提交。",
+      "expected_output": "app/pubspec.yaml 变为 1.1.0+2；windows/runner/Runner.rc 两处 fallback 同步；说明 dmg 脚本与 installer.iss 是从 pubspec / exe 派生的，无需改；不提交。",
+      "files": [],
+      "assertions": [
+        "app/pubspec.yaml version becomes 1.1.0 (build number 2 or otherwise incremented, not left at +1)",
+        "windows/runner/Runner.rc fallback VERSION_AS_STRING becomes \"1.1.0\"",
+        "windows/runner/Runner.rc fallback VERSION_AS_NUMBER first three components become 1,1,0",
+        "No lock files (pubspec.lock, Podfile.lock) or generated files are modified",
+        "Nothing was committed (git status shows uncommitted changes, HEAD unchanged)",
+        "Final message states that make_dmg.sh derives the version from pubspec and installer.iss reads it from the exe, so they need no edit",
+        "No file outside app/ was modified"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "bump the patch version of this flutter desktop app. update every place the version appears (build scripts for mac/win/linux, project config, changelog). don't commit.",
+      "expected_output": "pubspec 2.3.1+7 → 2.3.2+8；Runner.rc、Info.plist、installer.iss、make_dmg.sh、snapcraft.yaml、lib/about.dart 全部改为 2.3.2；CHANGELOG 的 Unreleased 变成 2.3.2 标题而旧条目不动；.desktop 的 Version=1.0 不动。",
+      "files": [
+        "fixtures/demo_app"
+      ],
+      "assertions": [
+        "pubspec.yaml version becomes 2.3.2+8",
+        "windows/runner/Runner.rc VERSION_AS_STRING becomes \"2.3.2\" and VERSION_AS_NUMBER starts with 2,3,2",
+        "macos/Runner/Info.plist CFBundleShortVersionString becomes 2.3.2 and CFBundleVersion becomes 8",
+        "packaging/windows/installer.iss AppVersion define becomes \"2.3.2\"",
+        "packaging/macos/make_dmg.sh VERSION becomes \"2.3.2\"",
+        "snap/snapcraft.yaml version becomes 2.3.2",
+        "lib/about.dart appVersion constant becomes 2.3.2",
+        "linux/demo_app.desktop Version=1.0 is left unchanged",
+        "CHANGELOG.md gains a 2.3.2 heading (Unreleased renamed or new section) and the old 2.3.1 / 2.3.0 entries are untouched",
+        "Nothing was committed"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "准备发 2.0.0，版本号统一改一下，build number 保持不变。改完告诉我每个平台的版本是从哪里来的。不用提交。",
+      "expected_output": "app/pubspec.yaml 变为 2.0.0+1（build 不变）；Runner.rc fallback 同步；最终说明按平台列出来源：macOS Info.plist 与 dmg 脚本派生自 pubspec，Windows 由 FLUTTER_VERSION 定义、iss 读 exe 版本，Linux 无版本元数据。",
+      "files": [],
+      "assertions": [
+        "app/pubspec.yaml version becomes 2.0.0+1 (build number unchanged)",
+        "windows/runner/Runner.rc fallback strings become 2.0.0 / 2,0,0,…",
+        "No lock files or generated files are modified",
+        "Nothing was committed",
+        "Final message lists per platform where the version comes from: macOS from pubspec via FLUTTER_BUILD_NAME (Info.plist) and the dmg script's sed; Windows from FLUTTER_VERSION defines with Runner.rc fallback and the iss reading the exe; Linux has no version metadata",
+        "Final message does not claim the .desktop file carries the app version"
+      ]
+    }
+  ]
+}

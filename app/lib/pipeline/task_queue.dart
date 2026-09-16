@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../domain/media_kinds.dart';
 import '../domain/task.dart';
 import '../domain/task_options.dart';
+import '../domain/transcode.dart';
 import '../services/provider_api.dart';
 import '../services/settings.dart';
 import '../services/task_store.dart';
@@ -143,14 +144,37 @@ class TaskQueue extends ChangeNotifier {
     TaskKind? kind,
   }) {
     final opts = options ?? settings.defaultTaskOptions();
-    final task = SubtitleTask(
-      id: const Uuid().v4(),
-      sourcePath: sourcePath,
-      kind:
-          kind ??
-          (MediaKinds.isSubtitle(sourcePath) ? TaskKind.translate : opts.kind),
-      options: opts,
+    return _add(
+      SubtitleTask(
+        id: const Uuid().v4(),
+        sourcePath: sourcePath,
+        kind:
+            kind ??
+            (MediaKinds.isSubtitle(sourcePath) ? TaskKind.translate : opts.kind),
+        options: opts,
+      ),
     );
+  }
+
+  /// 把一批视频按同一份转码参数入队。返回顺序与 [paths] 一致。
+  List<SubtitleTask> enqueueTranscode(
+    List<String> paths, {
+    required TranscodeOptions options,
+  }) => [
+    for (final path in paths)
+      _add(
+        SubtitleTask(
+          id: const Uuid().v4(),
+          sourcePath: path,
+          kind: TaskKind.transcode,
+          // 字幕参数对转码任务无意义，只是占位，免得存档读回时缺字段。
+          options: settings.defaultTaskOptions(),
+          transcode: TranscodeJob(options: options),
+        ),
+      ),
+  ];
+
+  SubtitleTask _add(SubtitleTask task) {
     task.note('任务已加入队列（位置 ${_tasks.where((t) => t.isActive).length + 1}）');
     _tasks.insert(0, task);
     persist(task);

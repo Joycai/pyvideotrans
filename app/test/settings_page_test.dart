@@ -5,7 +5,15 @@ import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/features/settings/section_outline.dart';
 import 'package:subtitle_studio/features/settings/settings_page.dart';
 import 'package:subtitle_studio/features/settings/settings_section.dart';
+import 'package:subtitle_studio/services/media.dart';
 import 'package:subtitle_studio/services/settings.dart';
+
+/// 「环境」分区要显示 ffmpeg 路径。给一份写死的，测试就不去碰真实磁盘，
+/// 结果也不随测试机装没装 ffmpeg 变。
+Media _fixedMedia() => Media(
+  ffmpegPath: '/usr/local/bin/ffmpeg',
+  ffprobePath: '/usr/local/bin/ffprobe',
+);
 
 void main() {
   late AppSettings settings;
@@ -30,7 +38,7 @@ void main() {
           // 左边留出 72px Rail + 12px 间隙，面板宽度才与真实外壳一致。
           body: Padding(
             padding: const EdgeInsets.fromLTRB(96, 12, 12, 12),
-            child: SettingsPage(settings: settings),
+            child: SettingsPage(settings: settings, media: _fixedMedia()),
           ),
         ),
       ),
@@ -61,6 +69,21 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('环境分区：显示 ffmpeg 位置，给出打开目录与重新检测', (tester) async {
+    final page = await pump(tester);
+    await tester.tap(outlineItem('环境'));
+    await tester.pumpAndSettle();
+    expect(page.active, SettingsSectionKey.environment);
+
+    // 路径是注入的那份，与测试机上装没装 ffmpeg 无关。
+    expect(find.text('/usr/local/bin/ffmpeg'), findsOneWidget);
+    expect(find.text('已找到'), findsOneWidget);
+    expect(find.text('打开目录'), findsOneWidget);
+    expect(find.text('重新检测'), findsOneWidget);
+    // 说明里要点名 ffprobe：只放 ffmpeg 会落进「抽音能跑、读时长失败」的半坏状态。
+    expect(find.textContaining('ffprobe'), findsWidgets);
   });
 
   testWidgets('窄于 1180：目录折叠成顶部 Tab；窄于 1000：标签堆叠', (tester) async {

@@ -9,6 +9,7 @@ enum AppSection {
   tasks(Symbols.list_alt, '任务'),
   newTranscribe(Symbols.mic, '新建转写'),
   newTranslate(Symbols.translate, '翻译'),
+  transcode(Symbols.video_settings, '转码'),
   editor(Symbols.edit_note, '编辑器'),
   settings(Symbols.settings, '设置');
 
@@ -31,6 +32,7 @@ class AppNavRail extends StatelessWidget {
       AppSection.tasks,
       AppSection.newTranscribe,
       AppSection.newTranslate,
+      AppSection.transcode,
       AppSection.editor,
     ];
     return GlassPanel(

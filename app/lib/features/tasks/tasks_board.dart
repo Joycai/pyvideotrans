@@ -119,6 +119,7 @@ class TasksBoard extends StatelessWidget {
                           onAction(selected, TaskAction.resumeAuto),
                       onOpenEditor: () =>
                           onAction(selected, TaskAction.openEditor),
+                      onReveal: () => onAction(selected, TaskAction.reveal),
                     ),
                   ),
                 ),

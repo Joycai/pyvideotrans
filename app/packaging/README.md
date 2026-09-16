@@ -26,7 +26,8 @@ packaging/macos/make_dmg.sh        # 产物 build/dist/字幕工具-<版本>.dmg
 
 ## Windows 安装包
 
-安装 [Inno Setup 6](https://jrsoftware.org/isinfo.php)，然后：
+安装 [Inno Setup 7](https://jrsoftware.org/isinfo.php)（`winget install JRSoftware.InnoSetup.7`，
+并把 `C:\Program Files\Inno Setup 7` 加进 PATH），然后：
 
 ```bat
 flutter build windows --release

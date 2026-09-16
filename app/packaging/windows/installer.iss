@@ -1,4 +1,4 @@
-; 字幕工具 Windows 安装包（Inno Setup 6）。
+; 字幕工具 Windows 安装包（Inno Setup 7）。
 ; 安装向导、安装包 exe、开始菜单与「应用和功能」里的图标统一用
 ; windows\runner\resources\app_icon.ico —— 与应用本体同一个文件。
 ;
