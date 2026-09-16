@@ -70,15 +70,20 @@ sudo apt install libmpv-dev mpv    # Debian / Ubuntu；Fedora 用 mpv-libs-devel
 
 ```
 lib/
-  core/theme/      设计令牌 → ThemeData（ColorScheme / TextTheme / 三个 ThemeExtension）
-  core/widgets/    玻璃面板、渐变按钮、状态标签、进度条…
-  domain/          Cue / SubtitleDocument / SubtitleTask / TaskOptions，
-                   语言表、折行、SRT 与 VTT 编解码
-  services/        provider 抽象 + OpenAI 兼容实现 + 登记表 + 可用性检查 + 设置
-  services/local/  本地后端客户端（第一期为 stub）
-  pipeline/        六阶段流水线与任务队列
-  features/        shell / tasks / editor / settings
+  main.dart          装配点：建服务对象、切页、顶栏与状态栏内容
+  core/theme/        设计令牌 → ThemeData（ColorScheme / TextTheme / 三个 ThemeExtension）
+  core/widgets/      玻璃面板、渐变按钮、下拉与输入框、状态标签、进度条、烘焙壁纸
+  domain/            纯数据与纯函数，不碰 IO：Cue / SubtitleDocument / SubtitleTask /
+                     TaskOptions / TranscodeOptions，语言表、折行、断句、配对、
+                     SRT 与 VTT 编解码、ffmpeg 命令拼装
+  services/          IO 与外部世界：provider 抽象 + 各家实现 + 登记表 + 可用性检查 +
+                     ffmpeg 封装 + 设置 + 任务与编辑器存档
+  services/local/    本地后端客户端（第一期为 stub）
+  pipeline/          TaskQueue（串行队列）与 TaskRunner（阶段机）
+  features/          shell / tasks / transcode / editor / settings
 ```
+
+逐文件的职责、按功能反查、测试对照见 [`../docs/app-codemap.md`](../docs/app-codemap.md)。
 
 ### 为什么「本地」不是一条单独的代码路径
 

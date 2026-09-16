@@ -46,7 +46,9 @@ app/lib/
   features/      shell / tasks / transcode / editor / settings
 ```
 
-`app/README.md` 有每条设计决定的完整理由，改到相关代码前先读那一节。下面是跨多个文件、
+`app/README.md` 有每条设计决定的完整理由，改到相关代码前先读那一节。
+文件级的源码结构索引（每个文件干什么、按功能反查、测试对照）在 `docs/app-codemap.md`。
+下面是跨多个文件、
 **只看单个文件看不出来**的约束：
 
 ### 服务抽象：本地不是一条单独的代码路径
