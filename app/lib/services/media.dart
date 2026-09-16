@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import '../domain/cue.dart';
 import '../domain/speech_segments.dart';
@@ -58,7 +59,9 @@ class MediaFileInfo {
 /// 识别服务要的是 16kHz 单声道音频，不是原视频 —— 直接上传 mp4 既慢又常触发
 /// 大小限制。抽音放在「准备」阶段，产物落在任务的工作目录里，
 /// 这样识别阶段失败重试时不需要重新抽。
-class Media {
+/// 可监听：投放目录里换了东西之后状态栏那行「ffmpeg · 就绪 / 未找到」要跟着变，
+/// 否则设置页已经显示「已找到」、底部还写着「未找到」，看着像没生效。
+class Media extends ChangeNotifier {
   Media({String? ffmpegPath, String? ffprobePath})
     : _injectedFfmpeg = ffmpegPath,
       _injectedFfprobe = ffprobePath,
@@ -90,7 +93,12 @@ class Media {
   /// 十有八九没重启、PATH 还没生效，但文件就在这些地方。
   static List<String> get _searchDirs {
     if (!Platform.isWindows) {
-      return const ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/snap/bin'];
+      return const [
+        '/opt/homebrew/bin',
+        '/usr/local/bin',
+        '/usr/bin',
+        '/snap/bin',
+      ];
     }
     final env = Platform.environment;
     final localAppData = env['LOCALAPPDATA'];
@@ -130,6 +138,7 @@ class Media {
   void reset() {
     _ffmpeg = _injectedFfmpeg;
     _ffprobe = _injectedFfprobe;
+    notifyListeners();
   }
 
   /// 建出投放目录并返回它。界面要先有这个文件夹才能打开给用户看 ——
@@ -159,7 +168,10 @@ class Media {
     final dropIn = dropInDir;
     if (dropIn != null) {
       final placed = File('$dropIn$sep$exe');
-      if (placed.existsSync()) return placed.path;
+      // 非 Windows 上还要能执行才算数。从 zip 解出来丢了 +x 位、或者拖到一半的
+      // 残文件，都会盖过系统里那份本来能用的 ffmpeg，而且失败形态会从
+      // 「找不到 FFmpeg」退化成运行时的权限错误，更难懂。
+      if (placed.existsSync() && _isRunnable(placed)) return placed.path;
     }
 
     // 与可执行文件同级的 ffmpeg/ 目录（打包分发时把二进制放这儿）。
@@ -195,6 +207,16 @@ class Media {
           : '用包管理器安装（如 sudo apt install ffmpeg）；'
               '或在「设置 → 环境」里打开目录，把 $exe 放进去。',
     );
+  }
+
+  /// 能不能执行。Windows 靠扩展名，不看权限位；其余平台要求三个 x 位里有一个。
+  static bool _isRunnable(File file) {
+    if (Platform.isWindows) return true;
+    try {
+      return file.statSync().mode & 0x49 != 0;
+    } on FileSystemException {
+      return false;
+    }
   }
 
   /// 读取媒体时长。取不到时返回 null，不让它阻断流水线。

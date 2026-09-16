@@ -97,9 +97,14 @@ void main() {
       other.deleteSync(recursive: true);
     });
 
-    File place(Directory dir) =>
-        File('${dir.path}${Platform.pathSeparator}${Media.dropInNames.first}')
-          ..writeAsStringSync('');
+    // 非 Windows 上查找会要求执行位，造的假文件也得带上，否则会被跳过。
+    File place(Directory dir) {
+      final file = File(
+        '${dir.path}${Platform.pathSeparator}${Media.dropInNames.first}',
+      )..writeAsStringSync('');
+      if (!Platform.isWindows) Process.runSync('chmod', ['+x', file.path]);
+      return file;
+    }
 
     // 用户特意放进来的那份，就该盖过系统里和随包带的。
     test('投放目录优先于其他位置', () {
@@ -108,7 +113,8 @@ void main() {
     });
 
     test('投放目录是空的就继续往下找', () {
-      final placed = '${dropIn.path}${Platform.pathSeparator}'
+      final placed =
+          '${dropIn.path}${Platform.pathSeparator}'
           '${Media.dropInNames.first}';
       expect(Media().ffmpegOrNull, isNot(placed));
     });

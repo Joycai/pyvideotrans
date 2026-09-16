@@ -182,6 +182,8 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   Listenable get _live => Listenable.merge([
     widget.queue,
     widget.settings,
+    // 「重新检测」之后状态栏那行 ffmpeg 状态要跟着更新。
+    widget.media,
     _transcribeForm,
     _translateForm,
     _transcodeForm,

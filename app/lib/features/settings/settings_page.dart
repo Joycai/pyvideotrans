@@ -34,7 +34,7 @@ PageChrome settingsChrome({required VoidCallback onReset}) => PageChrome(
 
 /// 设置页（设计稿 M-SettingsPage）。
 ///
-/// 内容面板左侧是 208px 的分区目录，右侧内容列限宽 880 靠左，七个分区
+/// 内容面板左侧是 208px 的分区目录，右侧内容列限宽 880 靠左，八个分区
 /// 竖排、间距 32。没有「保存 / 取消」：改动即写入，只在改动的分区标题
 /// 右侧闪一下「已保存」。
 ///
@@ -42,11 +42,7 @@ PageChrome settingsChrome({required VoidCallback onReset}) => PageChrome(
 /// - 窄于 1180：目录折叠成面板顶部 48px 的横向 Tab；
 /// - 窄于 1000：表单行的标签堆到控件上方。
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({
-    super.key,
-    required this.settings,
-    required this.media,
-  });
+  const SettingsPage({super.key, required this.settings, required this.media});
 
   final AppSettings settings;
 
@@ -724,7 +720,8 @@ class _EnvironmentSectionState extends State<_EnvironmentSection> {
     final found = _path != null;
     return SettingsSection(
       section: SettingsSectionKey.environment,
-      note: '抽音与转码都要用 FFmpeg。没有的话，点「打开目录」把 '
+      note:
+          '抽音与转码都要用 FFmpeg。没有的话，点「打开目录」把 '
           '${Media.dropInNames.join(' 和 ')} 放进去即可，不用配环境变量。',
       children: [
         SettingsRow(
