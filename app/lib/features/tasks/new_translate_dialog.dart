@@ -10,7 +10,7 @@ import '../../core/widgets/glass_panel.dart';
 import '../../domain/srt.dart';
 import '../../services/media.dart';
 import '../../services/settings.dart';
-import 'provider_fields.dart';
+import '../shared/provider_fields.dart';
 import 'translate_form.dart';
 
 export 'translate_form.dart' show NewTranslateResult;

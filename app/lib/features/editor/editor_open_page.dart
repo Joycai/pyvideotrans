@@ -11,7 +11,7 @@ import '../../domain/language.dart';
 import '../../domain/subtitle_pairing.dart';
 import '../../domain/task.dart';
 import '../../services/editor_store.dart';
-import '../shell/app_shell.dart';
+import '../shell/page_chrome.dart';
 import 'editor_open_form.dart';
 import 'editor_widgets.dart';
 import 'speaker_badge.dart';

@@ -17,7 +17,7 @@ import '../../services/media.dart';
 import '../../services/registry.dart';
 import '../../services/reveal.dart';
 import '../../services/settings.dart';
-import '../shell/app_shell.dart';
+import '../shell/page_chrome.dart';
 import 'provider_section.dart';
 import 'section_outline.dart';
 import 'settings_section.dart';

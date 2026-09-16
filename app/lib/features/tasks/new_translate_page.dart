@@ -11,8 +11,8 @@ import '../../core/widgets/buttons.dart';
 import '../../core/widgets/indicators.dart';
 import '../../domain/srt.dart';
 import '../../pipeline/task_queue.dart';
-import '../shell/app_shell.dart';
-import 'provider_fields.dart';
+import '../shared/provider_fields.dart';
+import '../shell/page_chrome.dart';
 import 'translate_form.dart';
 
 /// 顶栏内容：标题、随文件变化的副标题、「上次参数」。

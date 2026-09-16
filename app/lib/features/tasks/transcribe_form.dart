@@ -14,7 +14,7 @@ import '../../services/provider_api.dart';
 import '../../services/readiness.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
-import 'provider_fields.dart';
+import '../shared/provider_fields.dart';
 
 /// 表单确认后交出来的东西：一批文件 + 一份参数。
 class NewTranscribeResult {

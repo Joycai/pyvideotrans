@@ -10,7 +10,7 @@ import '../../services/provider_api.dart';
 import '../../services/readiness.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
-import '../tasks/provider_fields.dart';
+import '../shared/provider_fields.dart';
 import 'section_outline.dart';
 import 'settings_section.dart';
 

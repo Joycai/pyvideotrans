@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/core/widgets/fields.dart';
-import 'package:subtitle_studio/features/tasks/provider_fields.dart';
+import 'package:subtitle_studio/features/shared/provider_fields.dart';
 import 'package:subtitle_studio/features/tasks/transcribe_form.dart';
 import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';

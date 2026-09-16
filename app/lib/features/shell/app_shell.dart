@@ -5,22 +5,8 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/glass_panel.dart';
 import '../../core/widgets/wallpaper.dart';
 import 'nav_rail.dart';
+import 'page_chrome.dart';
 import 'status_bar.dart';
-
-/// 每个页面提供给顶栏的内容：标题、副标题、标题右侧的标签、右侧操作区。
-class PageChrome {
-  const PageChrome({
-    required this.title,
-    this.subtitle,
-    this.titleTrailing,
-    this.actions = const [],
-  });
-
-  final String title;
-  final String? subtitle;
-  final Widget? titleTrailing;
-  final List<Widget> actions;
-}
 
 /// 应用框架：72px 玻璃 Rail + 52px 顶栏 + 内容区 + 32px 状态栏，
 /// 12px 外边距与间隙，底层透出壁纸。对应设计稿 1440×900 的栅格。

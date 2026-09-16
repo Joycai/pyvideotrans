@@ -14,9 +14,9 @@ import '../../domain/task_options.dart';
 import '../../domain/transcode.dart';
 import '../../pipeline/task_queue.dart';
 import '../../services/transcoder.dart';
-import '../shell/app_shell.dart';
-import '../tasks/provider_fields.dart' show LinkText;
-import '../tasks/task_detail_panel.dart' show CommandBlock;
+import '../shared/command_block.dart';
+import '../shared/provider_fields.dart' show LinkText;
+import '../shell/page_chrome.dart';
 import 'transcode_form.dart';
 
 /// 顶栏：标题、随文件变化的副标题、「上次参数」。

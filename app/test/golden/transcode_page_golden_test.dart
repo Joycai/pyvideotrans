@@ -12,6 +12,7 @@ import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/transcode.dart';
 import 'package:subtitle_studio/features/shell/app_shell.dart';
+import 'package:subtitle_studio/features/shell/page_chrome.dart';
 import 'package:subtitle_studio/features/shell/nav_rail.dart';
 import 'package:subtitle_studio/features/shell/status_bar.dart';
 import 'package:subtitle_studio/features/tasks/tasks_board.dart';
