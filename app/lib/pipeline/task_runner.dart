@@ -13,7 +13,8 @@ import '../services/provider_api.dart';
 import '../services/registry.dart';
 import '../services/settings.dart';
 import '../services/transcoder.dart';
-import '../domain/transcode.dart';
+import '../domain/transcode/command.dart';
+import '../domain/transcode/probe.dart';
 
 /// 识别服务的构造方式。测试注入假实现时换的就是它。
 typedef AsrFactory =

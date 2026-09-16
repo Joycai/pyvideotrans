@@ -2,7 +2,7 @@ import 'cue.dart';
 import 'recognition_checkpoint.dart';
 import 'language.dart';
 import 'task_options.dart';
-import 'transcode.dart';
+import 'transcode/command.dart';
 
 /// 流水线的阶段，顺序固定。每种任务只走其中一部分（见 [TaskKind.stages]），
 /// 界面上的阶段条画的就是那一部分。

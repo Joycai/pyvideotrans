@@ -4,7 +4,11 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import '../domain/transcode.dart';
+import '../domain/transcode/codecs.dart';
+import '../domain/transcode/command.dart';
+import '../domain/transcode/encoder_catalog.dart';
+import '../domain/transcode/encoder_params.dart';
+import '../domain/transcode/probe.dart';
 import 'media.dart';
 import 'provider_api.dart';
 

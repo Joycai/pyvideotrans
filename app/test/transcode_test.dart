@@ -1,7 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
-import 'package:subtitle_studio/domain/transcode.dart';
+import 'package:subtitle_studio/domain/transcode/codecs.dart';
+import 'package:subtitle_studio/domain/transcode/command.dart';
+import 'package:subtitle_studio/domain/transcode/encoder_catalog.dart';
+import 'package:subtitle_studio/domain/transcode/encoder_params.dart';
+import 'package:subtitle_studio/domain/transcode/options.dart';
+import 'package:subtitle_studio/domain/transcode/probe.dart';
 import 'package:subtitle_studio/services/transcoder.dart';
 
 import 'helpers.dart';
