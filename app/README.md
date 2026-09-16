@@ -70,16 +70,14 @@ sudo apt install libmpv-dev mpv    # Debian / Ubuntu；Fedora 用 mpv-libs-devel
 
 ```
 lib/
-  main.dart          装配点：建服务对象、切页、顶栏与状态栏内容
-  core/theme/        设计令牌 → ThemeData（ColorScheme / TextTheme / 三个 ThemeExtension）
-  core/widgets/      玻璃面板、渐变按钮、下拉与输入框、状态标签、进度条、烘焙壁纸
-  domain/            纯数据与纯函数，不碰 IO：Cue / SubtitleDocument / SubtitleTask /
-                     TaskOptions / TranscodeOptions，语言表、折行、断句、配对、
-                     SRT 与 VTT 编解码、ffmpeg 命令拼装
-  services/          IO 与外部世界：provider 抽象 + 各家实现 + 登记表 + 可用性检查 +
-                     ffmpeg 封装 + 设置 + 任务与编辑器存档
-  services/local/    本地后端客户端（第一期为 stub）
-  pipeline/          TaskQueue（串行队列）与 TaskRunner（阶段机）
+  main.dart          装配点：服务对象、根级表单控制器、页面切换、顶栏与状态栏
+  core/theme/        设计令牌 → ThemeData 与 ThemeExtension
+  core/widgets/      无业务语义控件；fields.dart 是 dropdown / form_fields 的公共入口
+  domain/            纯数据与纯规则，不碰网络 / 外部进程
+  domain/transcode/  编解码枚举、编码器目录、参数、探测结果、ffmpeg 命令
+  services/          provider、ffmpeg / ffprobe、设置与持久化
+  pipeline/          串行队列、任务编排、阶段壳、字幕写出、转码执行
+  features/shared/   跨 feature 共用的服务字段、命令块、入队横幅与步骤说明
   features/          shell / tasks / transcode / editor / settings
 ```
 
