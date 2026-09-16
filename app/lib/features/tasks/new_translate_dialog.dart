@@ -11,7 +11,10 @@ import '../../domain/srt.dart';
 import '../../services/media.dart';
 import '../../services/settings.dart';
 import '../shared/provider_fields.dart';
+import 'translate_advanced_section.dart';
+import 'translate_footer.dart';
 import 'translate_form.dart';
+import 'translate_language_section.dart';
 
 export 'translate_form.dart' show NewTranslateResult;
 

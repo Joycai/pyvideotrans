@@ -1,6 +1,7 @@
+import 'package:flutter/material.dart';
+
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
-import 'package:flutter/material.dart';
 
 /// 参数面板里的一段：16px 内边距，段与段之间 1px 分隔线。
 class TranscodeSection extends StatelessWidget {

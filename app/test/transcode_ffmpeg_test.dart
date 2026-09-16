@@ -10,8 +10,8 @@ import 'package:subtitle_studio/domain/transcode/options.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
 import 'package:subtitle_studio/services/media.dart';
-import 'package:subtitle_studio/services/transcoder.dart';
 import 'package:subtitle_studio/services/settings.dart';
+import 'package:subtitle_studio/services/transcoder.dart';
 
 /// 真的跑 ffmpeg 的端到端测试：入队 → 准备 → 转码 → 完成，核对产物的编码。
 /// 本机没有 ffmpeg 时整组跳过。

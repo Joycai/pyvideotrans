@@ -1,6 +1,6 @@
 import 'cue.dart';
-import 'recognition_checkpoint.dart';
 import 'language.dart';
+import 'recognition_checkpoint.dart';
 import 'task_options.dart';
 import 'transcode/command.dart';
 

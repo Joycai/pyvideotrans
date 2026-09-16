@@ -1,3 +1,7 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:material_symbols_icons/symbols.dart';
+
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
@@ -6,9 +10,6 @@ import '../../domain/task_options.dart';
 import '../../domain/transcode/codecs.dart';
 import '../../domain/transcode/options.dart';
 import '../shared/command_block.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'transcode_form.dart';
 import 'transcode_video_section.dart';
 import 'transcode_widgets.dart';

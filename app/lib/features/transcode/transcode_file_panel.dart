@@ -1,10 +1,11 @@
+import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
+
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/indicators.dart';
 import '../shared/provider_fields.dart' show LinkText;
-import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'transcode_file_list.dart';
 import 'transcode_form.dart';
 import 'transcode_widgets.dart';

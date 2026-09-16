@@ -13,7 +13,10 @@ import '../../domain/srt.dart';
 import '../../pipeline/task_queue.dart';
 import '../shared/provider_fields.dart';
 import '../shell/page_chrome.dart';
+import 'translate_advanced_section.dart';
+import 'translate_footer.dart';
 import 'translate_form.dart';
+import 'translate_language_section.dart';
 
 /// 顶栏内容：标题、随文件变化的副标题、「上次参数」。
 /// 放在这里而不是 main.dart，截图测试才能用同一份。

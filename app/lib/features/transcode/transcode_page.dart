@@ -1,12 +1,14 @@
-import '../../core/theme/tokens.dart';
-import '../../core/widgets/buttons.dart';
-import '../../pipeline/task_queue.dart';
-import '../shell/page_chrome.dart';
 import 'dart:async';
+
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
+
+import '../../core/theme/tokens.dart';
+import '../../core/widgets/buttons.dart';
+import '../../pipeline/task_queue.dart';
+import '../shell/page_chrome.dart';
 import 'transcode_file_panel.dart';
 import 'transcode_form.dart';
 import 'transcode_param_panel.dart';

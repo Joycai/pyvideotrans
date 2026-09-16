@@ -1,3 +1,6 @@
+import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
+
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
@@ -6,8 +9,6 @@ import '../../domain/transcode/codecs.dart';
 import '../../domain/transcode/encoder_params.dart';
 import '../../domain/transcode/options.dart';
 import '../../services/transcoder.dart';
-import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'transcode_form.dart';
 import 'transcode_widgets.dart';
 

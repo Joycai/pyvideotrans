@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/core/widgets/wallpaper.dart';
 import 'package:subtitle_studio/features/shell/app_shell.dart';
-import 'package:subtitle_studio/features/shell/page_chrome.dart';
 import 'package:subtitle_studio/features/shell/nav_rail.dart';
+import 'package:subtitle_studio/features/shell/page_chrome.dart';
 import 'package:subtitle_studio/features/shell/status_bar.dart';
 
 /// 渲染性能的两条回归线：

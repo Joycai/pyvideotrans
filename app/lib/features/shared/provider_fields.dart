@@ -364,3 +364,9 @@ class ReadinessLine extends StatelessWidget {
     );
   }
 }
+
+String serviceLabel(ProviderInfo? info, String? model, AppSettings settings) {
+  if (info == null) return '—';
+  final chosen = resolvedModel(info, model, settings);
+  return chosen.isEmpty ? info.name : '${info.name} · $chosen';
+}

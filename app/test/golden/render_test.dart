@@ -6,28 +6,27 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import '../helpers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/task.dart';
-import 'package:subtitle_studio/features/shell/app_shell.dart';
-import 'package:subtitle_studio/features/shell/page_chrome.dart';
-import 'package:subtitle_studio/features/shell/nav_rail.dart';
-import 'package:subtitle_studio/features/shell/status_bar.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
-import 'package:subtitle_studio/features/editor/editor_page.dart';
 import 'package:subtitle_studio/features/editor/editor_open_form.dart';
 import 'package:subtitle_studio/features/editor/editor_open_page.dart';
+import 'package:subtitle_studio/features/editor/editor_page.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/editor_widgets.dart';
-import 'package:subtitle_studio/services/editor_store.dart';
-
-import '../editor_fixtures.dart';
+import 'package:subtitle_studio/features/shell/app_shell.dart';
+import 'package:subtitle_studio/features/shell/nav_rail.dart';
+import 'package:subtitle_studio/features/shell/page_chrome.dart';
+import 'package:subtitle_studio/features/shell/status_bar.dart';
 import 'package:subtitle_studio/features/tasks/tasks_board.dart';
 import 'package:subtitle_studio/features/tasks/tasks_page.dart';
+import 'package:subtitle_studio/services/editor_store.dart';
 import 'package:subtitle_studio/services/settings.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../editor_fixtures.dart';
+import '../helpers.dart';
 
 /// 渲染全窗口截图，用来核对实现与设计稿是否一致。
 ///
