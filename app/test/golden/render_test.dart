@@ -14,6 +14,8 @@ import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_open_form.dart';
 import 'package:subtitle_studio/features/editor/editor_open_page.dart';
 import 'package:subtitle_studio/features/editor/editor_page.dart';
+import 'package:subtitle_studio/features/editor/editor_page_actions.dart';
+import 'package:subtitle_studio/features/editor/editor_title.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/editor_widgets.dart';
 import 'package:subtitle_studio/features/shell/app_shell.dart';

@@ -313,3 +313,32 @@ String parentDir(String path) {
 }
 
 String baseName(String path) => path.split(RegExp(r'[/\\]')).last;
+
+class EditorTextAction extends StatelessWidget {
+  const EditorTextAction({
+    super.key,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(AppSpacing.s2),
+    hoverColor: color.withValues(alpha: AppStateLayer.hover),
+    child: Container(
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: context.texts.labelMedium?.copyWith(color: color),
+      ),
+    ),
+  );
+}
