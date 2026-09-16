@@ -13,7 +13,15 @@ import 'package:subtitle_studio/features/settings/settings_page.dart';
 import 'package:subtitle_studio/features/shell/app_shell.dart';
 import 'package:subtitle_studio/features/shell/nav_rail.dart';
 import 'package:subtitle_studio/features/shell/status_bar.dart';
+import 'package:subtitle_studio/services/media.dart';
 import 'package:subtitle_studio/services/settings.dart';
+
+/// 「环境」分区要显示 ffmpeg 路径。给一份写死的，截图才不会随测试机
+/// 装没装 ffmpeg、装在哪而变。
+Media _fixedMedia() => Media(
+  ffmpegPath: '/usr/local/bin/ffmpeg',
+  ffprobePath: '/usr/local/bin/ffprobe',
+);
 
 /// 与 render_test.dart 同样的字体处理：测试默认字体不含汉字。
 Future<void> _loadCjkFont() async {
@@ -105,7 +113,7 @@ void main() {
             runningTasks: asrOk ? 2 : 0,
           ),
           live: settings,
-          child: SettingsPage(settings: settings),
+          child: SettingsPage(settings: settings, media: _fixedMedia()),
         ),
       ),
     );

@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 
 import '../domain/cue.dart';
 import '../domain/speech_segments.dart';
@@ -58,22 +59,57 @@ class MediaFileInfo {
 /// 识别服务要的是 16kHz 单声道音频，不是原视频 —— 直接上传 mp4 既慢又常触发
 /// 大小限制。抽音放在「准备」阶段，产物落在任务的工作目录里，
 /// 这样识别阶段失败重试时不需要重新抽。
-class Media {
+/// 可监听：投放目录里换了东西之后状态栏那行「ffmpeg · 就绪 / 未找到」要跟着变，
+/// 否则设置页已经显示「已找到」、底部还写着「未找到」，看着像没生效。
+class Media extends ChangeNotifier {
   Media({String? ffmpegPath, String? ffprobePath})
-    : _ffmpeg = ffmpegPath,
+    : _injectedFfmpeg = ffmpegPath,
+      _injectedFfprobe = ffprobePath,
+      _ffmpeg = ffmpegPath,
       _ffprobe = ffprobePath;
+
+  /// 构造时显式指定的路径。[reset] 要退回到它们，而不是把测试的桩也清掉。
+  final String? _injectedFfmpeg;
+  final String? _injectedFfprobe;
 
   String? _ffmpeg;
   String? _ffprobe;
 
-  /// 除 PATH 外还会找的位置。macOS 上 GUI 应用拿不到用户 shell 的 PATH，
-  /// Homebrew 装的 ffmpeg 必须显式找。
-  static const _searchDirs = [
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    '/usr/bin',
-    '/snap/bin',
-  ];
+  /// 用户投放目录：设置页「打开目录」开的就是这里，用户把 ffmpeg 可执行文件
+  /// 丢进来即可。由 main 在拿到应用支持目录后设置一次。
+  ///
+  /// 做成进程级静态量是因为它和 [Platform.resolvedExecutable] 一样属于环境常量，
+  /// 而 `Media` 在几个表单里有 `media ?? Media()` 的兜底构造 —— 挂在实例上，
+  /// 那些兜底出来的实例就看不见它了。
+  ///
+  /// 不用应用安装目录：Windows 上它在 Program Files 下，用户往里拖文件会撞 UAC；
+  /// 应用支持目录可写，且重装应用不会被清掉。
+  static String? dropInDir;
+
+  /// 除 PATH 外还会找的位置。
+  ///
+  /// macOS 上 GUI 应用拿不到用户 shell 的 PATH，Homebrew 装的 ffmpeg 必须显式找。
+  /// Windows 列的是几个包管理器和教程最常用的落点 —— 用户照着网上教程装完，
+  /// 十有八九没重启、PATH 还没生效，但文件就在这些地方。
+  static List<String> get _searchDirs {
+    if (!Platform.isWindows) {
+      return const [
+        '/opt/homebrew/bin',
+        '/usr/local/bin',
+        '/usr/bin',
+        '/snap/bin',
+      ];
+    }
+    final env = Platform.environment;
+    final localAppData = env['LOCALAPPDATA'];
+    final userProfile = env['USERPROFILE'];
+    return [
+      r'C:\ffmpeg\bin',
+      if (localAppData != null) '$localAppData\\Microsoft\\WinGet\\Links',
+      if (userProfile != null) '$userProfile\\scoop\\shims',
+      r'C:\ProgramData\chocolatey\bin',
+    ];
+  }
 
   String get ffmpeg => _ffmpeg ??= _locate('ffmpeg');
   String get ffprobe => _ffprobe ??= _locate('ffprobe');
@@ -87,18 +123,66 @@ class Media {
     }
   }
 
+  /// 找到的 ffmpeg 路径，找不到时为 null。设置页显示状态用 ——
+  /// 只是想知道在不在，不该为此接异常。
+  String? get ffmpegOrNull {
+    try {
+      return ffmpeg;
+    } on ProviderException {
+      return null;
+    }
+  }
+
+  /// 丢掉查找结果，下次再查。用户刚把可执行文件放进投放目录后要调它，
+  /// 否则之前缓存的「找不到」会一直生效到重启。
+  void reset() {
+    _ffmpeg = _injectedFfmpeg;
+    _ffprobe = _injectedFfprobe;
+    notifyListeners();
+  }
+
+  /// 建出投放目录并返回它。界面要先有这个文件夹才能打开给用户看 ——
+  /// 打开一个不存在的路径，资源管理器只会弹个错。
+  static Future<String?> ensureDropInDir() async {
+    final dir = dropInDir;
+    if (dir == null) return null;
+    try {
+      await Directory(dir).create(recursive: true);
+      return dir;
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  /// 投放目录里该放哪些文件。界面照着这个列出来，省得用户只放了 ffmpeg
+  /// 却漏了 ffprobe —— 抽音能跑、读时长却失败，那种半坏状态最难懂。
+  static List<String> get dropInNames => Platform.isWindows
+      ? const ['ffmpeg.exe', 'ffprobe.exe']
+      : const ['ffmpeg', 'ffprobe'];
+
   static String _locate(String name) {
+    final sep = Platform.pathSeparator;
     final exe = Platform.isWindows ? '$name.exe' : name;
+
+    // 用户投放的排在最前：他特意放进来的那份，就该盖过随包带的和系统里的。
+    final dropIn = dropInDir;
+    if (dropIn != null) {
+      final placed = File('$dropIn$sep$exe');
+      // 非 Windows 上还要能执行才算数。从 zip 解出来丢了 +x 位、或者拖到一半的
+      // 残文件，都会盖过系统里那份本来能用的 ffmpeg，而且失败形态会从
+      // 「找不到 FFmpeg」退化成运行时的权限错误，更难懂。
+      if (placed.existsSync() && _isRunnable(placed)) return placed.path;
+    }
 
     // 与可执行文件同级的 ffmpeg/ 目录（打包分发时把二进制放这儿）。
     final bundled = File(
-      '${File(Platform.resolvedExecutable).parent.path}'
-      '${Platform.pathSeparator}ffmpeg${Platform.pathSeparator}$exe',
+      '${File(Platform.resolvedExecutable).parent.path}${sep}ffmpeg$sep$exe',
     );
     if (bundled.existsSync()) return bundled.path;
 
-    for (final dir in _searchDirs) {
-      final candidate = File('$dir${Platform.pathSeparator}$exe');
+    final dirs = _searchDirs;
+    for (final dir in dirs) {
+      final candidate = File('$dir$sep$exe');
       if (candidate.existsSync()) return candidate.path;
     }
 
@@ -112,10 +196,27 @@ class Media {
 
     throw ProviderException(
       '找不到 $name',
-      detail: '已查找：应用目录/ffmpeg、${_searchDirs.join('、')}、PATH',
-      hint: 'macOS 执行 brew install ffmpeg；'
-          'Windows 把 ffmpeg.exe 放到应用目录的 ffmpeg 文件夹下。',
+      detail: '已查找：'
+          '${dropIn == null ? '' : '$dropIn、'}'
+          '应用目录/ffmpeg、${dirs.join('、')}、PATH',
+      hint: Platform.isWindows
+          ? '在「设置 → 环境」里打开目录，把 $exe 放进去，再点重新检测。'
+          : Platform.isMacOS
+          ? '执行 brew install ffmpeg；'
+              '或在「设置 → 环境」里打开目录，把 $exe 放进去。'
+          : '用包管理器安装（如 sudo apt install ffmpeg）；'
+              '或在「设置 → 环境」里打开目录，把 $exe 放进去。',
     );
+  }
+
+  /// 能不能执行。Windows 靠扩展名，不看权限位；其余平台要求三个 x 位里有一个。
+  static bool _isRunnable(File file) {
+    if (Platform.isWindows) return true;
+    try {
+      return file.statSync().mode & 0x49 != 0;
+    } on FileSystemException {
+      return false;
+    }
   }
 
   /// 读取媒体时长。取不到时返回 null，不让它阻断流水线。

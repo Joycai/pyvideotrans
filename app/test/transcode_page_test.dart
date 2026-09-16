@@ -53,6 +53,16 @@ class FakeTranscoder extends Transcoder {
   }
 }
 
+/// 找不到 ffmpeg 的转码器。只用来验证「开始」下面那句拦截理由。
+class _MissingFfmpegTranscoder extends FakeTranscoder {
+  @override
+  String? get ffmpegProblem => '找不到 ffmpeg';
+
+  @override
+  String? get ffmpegHint =>
+      '在「设置 → 环境」里打开目录，把 ffmpeg.exe 放进去，再点重新检测。';
+}
+
 void main() {
   late AppSettings settings;
   late TaskQueue queue;
@@ -174,6 +184,22 @@ void main() {
     // 切回 MP4 不会把 AAC 再改回去。
     form.setContainer(OutputContainer.mp4);
     expect(form.options.audioCodec, AudioCodec.aac);
+  });
+
+  // 这句提示以前对所有平台都写死「macOS 执行 brew install ffmpeg」，
+  // Windows 用户看到的恰恰是最没用的那句。现在按平台的建议由 Media 给出、
+  // Transcoder 透传，界面只管显示。
+  test('找不到 FFmpeg 时，开始的拦截理由带上按平台给的建议', () async {
+    SharedPreferences.setMockInitialValues({});
+    final s = await AppSettings.load();
+    final form = TranscodeFormController(
+      settings: s,
+      transcoder: _MissingFfmpegTranscoder(),
+    );
+
+    expect(form.blocker, contains('找不到 FFmpeg'));
+    expect(form.blocker, contains('设置 → 环境'));
+    expect(form.blocker, isNot(contains('brew')));
   });
 
   testWidgets('加文件、跳过不兼容的、开始后入队并清空列表', (tester) async {

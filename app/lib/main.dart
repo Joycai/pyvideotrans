@@ -43,6 +43,12 @@ Future<void> main() async {
   final workDir = '$support/work';
   await Directory(workDir).create(recursive: true);
 
+  // 用户投放 ffmpeg 的目录。放在应用支持目录下而不是安装目录：Windows 上
+  // 安装目录在 Program Files 里，用户往里拖文件要过 UAC。
+  // 用平台分隔符拼：这个路径要交给资源管理器打开，Windows 的 explorer
+  // 对正斜杠的路径经常不认。
+  Media.dropInDir = '$support${Platform.pathSeparator}ffmpeg';
+
   final media = Media();
   // 转码页（检测编码器、读源文件）与流水线（跑转码）共用一份，
   // 编码器检测结果只做一次。
@@ -176,6 +182,8 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   Listenable get _live => Listenable.merge([
     widget.queue,
     widget.settings,
+    // 「重新检测」之后状态栏那行 ffmpeg 状态要跟着更新。
+    widget.media,
     _transcribeForm,
     _translateForm,
     _transcodeForm,
@@ -481,6 +489,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     AppSection.settings => SettingsPage(
       key: _settingsKey,
       settings: widget.settings,
+      media: widget.media,
     ),
     AppSection.editor when _editor != null && !_showOpen => EditorPage(
       key: _editorKey,

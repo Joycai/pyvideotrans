@@ -91,7 +91,7 @@ P6c 的标注指向：同一个「H.264」在 x264 与 NVENC 下参数完全不�
 | 情形 | 文案 | 色 |
 | --- | --- | --- |
 | 无文件 | 先添加视频 | on-surface-variant，icon `add_circle` |
-| 找不到 FFmpeg | 找不到 FFmpeg，macOS 执行 brew install ffmpeg 后重新检测 | error，icon `error` |
+| 找不到 FFmpeg | 找不到 FFmpeg。在「设置 → 环境」里打开目录，把 ffmpeg.exe 放进去，再点重新检测（文案随平台变） | error，icon `error` |
 | 编码器不可用 | hevc_nvenc 在这台电脑上不可用，换一个编码器 | error，icon `error` |
 | 正常 | 将创建 3 个转码任务，按列表顺序排队 | on-surface-variant，icon `info` |
 | 有跳过 | …；1 个文件不兼容，将跳过 | 同上 |
