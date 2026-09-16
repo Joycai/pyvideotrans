@@ -12,6 +12,7 @@ enum SettingsSectionKey {
   lang('语言', '语言', Symbols.language),
   defaults('任务默认值', '任务默认值', Symbols.tune),
   output('输出', '输出', Symbols.folder),
+  environment('环境', '环境', Symbols.terminal),
   local('本地模型服务', '本地服务', Symbols.dns);
 
   const SettingsSectionKey(this.title, this.outlineLabel, this.icon);

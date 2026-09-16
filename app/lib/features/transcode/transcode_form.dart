@@ -346,7 +346,8 @@ class TranscodeFormController extends ChangeNotifier {
   /// 挡住开始的原因。null 表示可以开始（前提是有文件）。
   String? get blocker {
     if (transcoder.ffmpegProblem != null) {
-      return '找不到 FFmpeg，macOS 执行 brew install ffmpeg 后重新检测';
+      final hint = transcoder.ffmpegHint;
+      return hint == null ? '找不到 FFmpeg' : '找不到 FFmpeg。$hint';
     }
     final problem = _options.problem;
     if (problem != null) return problem;

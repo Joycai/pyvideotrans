@@ -38,14 +38,21 @@ cd app
 flutter run -d macos      # 或 -d windows / -d linux
 ```
 
-需要 `ffmpeg`（用来抽音）。应用会依次在「应用目录/ffmpeg」、Homebrew 与
-`/usr/local/bin`、PATH 里找它：
+需要 `ffmpeg`（用来抽音与转码）。macOS / Linux 用包管理器装上就行：
 
 ```bash
-brew install ffmpeg
+brew install ffmpeg                # macOS
+sudo apt install ffmpeg            # Debian / Ubuntu
 ```
 
-Windows 把 `ffmpeg.exe` 放进应用目录下的 `ffmpeg` 文件夹即可。
+Windows 装 ffmpeg 通常卡在「该放哪、怎么配环境变量」上，所以应用里留了条不用配的路：
+**设置 → 环境 → 打开目录**，把 `ffmpeg.exe` 和 `ffprobe.exe` 拖进去，再点「重新检测」。
+那个目录在应用支持目录下（不是安装目录 —— 安装目录在 Program Files 里，往里拖文件要过 UAC）。
+
+完整查找顺序：投放目录 → 应用目录/ffmpeg（随包分发时放这儿）→
+Homebrew 与 `/usr/local/bin` 等系统位置（Windows 上是 `C:\ffmpeg\bin`、winget、
+scoop、choco 的落点）→ PATH。macOS 上 GUI 应用拿不到用户 shell 的 PATH，
+所以必须显式找 Homebrew。
 
 编辑器里的预览用 [media_kit](https://pub.dev/packages/media_kit) 播放音视频。
 macOS 与 Windows 的播放库随应用打包；Linux 要装系统的 libmpv：

@@ -55,6 +55,11 @@ class Transcoder extends ChangeNotifier {
   String? get ffmpegProblem => _ffmpegProblem;
   String? _ffmpegProblem;
 
+  /// 找不到时该怎么办。文案按平台分好在 [Media] 里，界面直接显示，
+  /// 免得每个用到的地方各写一份 `Platform.isWindows ? …`。
+  String? get ffmpegHint => _ffmpegHint;
+  String? _ffmpegHint;
+
   bool get probed => _probing != null && !isProbing;
   bool _busy = false;
   bool get isProbing => _busy;
@@ -79,6 +84,9 @@ class Transcoder extends ChangeNotifier {
   /// 「重新检测」：装了驱动或换了 ffmpeg 之后用。
   Future<void> refresh() {
     if (_busy) return _probing!;
+    // 用户很可能刚把 ffmpeg 放进投放目录，上次查找的结果（尤其是「找不到」）
+    // 必须作废，否则点了也没用。
+    media.reset();
     return _probing = _probe();
   }
 
@@ -91,8 +99,10 @@ class Transcoder extends ChangeNotifier {
       try {
         exe = media.ffmpeg;
         _ffmpegProblem = null;
+        _ffmpegHint = null;
       } on ProviderException catch (e) {
         _ffmpegProblem = e.message;
+        _ffmpegHint = e.hint;
         _encoders = {
           for (final enc in VideoEncoders.all)
             enc.id: const EncoderStatus(EncoderState.notCompiled, '找不到 FFmpeg'),

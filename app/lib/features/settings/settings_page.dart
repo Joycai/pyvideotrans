@@ -13,7 +13,9 @@ import '../../core/widgets/indicators.dart';
 import '../../domain/language.dart';
 import '../../domain/task_options.dart';
 import '../../services/local/local_backend.dart';
+import '../../services/media.dart';
 import '../../services/registry.dart';
+import '../../services/reveal.dart';
 import '../../services/settings.dart';
 import '../shell/app_shell.dart';
 import 'provider_section.dart';
@@ -40,9 +42,17 @@ PageChrome settingsChrome({required VoidCallback onReset}) => PageChrome(
 /// - 窄于 1180：目录折叠成面板顶部 48px 的横向 Tab；
 /// - 窄于 1000：表单行的标签堆到控件上方。
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key, required this.settings});
+  const SettingsPage({
+    super.key,
+    required this.settings,
+    required this.media,
+  });
 
   final AppSettings settings;
+
+  /// 「环境」分区要显示 ffmpeg 找没找到。由外面传进来而不是自己 new 一个：
+  /// 截图测试得能塞一份固定的，否则截图会随测试机装没装 ffmpeg 而变。
+  final Media media;
 
   @override
   State<SettingsPage> createState() => SettingsPageState();
@@ -220,6 +230,8 @@ class SettingsPageState extends State<SettingsPage> {
     SettingsSectionKey.lang => SettingsGroup.language,
     SettingsSectionKey.defaults => SettingsGroup.defaults,
     SettingsSectionKey.output => SettingsGroup.output,
+    // 「环境」里没有可恢复的设置项：ffmpeg 放在哪是机器的事实，不是偏好。
+    SettingsSectionKey.environment => null,
     SettingsSectionKey.local => null,
   };
 
@@ -341,6 +353,10 @@ class SettingsPageState extends State<SettingsPage> {
     _anchor(SettingsSectionKey.lang, _language(stacked)),
     _anchor(SettingsSectionKey.defaults, _defaults(stacked)),
     _anchor(SettingsSectionKey.output, _output(stacked)),
+    _anchor(
+      SettingsSectionKey.environment,
+      _EnvironmentSection(media: widget.media, stacked: stacked),
+    ),
     _anchor(SettingsSectionKey.local, const _LocalBackendSection()),
   ];
 
@@ -662,6 +678,108 @@ class SettingsPageState extends State<SettingsPage> {
                         s.outputDir = null;
                         _touch(SettingsSectionKey.output);
                       },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 环境：ffmpeg 现在在哪，找不到时怎么补上。
+///
+/// 这里刻意不做成「填一个路径」的设置项。投放目录是固定的已知位置，用户只要
+/// 点开它、把可执行文件拖进去就行 —— Windows 用户的卡点从来不是「填路径」，
+/// 而是不知道该把文件放哪、也不会配环境变量。少一层心智负担，也省掉路径填错
+/// 之后的一堆状态。
+class _EnvironmentSection extends StatefulWidget {
+  const _EnvironmentSection({required this.media, required this.stacked});
+
+  final Media media;
+  final bool stacked;
+
+  @override
+  State<_EnvironmentSection> createState() => _EnvironmentSectionState();
+}
+
+class _EnvironmentSectionState extends State<_EnvironmentSection> {
+  late String? _path = widget.media.ffmpegOrNull;
+
+  /// 用户刚把文件放进去，得让上次的查找结果作废再查一遍。
+  void _recheck() {
+    widget.media.reset();
+    setState(() => _path = widget.media.ffmpegOrNull);
+  }
+
+  Future<void> _openDropIn() async {
+    final dir = await Media.ensureDropInDir();
+    if (dir == null) return;
+    await Reveal.openDir(dir);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.colors;
+    final found = _path != null;
+    return SettingsSection(
+      section: SettingsSectionKey.environment,
+      note: '抽音与转码都要用 FFmpeg。没有的话，点「打开目录」把 '
+          '${Media.dropInNames.join(' 和 ')} 放进去即可，不用配环境变量。',
+      children: [
+        SettingsRow(
+          label: 'FFmpeg',
+          note: found ? '已找到' : '未找到',
+          stacked: widget.stacked,
+          child: Wrap(
+            spacing: AppSpacing.s2,
+            runSpacing: AppSpacing.s2,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  minWidth: 200,
+                  // 与「输出目录」同一套算法：路径框吃掉按钮以外的宽度。
+                  maxWidth: widget.stacked
+                      ? double.infinity
+                      : 880 - 180 - 24 - 96 - 88 - 16,
+                ),
+                child: ControlSurface(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.s3,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        found ? Symbols.check_circle : Symbols.error,
+                        size: 18,
+                        weight: 400,
+                        color: found ? cs.primary : cs.error,
+                      ),
+                      const SizedBox(width: AppSpacing.s2),
+                      Expanded(
+                        child: Text(
+                          _path ?? '未找到，放进目录后点重新检测',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: kTimecodeStyle.copyWith(
+                            color: found ? cs.onSurface : cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              ControlButton(
+                label: '打开目录',
+                icon: Symbols.folder_open,
+                onPressed: _openDropIn,
+              ),
+              QuietButton(
+                label: '重新检测',
+                icon: Symbols.refresh,
+                onPressed: _recheck,
               ),
             ],
           ),

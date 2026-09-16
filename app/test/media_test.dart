@@ -76,4 +76,72 @@ void main() {
       expect(info.sizeLabel, '—');
     });
   });
+
+  // 投放目录是 Windows 用户的主要出路：设置页开这个文件夹，把可执行文件拖进去。
+  // 这些用例不碰真实 ffmpeg —— 查找只看文件在不在，建个空文件就够，
+  // 因此在装了和没装 ffmpeg 的机器上结果一样。
+  group('查找 ffmpeg', () {
+    late Directory dropIn;
+    late Directory other;
+    final original = Media.dropInDir;
+
+    setUp(() async {
+      dropIn = await Directory.systemTemp.createTemp('subtitle_studio_dropin');
+      other = await Directory.systemTemp.createTemp('subtitle_studio_dropin2');
+      Media.dropInDir = dropIn.path;
+    });
+    tearDown(() {
+      // 静态量，不还原会污染同一个 isolate 里后面的用例。
+      Media.dropInDir = original;
+      dropIn.deleteSync(recursive: true);
+      other.deleteSync(recursive: true);
+    });
+
+    File place(Directory dir) =>
+        File('${dir.path}${Platform.pathSeparator}${Media.dropInNames.first}')
+          ..writeAsStringSync('');
+
+    // 用户特意放进来的那份，就该盖过系统里和随包带的。
+    test('投放目录优先于其他位置', () {
+      final placed = place(dropIn);
+      expect(Media().ffmpeg, placed.path);
+    });
+
+    test('投放目录是空的就继续往下找', () {
+      final placed = '${dropIn.path}${Platform.pathSeparator}'
+          '${Media.dropInNames.first}';
+      expect(Media().ffmpegOrNull, isNot(placed));
+    });
+
+    // 「放进去 → 重新检测」这条路必须真的生效：找到过一次之后结果会缓存住，
+    // 不作废它，换了文件也还是用旧的。
+    test('reset 之后改用新投放的那份', () {
+      final first = place(dropIn);
+      final media = Media();
+      expect(media.ffmpeg, first.path);
+
+      Media.dropInDir = other.path;
+      final second = place(other);
+      expect(media.ffmpeg, first.path, reason: '没 reset 前应该还用缓存');
+
+      media.reset();
+      expect(media.ffmpeg, second.path);
+    });
+
+    // 构造时显式指定的路径是「就用这一份」的意思，reset 不该把它一起清掉。
+    test('reset 退回构造时指定的路径', () {
+      final media = Media(ffmpegPath: '/x/ffmpeg', ffprobePath: '/x/ffprobe');
+      media.reset();
+      expect(media.ffmpeg, '/x/ffmpeg');
+      expect(media.ffprobe, '/x/ffprobe');
+    });
+
+    // ffmpeg 有、ffprobe 没有是最难懂的半坏状态：抽音能跑，读时长却失败。
+    // 界面照着 dropInNames 提示要放哪几个文件，两个名字都得在。
+    test('提示要放的文件名包含 ffmpeg 与 ffprobe', () {
+      expect(Media.dropInNames, hasLength(2));
+      expect(Media.dropInNames.first, contains('ffmpeg'));
+      expect(Media.dropInNames.last, contains('ffprobe'));
+    });
+  });
 }

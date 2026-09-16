@@ -30,6 +30,15 @@ abstract final class Reveal {
     }
   }
 
+  /// 打开一个目录本身（不选中里面的某个文件）。
+  static Future<void> openDir(String dir) async {
+    try {
+      await _open(dir);
+    } on ProcessException {
+      // 同上：没有可用的文件管理器不值得报错。
+    }
+  }
+
   static Future<void> _open(String dir) => Process.run(
     Platform.isMacOS
         ? 'open'
