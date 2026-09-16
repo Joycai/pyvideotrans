@@ -334,7 +334,15 @@ void main() {
         state: StageState.active,
         note: '帧 72944 · 2.4x',
       )
-      ..note('开始转码 · hevc_videotoolbox');
+      // 不用 note()：它给日志盖的是 DateTime.now() 的时间戳，详情面板把它
+      // 显示出来，截图就会每天自己对不上。直接写死一条。
+      ..log.add(
+        LogEntry(
+          DateTime(2026, 9, 13, 14, 2, 11),
+          LogLevel.info,
+          '开始转码 · hevc_videotoolbox',
+        ),
+      );
     final done = SubtitleTask(
       id: 'tc2',
       sourcePath: '/Users/mia/Movies/产品/product_demo.mov',
