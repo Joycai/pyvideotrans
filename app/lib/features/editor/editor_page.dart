@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../domain/media_kinds.dart';
+import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import '../../services/provider_api.dart';
 import 'cue_table.dart';

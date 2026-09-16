@@ -4,6 +4,8 @@ import 'dart:io';
 import '../domain/cue.dart';
 import '../domain/language.dart';
 import '../domain/line_wrap.dart';
+import '../domain/output_naming.dart';
+import '../domain/paths.dart';
 import '../domain/segmenter.dart';
 import '../domain/srt.dart';
 import '../domain/task.dart';
@@ -444,16 +446,10 @@ class TaskRunner {
       );
     }
 
-    final dir = switch (options.outputLocation) {
-      OutputLocation.custom =>
-        options.outputDir?.trim().isNotEmpty == true
-            ? options.outputDir!.trim()
-            : File(task.sourcePath).parent.path,
-      OutputLocation.besideSource => File(task.sourcePath).parent.path,
-    };
+    final dir = options.outputDirFor(task.sourcePath);
     await Directory(dir).create(recursive: true);
 
-    final stem = task.fileName.replaceAll(RegExp(r'\.[^.]*$'), '');
+    final stem = stemOf(task.fileName);
     final written = <String>[];
 
     // 两路各按自己的语言折行：双语字幕的上下两行语种不同，用同一个上限
@@ -504,15 +500,15 @@ class TaskRunner {
     // 纯翻译任务的「原文」就是用户选的那个字幕文件，再写一份只是重复；
     // 转写任务则必须写出原文，那是识别的产物。
     if (task.kind != TaskKind.translate) {
-      await write(_langTag(task.sourceLanguage), SrtField.source);
+      await write(languageTag(task.sourceLanguage), SrtField.source);
     }
     if (task.kind.needsTranslation) {
       final layout = options.resolvedBilingual;
       await write(
         layout.isBilingual
             // 双语产物带上两种语言，跟单语那份区分得开，也说明了里面有什么。
-            ? '${_langTag(task.sourceLanguage)}-${_langTag(task.targetLanguage)}'
-            : _langTag(task.targetLanguage),
+            ? '${languageTag(task.sourceLanguage)}-${languageTag(task.targetLanguage)}'
+            : languageTag(task.targetLanguage),
         layout.field,
       );
     }
@@ -695,11 +691,4 @@ class TaskRunner {
     final perItem = elapsed.inMilliseconds / done;
     return Duration(milliseconds: (perItem * (total - done)).round());
   }
-
-  /// 产物文件名里的语言标签：`demo.zh.srt`。
-  ///
-  /// 用语言代码而不是中文名 —— 中文名带不进跨平台安全的文件名。
-  static String _langTag(Language language) => language.isAuto
-      ? 'src'
-      : language.code.replaceAll(RegExp(r'[^\w-]+'), '_');
 }

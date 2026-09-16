@@ -8,6 +8,7 @@ import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/indicators.dart';
 import '../../domain/language.dart';
+import '../../domain/paths.dart';
 import 'editor_open_form.dart';
 import 'editor_widgets.dart';
 import 'speaker_badge.dart';
@@ -246,7 +247,7 @@ class _FilledSlot extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      parentDir(file.path),
+                      dirName(file.path),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: context.texts.bodySmall?.copyWith(

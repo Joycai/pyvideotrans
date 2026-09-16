@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
+import '../../domain/paths.dart';
 import '../../domain/subtitle_pairing.dart';
 import 'editor_controller.dart';
 import 'editor_open_form.dart';
@@ -193,7 +194,7 @@ class _SourceChip extends StatelessWidget {
                 ],
               ),
               Text(
-                '${parentDir(path)} · $count 条',
+                '${dirName(path)} · $count 条',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: context.texts.bodySmall?.copyWith(

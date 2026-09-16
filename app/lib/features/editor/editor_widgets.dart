@@ -307,13 +307,6 @@ String friendlyTime(DateTime time, {DateTime? now}) {
   return '${time.month}月${time.day}日';
 }
 
-String parentDir(String path) {
-  final i = path.lastIndexOf(RegExp(r'[/\\]'));
-  return i <= 0 ? path : path.substring(0, i);
-}
-
-String baseName(String path) => path.split(RegExp(r'[/\\]')).last;
-
 class EditorTextAction extends StatelessWidget {
   const EditorTextAction({
     super.key,

@@ -6,11 +6,11 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/indicators.dart';
 import '../../domain/cue.dart';
+import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import 'cue_table_rows.dart';
 import 'editor_controller.dart';
 import 'editor_session.dart';
-import 'editor_widgets.dart';
 import 'inspector_speaker_field.dart';
 import 'speaker_badge.dart';
 

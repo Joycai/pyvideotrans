@@ -1,3 +1,5 @@
+import 'paths.dart';
+
 /// 一种语言。识别、翻译、断句换行与产物文件名都用这张表，避免各处
 /// 各自为政地判断「这是不是中日韩」。
 ///
@@ -171,7 +173,7 @@ abstract final class Languages {
   /// 从文件名认语言：`interview.zh.srt`、`demo.en-US.vtt`、`ep1.chs.srt`。
   /// 只看主干之后、扩展名之前的那几段，从后往前找第一段认得出的。
   static Language? fromFileName(String path) {
-    final parts = path.split(RegExp(r'[/\\]')).last.split('.');
+    final parts = baseName(path).split('.');
     if (parts.length < 3) return null;
     for (final tag in parts.sublist(1, parts.length - 1).reversed) {
       final language = fromTag(tag);

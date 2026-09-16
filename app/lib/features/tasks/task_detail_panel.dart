@@ -7,6 +7,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/glass_panel.dart';
 import '../../core/widgets/indicators.dart';
+import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import '../../domain/task.dart';
 import '../../services/media.dart';
@@ -568,7 +569,7 @@ class _TranscodeOutput extends StatelessWidget {
             child: Text(
               path == null
                   ? '视频 · ${job.options.container.label}'
-                  : path.split(RegExp(r'[/\\]')).last,
+                  : baseName(path),
               overflow: TextOverflow.ellipsis,
               style: kTimecodeStyle.copyWith(
                 fontSize: 13,

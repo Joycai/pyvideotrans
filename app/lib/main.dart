@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart' show MediaKit;
 import 'package:path_provider/path_provider.dart';
 
 import 'core/theme/app_theme.dart';
+import 'domain/paths.dart';
 import 'domain/task.dart';
 import 'features/editor/editor_controller.dart';
 import 'features/editor/editor_leave_dialog.dart';
@@ -15,7 +16,6 @@ import 'features/editor/editor_page.dart';
 import 'features/editor/editor_page_actions.dart';
 import 'features/editor/editor_session.dart';
 import 'features/editor/editor_title.dart';
-import 'features/editor/editor_widgets.dart';
 import 'features/settings/settings_page.dart';
 import 'features/shell/app_shell.dart';
 import 'features/shell/nav_rail.dart';

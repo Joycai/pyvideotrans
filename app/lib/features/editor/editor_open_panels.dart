@@ -6,6 +6,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/indicators.dart';
+import '../../domain/paths.dart';
 import '../../domain/task.dart';
 import '../../services/editor_store.dart';
 import 'editor_open_form.dart';
@@ -272,7 +273,7 @@ class _RecentRow extends StatelessWidget {
             baseName(r.sourcePath!),
             if (r.translationPath != null) baseName(r.translationPath!),
           ].join(' + ');
-    final dir = r.isTask ? '任务' : parentDir(r.sourcePath!);
+    final dir = r.isTask ? '任务' : dirName(r.sourcePath!);
     final stat = [
       '${r.cueCount} 条',
       if (r.speakerCount > 0) '${r.speakerCount} 位说话人',

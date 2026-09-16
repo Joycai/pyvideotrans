@@ -1,5 +1,6 @@
 import 'cue.dart';
 import 'language.dart';
+import 'paths.dart';
 import 'recognition_checkpoint.dart';
 import 'task_options.dart';
 import 'transcode/command.dart';
@@ -217,7 +218,7 @@ class SubtitleTask {
   final TranscodeJob? transcode;
 
   /// 同时兼容 POSIX 与 Windows 分隔符。
-  String get fileName => sourcePath.split(RegExp(r'[/\\]')).last;
+  String get fileName => baseName(sourcePath);
 
   bool get isActive =>
       status == TaskStatus.running || status == TaskStatus.queued;

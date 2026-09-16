@@ -1,3 +1,4 @@
+import '../paths.dart';
 import '../task_options.dart';
 import 'codecs.dart';
 import 'encoder_params.dart';
@@ -174,10 +175,8 @@ abstract final class TranscodeCommand {
     required bool Function(String path) exists,
   }) {
     final sep = input.contains('\\') && !input.contains('/') ? '\\' : '/';
-    final cut = input.lastIndexOf(RegExp(r'[/\\]'));
-    final sourceDir = cut < 0 ? '.' : input.substring(0, cut);
-    final name = cut < 0 ? input : input.substring(cut + 1);
-    final stem = name.replaceAll(RegExp(r'\.[^.]*$'), '');
+    final sourceDir = dirName(input);
+    final stem = stemOf(baseName(input));
     final dir = options.outputLocation == OutputLocation.custom &&
             (options.outputDir?.trim().isNotEmpty ?? false)
         ? options.outputDir!.trim().replaceAll(RegExp(r'[/\\]+$'), '')

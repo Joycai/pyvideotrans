@@ -6,6 +6,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../domain/cue.dart';
 import '../../domain/media_kinds.dart';
+import '../../domain/paths.dart';
 import 'editor_controller.dart';
 
 /// 检视面板的预览播放：把播放器与编辑器的选中条绑在一起。
@@ -72,7 +73,7 @@ class PreviewPlayback extends ChangeNotifier {
   int? _pendingSeekMs;
   bool _disposed = false;
 
-  String get fileName => mediaPath.split(RegExp(r'[/\\]')).last;
+  String get fileName => baseName(mediaPath);
 
   bool get loaded => duration > Duration.zero;
 

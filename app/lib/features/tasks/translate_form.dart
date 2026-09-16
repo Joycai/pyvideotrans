@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../domain/language.dart';
 import '../../domain/media_kinds.dart';
+import '../../domain/paths.dart';
 import '../../domain/task_options.dart';
 import '../../services/media.dart';
 import '../../services/readiness.dart';
@@ -39,7 +40,7 @@ class StagedSubtitle {
   final MediaFileInfo? info;
   final StagedSubtitleState state;
 
-  String get fileName => path.split(RegExp(r'[/\\]')).last;
+  String get fileName => baseName(path);
 
   /// 所在目录，用于列表副信息。
   String get directory {

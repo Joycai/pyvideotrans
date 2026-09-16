@@ -3,6 +3,8 @@ import 'dart:io';
 import '../../domain/cue.dart';
 import '../../domain/language.dart';
 import '../../domain/media_kinds.dart';
+import '../../domain/output_naming.dart';
+import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import '../../domain/subtitle_pairing.dart';
 import '../../domain/task.dart';
@@ -56,15 +58,15 @@ sealed class EditorSession {
 /// 目录读不了（不存在、无权限）时返回 null。
 Future<String?> findSiblingMedia(String subtitlePath, String stem) async {
   final dir = File(subtitlePath).parent;
-  final ownStem = _withoutExtension(_fileName(subtitlePath));
+  final ownStem = stemOf(baseName(subtitlePath));
   final stems = {stem, ownStem};
   final candidates = <(int, String, String)>[];
   try {
     await for (final entry in dir.list(followLinks: false)) {
       if (entry is! File) continue;
-      final name = _fileName(entry.path);
+      final name = baseName(entry.path);
       if (!MediaKinds.isMedia(name)) continue;
-      if (!stems.contains(_withoutExtension(name))) continue;
+      if (!stems.contains(stemOf(name))) continue;
       final rank = MediaKinds.isAudio(name) ? 1 : 0;
       candidates.add((rank, name.toLowerCase(), entry.path));
     }
@@ -98,10 +100,10 @@ class TaskSession extends EditorSession {
   String get title => task.fileName;
 
   @override
-  String get exportDir => _outputDir(options, task.sourcePath);
+  String get exportDir => options.outputDirFor(task.sourcePath);
 
   @override
-  String get exportStem => _withoutExtension(task.fileName);
+  String get exportStem => stemOf(task.fileName);
 
   @override
   String get subtitlePath => task.sourcePath;
@@ -140,7 +142,7 @@ class LocalSubtitleFile {
   /// 从文件名或文字猜出的语言；猜不出为 null。
   final Language? language;
 
-  String get fileName => _fileName(path);
+  String get fileName => baseName(path);
 
   /// 解析一份字幕文本。解析不出任何字幕时抛 [FormatException]。
   static LocalSubtitleFile parse(String path, String text) {
@@ -264,7 +266,7 @@ class FileSession extends EditorSession {
   String get title => exportStem;
 
   @override
-  String get exportDir => _outputDir(options, sourcePath);
+  String get exportDir => options.outputDirFor(sourcePath);
 
   @override
   String get subtitlePath => sourcePath;
@@ -273,7 +275,7 @@ class FileSession extends EditorSession {
   /// 实际语言加回来。
   @override
   String get exportStem {
-    final stem = _withoutExtension(_fileName(sourcePath));
+    final stem = stemOf(baseName(sourcePath));
     final dot = stem.lastIndexOf('.');
     if (dot > 0 && Languages.fromTag(stem.substring(dot + 1)) != null) {
       return stem.substring(0, dot);
@@ -315,10 +317,11 @@ class FileSession extends EditorSession {
   }
 
   Future<String> _freshTranslationPath() async {
-    final dir = File(sourcePath).parent.path;
+    final dir = dirName(sourcePath);
     final sep = Platform.pathSeparator;
-    final tag = _langTag(targetLanguage);
-    final ext = _extension(sourcePath);
+    final tag = languageTag(targetLanguage);
+    final sourceExt = extensionOf(sourcePath);
+    final ext = sourceExt.isEmpty ? 'srt' : sourceExt;
     var path = '$dir$sep$exportStem.$tag.$ext';
     for (var n = 2; await File(path).exists(); n++) {
       path = '$dir$sep$exportStem-$n.$tag.$ext';
@@ -332,7 +335,8 @@ class FileSession extends EditorSession {
     SrtField field,
     String Function(int)? speakerLabel,
   ) async {
-    final content = _extension(path).toLowerCase() == 'vtt'
+    final ext = extensionOf(path);
+    final content = (ext.isEmpty ? 'srt' : ext) == 'vtt'
         ? Srt.serializeVtt(
             document.cues,
             field: field,
@@ -348,25 +352,3 @@ class FileSession extends EditorSession {
     await tmp.rename(path);
   }
 }
-
-String _fileName(String path) => path.split(RegExp(r'[/\\]')).last;
-
-String _withoutExtension(String name) =>
-    name.replaceAll(RegExp(r'\.[^.]*$'), '');
-
-String _extension(String path) {
-  final name = _fileName(path);
-  final dot = name.lastIndexOf('.');
-  return dot < 0 ? 'srt' : name.substring(dot + 1);
-}
-
-/// 与任务产物一致：设置了输出目录就用它，否则与源文件同目录。
-String _outputDir(TaskOptions options, String sourcePath) =>
-    switch (options.outputLocation) {
-      OutputLocation.custom when options.outputDir?.trim().isNotEmpty == true =>
-        options.outputDir!.trim(),
-      _ => File(sourcePath).parent.path,
-    };
-
-String _langTag(Language language) =>
-    language.isAuto ? 'src' : language.code.replaceAll(RegExp(r'[^\w-]+'), '_');

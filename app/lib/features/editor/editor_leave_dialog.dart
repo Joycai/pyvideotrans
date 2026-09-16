@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
+import '../../domain/paths.dart';
 import 'editor_controller.dart';
 import 'editor_session.dart';
 import 'editor_widgets.dart';

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../domain/media_kinds.dart';
+import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import '../../domain/task_options.dart';
 import '../../domain/transcode/codecs.dart';
@@ -50,7 +51,7 @@ class StagedVideo {
   final String? error;
   final bool probing;
 
-  String get fileName => path.split(RegExp(r'[/\\]')).last;
+  String get fileName => baseName(path);
 
   String get directory {
     final cut = path.length - fileName.length;
@@ -427,8 +428,7 @@ class TranscodeFormController extends ChangeNotifier {
 
   /// 产物名示例：`interview.hevc.mp4`。
   String outputNameFor(String input) {
-    final name = input.split(RegExp(r'[/\\]')).last;
-    final stem = name.replaceAll(RegExp(r'\.[^.]*$'), '');
+    final stem = stemOf(baseName(input));
     return '$stem.${_options.resolvedSuffix}.${_options.container.extension}';
   }
 
