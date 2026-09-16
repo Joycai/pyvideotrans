@@ -8,10 +8,13 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
+import '../../core/widgets/dashed_border.dart';
 import '../../core/widgets/indicators.dart';
 import '../../domain/srt.dart';
 import '../../pipeline/task_queue.dart';
+import '../shared/enqueued_banner.dart';
 import '../shared/provider_fields.dart';
+import '../shared/step_dots.dart';
 import '../shell/page_chrome.dart';
 import 'translate_advanced_section.dart';
 import 'translate_footer.dart';
@@ -261,62 +264,16 @@ class _FilePanel extends StatelessWidget {
             alignment: Alignment.topCenter,
             child: page._enqueued == null
                 ? const SizedBox(width: double.infinity)
-                : _Banner(count: page._enqueued!, page: page),
+                : EnqueuedBanner(
+                    count: page._enqueued!,
+                    onOpenTasks: page.widget.onOpenTasks,
+                    onDismiss: page._dismissBanner,
+                  ),
           ),
           Expanded(
             child: files.isEmpty
                 ? _EmptyArea(page: page)
                 : _ListArea(page: page),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Banner extends StatelessWidget {
-  const _Banner({required this.count, required this.page});
-
-  final int count;
-  final NewTranslatePageState page;
-
-  @override
-  Widget build(BuildContext context) {
-    final ext = context.ext;
-    final fg = ext.onSuccessContainer;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(
-        AppSpacing.s4,
-        0,
-        AppSpacing.s4,
-        AppSpacing.s3,
-      ),
-      height: 44,
-      padding: const EdgeInsets.only(left: 14, right: AppSpacing.s2),
-      decoration: BoxDecoration(
-        color: ext.successContainer,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      child: Row(
-        children: [
-          Icon(Symbols.check_circle, size: 20, weight: 400, color: ext.success),
-          const SizedBox(width: AppSpacing.s2 + 2),
-          Text('已加入队列 ', style: context.texts.bodyMedium?.copyWith(color: fg)),
-          Timecode('$count', color: fg),
-          Text(
-            ' 个任务，按列表顺序排队',
-            style: context.texts.bodyMedium?.copyWith(color: fg),
-          ),
-          const SizedBox(width: AppSpacing.s2 + 2),
-          Text('·', style: TextStyle(color: fg.withValues(alpha: 0.5))),
-          const SizedBox(width: AppSpacing.s2 + 2),
-          LinkText(label: '查看任务', color: fg, onTap: page.widget.onOpenTasks),
-          const Spacer(),
-          IconActionButton(
-            icon: Symbols.close,
-            tooltip: '关闭',
-            iconSize: 18,
-            onPressed: page._dismissBanner,
           ),
         ],
       ),
@@ -347,7 +304,7 @@ class _EmptyArea extends StatelessWidget {
           _Notes(page: page),
           Expanded(
             child: CustomPaint(
-              painter: _DashedBorder(
+              painter: DashedBorder(
                 color: dragging ? cs.primary : cs.outline,
                 radius: AppRadius.md,
               ),
@@ -381,51 +338,12 @@ class _EmptyArea extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.s4),
-          _Steps(current: page._enqueued != null ? 3 : 1),
+          StepDots(
+            labels: const ['添加字幕文件', '确认语言与服务', '加入队列，进度在任务页'],
+            current: page._enqueued != null ? 3 : 1,
+          ),
         ],
       ),
-    );
-  }
-}
-
-/// 三步说明。是真实顺序，所以用了编号；当前步骤的点是 primary。
-class _Steps extends StatelessWidget {
-  const _Steps({required this.current});
-
-  final int current;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = context.colors;
-    const labels = ['添加字幕文件', '确认语言与服务', '加入队列，进度在任务页'];
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        for (final (i, label) in labels.indexed) ...[
-          if (i > 0) const SizedBox(width: AppSpacing.s6),
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: i + 1 == current ? cs.primary : cs.outlineVariant,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.s2),
-          Timecode(
-            '${i + 1}',
-            fontSize: 12,
-            color: i + 1 == current ? cs.onSurface : cs.onSurfaceVariant,
-          ),
-          const SizedBox(width: AppSpacing.s2),
-          Text(
-            label,
-            style: context.texts.bodySmall?.copyWith(
-              color: i + 1 == current ? cs.onSurface : cs.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ],
     );
   }
 }
@@ -559,7 +477,7 @@ class _ListArea extends StatelessWidget {
           SizedBox(
             height: 44,
             child: CustomPaint(
-              painter: _DashedBorder(
+              painter: DashedBorder(
                 color: page._dragging ? cs.primary : cs.outline,
                 radius: AppRadius.md,
               ),
@@ -835,43 +753,6 @@ class _StateChip extends StatelessWidget {
     );
   }
 }
-
-/// 1px 虚线圆角框。Flutter 的 Border 没有 dashed，自己画。
-class _DashedBorder extends CustomPainter {
-  const _DashedBorder({required this.color, required this.radius});
-
-  final Color color;
-  final double radius;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0.5, 0.5, size.width - 1, size.height - 1),
-      Radius.circular(radius),
-    );
-    final path = Path()..addRRect(rect);
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    const dash = 4.0, space = 4.0;
-    for (final metric in path.computeMetrics()) {
-      var d = 0.0;
-      while (d < metric.length) {
-        canvas.drawPath(metric.extractPath(d, d + dash), paint);
-        d += dash + space;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DashedBorder old) =>
-      old.color != color || old.radius != radius;
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// 参数面板
-// ═══════════════════════════════════════════════════════════════════════
 
 class _ParamPanel extends StatelessWidget {
   const _ParamPanel({required this.page});

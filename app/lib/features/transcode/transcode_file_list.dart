@@ -4,6 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
+import '../../core/widgets/dashed_border.dart';
 import '../../domain/transcode/probe.dart';
 import 'transcode_form.dart';
 import 'transcode_widgets.dart';
@@ -63,7 +64,7 @@ class TranscodeFileList extends StatelessWidget {
         SizedBox(
           height: 44,
           child: CustomPaint(
-            painter: TranscodeDashedBorder(
+            painter: DashedBorder(
               color: dragging ? cs.primary : cs.outline,
               radius: AppRadius.md,
             ),
