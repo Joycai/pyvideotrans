@@ -37,16 +37,22 @@ VideoToolbox 用例只在 macOS 跑。
 
 ```
 app/lib/
-  core/theme/    设计令牌 → ThemeData（ColorScheme / TextTheme / 三个 ThemeExtension）
-  core/widgets/  玻璃面板、渐变按钮、状态标签、进度条…
-  domain/        Cue / SubtitleDocument / SubtitleTask / TaskOptions / TranscodeOptions，
-                 语言表、折行、断句、SRT 与 VTT 编解码 —— 纯数据与纯函数，不碰 IO
-  services/      provider 抽象 + 各家实现 + 登记表 + ffmpeg 封装 + 设置 + 持久化
-  pipeline/      TaskQueue（串行队列）与 TaskRunner（阶段机）
-  features/      shell / tasks / transcode / editor / settings
+  main.dart          唯一装配点
+  core/theme/        设计令牌 → ThemeData / ThemeExtension
+  core/widgets/      无业务语义控件（fields.dart 是公共入口）
+  domain/            纯数据与纯规则；转码子域在 domain/transcode/
+  services/          网络、外部进程、设置与持久化
+  pipeline/          队列、任务编排、阶段壳、字幕写出、转码执行
+  features/shared/   跨 feature 共用组件
+  features/          shell / tasks / transcode / editor / settings
 ```
 
-`app/README.md` 有每条设计决定的完整理由，改到相关代码前先读那一节。下面是跨多个文件、
+`app/README.md` 有每条设计决定的完整理由，改到相关代码前先读那一节。
+依赖边界：`domain` 不依赖 Flutter 或上层；feature 之间不互相 import 实现，公共件进
+`features/shared/`；页面文件只做生命周期与装配，大块界面拆到同目录 panel / section / list。
+相对 import 依赖图必须保持无环。
+文件级的源码结构索引（每个文件干什么、按功能反查、测试对照）在 `docs/app-codemap.md`。
+下面是跨多个文件、
 **只看单个文件看不出来**的约束：
 
 ### 服务抽象：本地不是一条单独的代码路径

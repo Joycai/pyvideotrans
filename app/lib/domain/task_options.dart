@@ -1,6 +1,7 @@
 import 'language.dart';
+import 'paths.dart';
 import 'srt.dart';
-import 'task.dart';
+import 'task_kind.dart';
 
 /// 产物格式。
 ///
@@ -288,4 +289,11 @@ class TaskOptions {
         ? this.outputDir
         : outputDir as String?,
   );
+
+  /// 产物目录：设了自定义输出目录就用它，否则与源文件同目录。
+  String outputDirFor(String sourcePath) => switch (outputLocation) {
+    OutputLocation.custom when outputDir?.trim().isNotEmpty == true =>
+      outputDir!.trim(),
+    _ => dirName(sourcePath),
+  };
 }

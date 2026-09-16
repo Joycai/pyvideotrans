@@ -5,8 +5,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../domain/cue.dart';
-import '../domain/speech_segments.dart';
 import '../domain/media_kinds.dart';
+import '../domain/paths.dart';
+import '../domain/speech_segments.dart';
 import '../domain/srt.dart';
 import 'provider_api.dart';
 
@@ -37,7 +38,7 @@ class MediaFileInfo {
   /// 字幕文件解析不出内容。
   bool get isEmptySubtitle => cueCount == 0;
 
-  String get fileName => path.split(RegExp(r'[/\\]')).last;
+  String get fileName => baseName(path);
 
   /// 「1.2 GB」「734 MB」这样的人类可读大小。
   String get sizeLabel {

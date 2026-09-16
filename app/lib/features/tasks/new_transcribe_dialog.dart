@@ -10,7 +10,11 @@ import '../../core/widgets/glass_panel.dart';
 import '../../domain/srt.dart';
 import '../../services/media.dart';
 import '../../services/settings.dart';
+import 'transcribe_advanced_section.dart';
+import 'transcribe_footer.dart';
 import 'transcribe_form.dart';
+import 'transcribe_recognize_section.dart';
+import 'transcribe_translate_section.dart';
 
 export 'transcribe_form.dart' show NewTranscribeResult;
 

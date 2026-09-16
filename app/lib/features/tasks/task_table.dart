@@ -8,7 +8,7 @@ import '../../core/widgets/indicators.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/srt.dart';
 import '../../domain/task.dart';
-import '../../domain/transcode.dart';
+import '../../domain/transcode/command.dart';
 import '../../services/registry.dart';
 import '../../services/reveal.dart';
 import 'stage_bar.dart';

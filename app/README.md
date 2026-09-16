@@ -70,15 +70,18 @@ sudo apt install libmpv-dev mpv    # Debian / Ubuntu；Fedora 用 mpv-libs-devel
 
 ```
 lib/
-  core/theme/      设计令牌 → ThemeData（ColorScheme / TextTheme / 三个 ThemeExtension）
-  core/widgets/    玻璃面板、渐变按钮、状态标签、进度条…
-  domain/          Cue / SubtitleDocument / SubtitleTask / TaskOptions，
-                   语言表、折行、SRT 与 VTT 编解码
-  services/        provider 抽象 + OpenAI 兼容实现 + 登记表 + 可用性检查 + 设置
-  services/local/  本地后端客户端（第一期为 stub）
-  pipeline/        六阶段流水线与任务队列
-  features/        shell / tasks / editor / settings
+  main.dart          装配点：服务对象、根级表单控制器、页面切换、顶栏与状态栏
+  core/theme/        设计令牌 → ThemeData 与 ThemeExtension
+  core/widgets/      无业务语义控件；fields.dart 是 dropdown / form_fields 的公共入口
+  domain/            纯数据与纯规则，不碰网络 / 外部进程
+  domain/transcode/  编解码枚举、编码器目录、参数、探测结果、ffmpeg 命令
+  services/          provider、ffmpeg / ffprobe、设置与持久化
+  pipeline/          串行队列、任务编排、阶段壳、字幕写出、转码执行
+  features/shared/   跨 feature 共用的服务字段、命令块、入队横幅与步骤说明
+  features/          shell / tasks / transcode / editor / settings
 ```
+
+逐文件的职责、按功能反查、测试对照见 [`../docs/app-codemap.md`](../docs/app-codemap.md)。
 
 ### 为什么「本地」不是一条单独的代码路径
 

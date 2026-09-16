@@ -1,3 +1,5 @@
+import 'paths.dart';
+
 /// 按扩展名判断一个文件是媒体还是字幕 —— 这决定了建什么类型的任务：
 /// 音视频走转写，字幕直接走翻译。
 ///
@@ -20,7 +22,7 @@ abstract final class MediaKinds {
   };
 
   static String extensionOf(String path) {
-    final name = path.split(RegExp(r'[/\\]')).last;
+    final name = baseName(path);
     final dot = name.lastIndexOf('.');
     return dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
   }

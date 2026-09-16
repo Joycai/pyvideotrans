@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../domain/cue.dart';
 import '../../domain/language.dart';
 import '../../domain/media_kinds.dart';
+import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import '../../domain/subtitle_pairing.dart';
 import '../../domain/task_options.dart';
@@ -112,9 +113,9 @@ class EditorOpenForm extends ChangeNotifier {
       setFile(slot, await LocalSubtitleFile.load(path));
       return;
     } on FormatException catch (e) {
-      _errors[slot] = '${_fileName(path)}：${e.message}';
+      _errors[slot] = '${baseName(path)}：${e.message}';
     } on FileSystemException {
-      _errors[slot] = '${_fileName(path)}：读不了这个文件，确认是 UTF-8 编码的 SRT / VTT';
+      _errors[slot] = '${baseName(path)}：读不了这个文件，确认是 UTF-8 编码的 SRT / VTT';
     }
     _recompute();
   }
@@ -275,7 +276,6 @@ class EditorOpenForm extends ChangeNotifier {
     super.dispose();
   }
 
-  static String _fileName(String path) => path.split(RegExp(r'[/\\]')).last;
 }
 
 String _grouped(int value) {
