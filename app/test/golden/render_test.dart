@@ -75,6 +75,9 @@ List<SubtitleTask> _fixtures() {
       document: document,
       mediaDuration: media,
       eta: eta,
+      // 钉死入队时间。不给的话构造函数取 DateTime.now()，编辑器入口页把它
+      // 渲染成「今天 / 昨天 / 9月16日」，截图就会每天自己对不上。
+      createdAt: DateTime(2026, 9, 13, 14, 2),
     );
     task.error = error;
     for (final entry in states.entries) {
