@@ -1,7 +1,7 @@
 import 'language.dart';
 import 'paths.dart';
 import 'srt.dart';
-import 'task.dart';
+import 'task_kind.dart';
 
 /// 产物格式。
 ///

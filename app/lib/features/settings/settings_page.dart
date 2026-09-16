@@ -211,12 +211,23 @@ class SettingsPageState extends State<SettingsPage> {
     if (!mounted || choice == null) return;
     switch (choice) {
       case ResetChoice.current:
-        if (group != null) s.reset(group);
+        if (group != null) {
+          s.reset(group, providerIds: _providerIds(group));
+        }
       case ResetChoice.all:
-        s.resetAll();
+        s.resetAll(
+          asrProviderIds: Registry.asr.map((p) => p.id),
+          translationProviderIds: Registry.translation.map((p) => p.id),
+        );
     }
     showSaved(_active);
   }
+
+  static Iterable<String> _providerIds(SettingsGroup group) => switch (group) {
+    SettingsGroup.asr => Registry.asr.map((p) => p.id),
+    SettingsGroup.translation => Registry.translation.map((p) => p.id),
+    _ => const [],
+  };
 
   static SettingsGroup? _groupOf(SettingsSectionKey key) => switch (key) {
     SettingsSectionKey.appearance => SettingsGroup.appearance,

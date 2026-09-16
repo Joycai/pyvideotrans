@@ -8,7 +8,6 @@ import '../domain/task_options.dart';
 import '../domain/transcode/options.dart';
 import 'openai_compatible.dart';
 import 'provider_api.dart';
-import 'registry.dart';
 
 /// 单个服务的连接配置。
 class ProviderConfig {
@@ -266,19 +265,22 @@ class AppSettings extends ChangeNotifier {
   ///
   /// 「恢复默认」按分区作用：用户来设置页多半只想重置某一块（比如把识别
   /// 服务的地址改坏了），整份清空会把翻译密钥也一起抹掉。
-  void reset(SettingsGroup group) {
+  void reset(
+    SettingsGroup group, {
+    Iterable<String> providerIds = const [],
+  }) {
     switch (group) {
       case SettingsGroup.appearance:
         _prefs.remove(_kThemeMode);
       case SettingsGroup.asr:
         _prefs.remove(_kAsrId);
         _prefs.remove(_kAsrPrompt);
-        _removeConfigs(Registry.asr.map((p) => p.id));
+        _removeConfigs(providerIds);
       case SettingsGroup.translation:
         _prefs.remove(_kMtId);
         _prefs.remove(_kBatchSize);
         _prefs.remove(_kGuidance);
-        _removeConfigs(Registry.translation.map((p) => p.id));
+        _removeConfigs(providerIds);
       case SettingsGroup.language:
         _prefs.remove(_kSourceLang);
         _prefs.remove(_kTargetLang);
@@ -294,9 +296,19 @@ class AppSettings extends ChangeNotifier {
   }
 
   /// 全部恢复默认。「上次参数」不在其列 —— 它是历史记录，不是设置。
-  void resetAll() {
+  void resetAll({
+    Iterable<String> asrProviderIds = const [],
+    Iterable<String> translationProviderIds = const [],
+  }) {
     for (final group in SettingsGroup.values) {
-      reset(group);
+      reset(
+        group,
+        providerIds: switch (group) {
+          SettingsGroup.asr => asrProviderIds,
+          SettingsGroup.translation => translationProviderIds,
+          _ => const [],
+        },
+      );
     }
   }
 

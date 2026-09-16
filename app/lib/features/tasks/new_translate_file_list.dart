@@ -7,7 +7,7 @@ import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dashed_border.dart';
 import '../../domain/srt.dart';
 import '../shared/provider_fields.dart';
-import 'new_translate_file_panel.dart';
+import 'translate_file_notes.dart';
 import 'translate_form.dart';
 
 class NewTranslateFileList extends StatelessWidget {
