@@ -55,7 +55,7 @@ abstract final class SubtitleOutputWriter {
     // 写之前先记下这一刻的文档：写文件要等 IO，期间编辑器可能又改了。
     final cues = task.document.cues;
 
-    final written = <String>[];
+    final contents = <String, String>{};
     for (final (path, field) in _plan(task, target)) {
       final content = switch (format) {
         SubtitleFormat.srt => Srt.serialize(
@@ -80,10 +80,25 @@ abstract final class SubtitleOutputWriter {
         SubtitleFormat.ass => '',
       };
       if (content.trim().isEmpty) continue;
-      // 产物可能正被播放器读着：先写临时文件再改名，写到一半出错不留半截文件。
-      await writeFileAtomically(path, content);
-      written.add(path);
+      contents[path] = content;
     }
+    // 产物可能正被播放器读着：先写临时文件再改名，写到一半出错不留半截文件；
+    // 原文、译文一起写，不会只写成一份。
+    try {
+      await writeFilesAtomically(contents);
+    } catch (_) {
+      // 改名阶段失败时，已经换成新内容的产物留着新内容；不重新记时间戳的话，
+      // 下次保存会把应用自己刚写的当成「在别处被改过」。
+      if (dir == null) {
+        for (final path in contents.keys) {
+          if (task.outputs.containsKey(path)) {
+            task.outputs[path] = await stampOf(path);
+          }
+        }
+      }
+      rethrow;
+    }
+    final written = contents.keys.toList();
 
     if (dir == null) {
       task.outputs = {for (final path in written) path: await stampOf(path)};

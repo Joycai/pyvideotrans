@@ -15,6 +15,8 @@ Future<EditorController> _controller() async {
     id: 'e1',
     sourcePath: '/v/demo.mp4',
     kind: TaskKind.transcribeAndTranslate,
+    // 跑完的任务：排队或运行中的任务编辑器只读。
+    status: TaskStatus.done,
     options: testOptions(
       asr: 'openai',
       mt: 'deepseek',

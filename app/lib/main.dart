@@ -274,6 +274,8 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       session: TaskSession(task),
       settings: widget.settings,
       store: widget.editorStore,
+      // 任务在跑时流水线会换掉文档，编辑器跟着刷新、只读。
+      follow: widget.queue,
     )
       // 编辑器里的改动（改字、改时间、拆分合并、重新翻译）跟着写盘。
       ..addListener(() => widget.queue.persist(task));

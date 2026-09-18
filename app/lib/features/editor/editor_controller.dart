@@ -128,10 +128,17 @@ class EditorController extends ChangeNotifier {
     SubtitleDocument? saved,
     this.recoveredAt,
     DateTime Function()? clock,
+    Listenable? follow,
+    this.translator,
   }) : _saved = saved ?? (session.pendingEdits == 0 ? session.document : null),
-       _clock = clock ?? DateTime.now {
+       _clock = clock ?? DateTime.now,
+       _follow = follow {
     _baseline = _saved ?? session.document;
+    _seen = session.document;
+    _wasLocked = locked;
+    _phase = session.phase;
     if (recoveredAt != null) recoveredEdits = session.pendingEdits;
+    follow?.addListener(_sourceChanged);
   }
 
   final EditorSession session;
@@ -141,6 +148,18 @@ class EditorController extends ChangeNotifier {
   final EditorStore? store;
 
   final DateTime Function() _clock;
+
+  /// 测试用：替换按设置建出来的翻译服务。
+  @visibleForTesting
+  final TranslationProvider Function()? translator;
+
+  /// 文档可能在编辑器以外被改的来源（任务队列）；它一通知就看看文档换没换。
+  final Listenable? _follow;
+
+  /// 编辑器最后一次看到的文档，用来分辨文档是不是被别处换掉了。
+  late SubtitleDocument _seen;
+  late bool _wasLocked;
+  Object? _phase;
 
   /// 本地会话打开时恢复了上次没写回文件的修改：草稿存下的时间。
   final DateTime? recoveredAt;
@@ -200,7 +219,11 @@ class EditorController extends ChangeNotifier {
 
   SubtitleDocument get document => session.document;
 
-  bool get canUndo => _undo.isNotEmpty;
+  /// 任务排队或运行中：流水线随时会整份换掉文档，编辑器这时的修改要么
+  /// 被下一批译文盖掉，要么把流水线的结果盖掉，所以只看不改。
+  bool get locked => session.busy;
+
+  bool get canUndo => !locked && _undo.isNotEmpty;
 
   /// 还没写进字幕文件的修改数。
   int get unsavedEdits {
@@ -211,7 +234,8 @@ class EditorController extends ChangeNotifier {
   }
 
   /// 能「撤销到上次写入」：知道上次写的是哪一版，且现在不一样。
-  bool get canRevertToWritten => _saved != null && unsavedEdits > 0;
+  bool get canRevertToWritten =>
+      !locked && _saved != null && unsavedEdits > 0;
 
   SyncState get sync {
     if (_writing) return SyncState.writing;
@@ -223,7 +247,8 @@ class EditorController extends ChangeNotifier {
   }
 
   /// 现在按「保存」有没有事可做：有修改、没生成过产物、上次失败或冲突了。
-  bool get canWrite => switch (sync) {
+  /// 任务还在跑时不写：完成阶段会按最终的文档写出产物。
+  bool get canWrite => !locked && switch (sync) {
     SyncState.dirty ||
     SyncState.noOutput ||
     SyncState.failed ||
@@ -401,6 +426,7 @@ class EditorController extends ChangeNotifier {
   /// 「刚写入」让位给新的修改，否则写完 2 秒内再改、再按 ⌘S 会被当成
   /// 没事可做。写入失败的红色保留到下一次写成。
   void _changed() {
+    _seen = document;
     progressAt = _clock();
     _justWritten = null;
     _writtenTimer?.cancel();
@@ -412,7 +438,7 @@ class EditorController extends ChangeNotifier {
   /// 改文档的操作都走这里：先存快照再换新文档。没变化就什么都不做，
   /// 免得撤销栈里堆一份一模一样的快照。
   void _commit(SubtitleDocument next) {
-    if (identical(next, document)) return;
+    if (locked || identical(next, document)) return;
     _push();
     session.document = next;
     _changed();
@@ -420,7 +446,7 @@ class EditorController extends ChangeNotifier {
 
   /// 文字编辑：同一条同一字段 1 秒内的连续改动并进上一次提交。
   void _commitText(SubtitleDocument next, String key) {
-    if (identical(next, document)) return;
+    if (locked || identical(next, document)) return;
     final now = _clock();
     final last = _coalesceAt;
     if (_coalesceKey == key &&
@@ -438,7 +464,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void undo() {
-    if (_undo.isEmpty) return;
+    if (!canUndo) return;
     session.document = _undo.removeLast();
     if (session.pendingEdits > 0) session.pendingEdits--;
     _coalesceKey = null;
@@ -451,7 +477,7 @@ class EditorController extends ChangeNotifier {
   /// 「撤销到上次写入」：换回上次写进字幕文件的版本。本身也能撤销。
   void revertToWritten() {
     final saved = _saved;
-    if (saved == null || identical(saved, document)) return;
+    if (locked || saved == null || identical(saved, document)) return;
     _commit(saved);
     session.pendingEdits = 0;
     notifyListeners();
@@ -584,7 +610,7 @@ class EditorController extends ChangeNotifier {
   /// 写之前先看文件在上次读 / 写之后有没有被别的程序改过，改过就抛
   /// [WriteConflict] 交给界面去问；[overwrite] 为真时不看，直接覆盖。
   Future<List<String>> save({bool overwrite = false}) async {
-    if (_writing) return const [];
+    if (_writing || locked) return const [];
     if (!overwrite) {
       final changes = await session.externalChanges();
       if (changes.isNotEmpty) {
@@ -599,6 +625,7 @@ class EditorController extends ChangeNotifier {
   /// 另存到 [dir]。本地会话写完就挂在新文件上；任务会话只是另存一份，
   /// 产物与同步状态不变。目标不能用时抛 [TargetRejected]。
   Future<List<String>> saveAs(String dir) async {
+    if (locked) throw const TargetRejected('任务还在运行，完成后再另存');
     final s = session;
     if (await s.checkWriteTo(dir) case final reason?) {
       throw TargetRejected(reason);
@@ -721,9 +748,43 @@ class EditorController extends ChangeNotifier {
     );
   }
 
+  /// 任务队列通知了：流水线可能换掉了文档，或任务开跑 / 跑完了。
+  ///
+  /// 文档被换掉时撤销栈里全是旧文档的快照，留着的话一撤销就把流水线的
+  /// 结果换回去，所以清掉；「本次修改」改以新文档为基准。
+  void _sourceChanged() {
+    if (_disposed) return;
+    final wasLocked = _wasLocked;
+    final phase = _phase;
+    _wasLocked = locked;
+    _phase = session.phase;
+    if (identical(document, _seen)) {
+      if (wasLocked != locked && session.justFinished) {
+        // 跑完了：完成阶段已按这份文档写出产物、清零了未写入数。
+        _saved = document;
+        _baseline = document;
+        _baselineKeys = null;
+      }
+      // 阶段变了（排队 → 识别 → 翻译）也要刷新只读横幅上的说明。
+      if (wasLocked != locked || phase != _phase) notifyListeners();
+      return;
+    }
+    _seen = document;
+    _undo.clear();
+    _coalesceKey = null;
+    _saved = session.pendingEdits == 0 ? document : null;
+    _baseline = document;
+    _baselineKeys = null;
+    selected = document.cues.isEmpty
+        ? 0
+        : selected.clamp(0, document.cues.length - 1);
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _disposed = true;
+    _follow?.removeListener(_sourceChanged);
     _writtenTimer?.cancel();
     // 关掉前把编辑进度写掉；写盘是异步的，不必等。
     if (_draftDirty) unawaited(flushDraft().catchError((Object _) {}));
@@ -732,6 +793,7 @@ class EditorController extends ChangeNotifier {
   }
 
   TranslationProvider _translationProvider() {
+    if (translator case final build?) return build();
     final options = session.options;
     return Registry.buildTranslation(
       options.translationProviderId,
@@ -743,6 +805,7 @@ class EditorController extends ChangeNotifier {
 
   /// 重新翻译某一条。失败时把错误抛给调用方去弹 SnackBar。
   Future<void> retranslate(int indexInDocument) async {
+    if (locked) return;
     final cue = document.cues[indexInDocument];
     translating.add(indexInDocument);
     notifyListeners();
@@ -758,6 +821,11 @@ class EditorController extends ChangeNotifier {
           '译文与原文条数对不上',
           hint: '模型没有返回恰好一条译文，请稍后重试。',
         );
+      }
+      // 等译文期间文档被流水线换掉了：下标已经对不上，这条译文不要了。
+      if (indexInDocument >= document.cues.length ||
+          !identical(document.cues[indexInDocument], cue)) {
+        return;
       }
       _commit(
         document.replaceAt(
@@ -775,6 +843,7 @@ class EditorController extends ChangeNotifier {
   ///
   /// 未配对行没有原文，不送去翻译；识别跳过留下的空原文同理。
   Future<int> translateMissing() async {
+    if (locked) return 0;
     final pending = [
       for (final (i, c) in document.cues.indexed)
         if (!c.hasTranslation && c.source.trim().isNotEmpty) i,
@@ -784,20 +853,26 @@ class EditorController extends ChangeNotifier {
     final provider = _translationProvider();
     final token = CancellationToken();
     final batchSize = session.options.translationBatchSize;
-    final cues = [...document.cues];
-    _push();
+    var done = 0;
+    var pushed = false;
 
     for (var start = 0; start < pending.length; start += batchSize) {
-      final slice = pending.sublist(
-        start,
-        (start + batchSize).clamp(0, pending.length),
-      );
+      final slice = [
+        for (final i in pending.sublist(
+          start,
+          (start + batchSize).clamp(0, pending.length),
+        ))
+          if (i < document.cues.length) i,
+      ];
+      final sources = [for (final i in slice) document.cues[i].source];
       final result = await provider.translateBatch(
-        lines: [for (final i in slice) cues[i].source],
+        lines: sources,
         sourceLanguage: session.sourceLanguage.name,
         targetLanguage: session.targetLanguage.name,
         token: token,
       );
+      // 翻到一半任务被续跑了：文档归流水线，再写回去会盖掉它的结果。
+      if (locked || _disposed) return done;
       if (result.length != slice.length) {
         throw ProviderException(
           '译文与原文条数对不上',
@@ -805,18 +880,36 @@ class EditorController extends ChangeNotifier {
           hint: '模型合并或丢弃了字幕行，请减小批量后重试。',
         );
       }
+      // 等译文期间文档可能又变了（用户接着改、拆分合并、流水线续跑过又停了）：
+      // 译文写到**现在**的文档上，只填原文没变、还没有译文的那几条，
+      // 别的条目一律不碰 —— 不能拿开始时的快照整份盖回去。
+      final cues = [...document.cues];
+      var filled = 0;
       for (final (j, i) in slice.indexed) {
-        cues[i] = cues[i].copyWith(translation: result[j]);
+        if (i >= cues.length) continue;
+        final cue = cues[i];
+        if (cue.source != sources[j] || cue.hasTranslation) continue;
+        cues[i] = cue.copyWith(translation: result[j]);
+        filled++;
+      }
+      if (filled == 0) continue;
+      if (!pushed) {
+        _push();
+        pushed = true;
       }
       session.document = document.copyWith(cues: cues);
+      done += filled;
       _changed();
     }
-    return pending.length;
+    return done;
   }
+
 
   /// 导出到 [dir]（默认源文件所在目录或设置里指定的输出目录）。返回写出
   /// 的路径。导出是另存一份，不改变同步状态。
   Future<List<String>> export(Set<SrtField> fields, {String? dir}) async {
+    // 与另存为一致：跑到一半的文档导出去也没用。
+    if (locked) throw const TargetRejected('任务还在运行，完成后再导出');
     final options = session.options;
     if (!options.format.implemented) {
       throw const ProviderException(
@@ -848,7 +941,6 @@ class EditorController extends ChangeNotifier {
       );
     }
     await Directory(dir).create(recursive: true);
-    final written = <String>[];
 
     String Function(String) wrap(Language language) {
       final limit = language.cjk
@@ -861,6 +953,7 @@ class EditorController extends ChangeNotifier {
     final wrapTranslation = wrap(session.targetLanguage);
     final speakerLabel = document.speakerLabeler(session.sourceLanguage);
 
+    final contents = <String, String>{};
     for (final field in fields) {
       final content = switch (options.format) {
         SubtitleFormat.srt => Srt.serialize(
@@ -885,11 +978,11 @@ class EditorController extends ChangeNotifier {
         SubtitleFormat.ass => '',
       };
       if (content.trim().isEmpty) continue;
-      final path = pathOf(field);
-      await writeFileAtomically(path, content);
-      written.add(path);
+      contents[pathOf(field)] = content;
     }
-    return written;
+    // 几份一起写，失败时不留半套。
+    await writeFilesAtomically(contents);
+    return contents.keys.toList();
   }
 
   static String _tag(String language) {

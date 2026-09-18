@@ -59,6 +59,15 @@ sealed class EditorSession {
   /// 字幕文件是否已经有了：失败或取消的任务还没写过产物。
   bool get hasOutputs => true;
 
+  /// 文档正被编辑器以外的地方改着（任务排队或运行中），编辑器只能看。
+  bool get busy => false;
+
+  /// 进行到哪一步；变了编辑器就刷新只读说明。
+  Object? get phase => null;
+
+  /// 刚跑完且产物已按当前文档写出：解锁时据此认定字幕文件已同步。
+  bool get justFinished => false;
+
   /// 字幕文件上次写入（或读入）的时间；不知道时为 null。
   DateTime? get writtenAt;
 
@@ -189,6 +198,19 @@ class TaskSession extends EditorSession {
   @override
   bool get hasOutputs =>
       task.outputs.isNotEmpty || task.status == TaskStatus.done;
+
+  /// 排队的也算：一轮到它，流水线就从续跑阶段起重写文档。
+  @override
+  bool get busy =>
+      task.status == TaskStatus.running || task.status == TaskStatus.queued;
+
+  @override
+  Object? get phase => (task.status, task.stage);
+
+  /// 取消、失败也会解锁，但那时产物没按这份文档写过。
+  @override
+  bool get justFinished =>
+      task.status == TaskStatus.done && task.unsyncedEdits == 0;
 
   @override
   DateTime? get writtenAt => task.outputsWrittenAt;
@@ -450,28 +472,36 @@ class FileSession extends EditorSession {
   /// - 已校对标记、置信度 SRT 装不下，由 EditorStore 另存。
   /// - VTT 按 VTT 写回，但样式块、注释这类字幕以外的内容不保留。
   Future<List<String>> save() async {
-    final written = <String>[];
-    await _write(
-      sourcePath,
-      SrtField.source,
-      document.speakerLabeler(sourceLanguage),
-    );
-    written.add(sourcePath);
-
-    if (!document.cues.any((c) => c.hasTranslation)) {
-      translationPath = null;
-    } else {
-      final target = translationPath ?? await _freshTranslationPath();
-      await _write(
+    final contents = {
+      sourcePath: _content(
+        sourcePath,
+        SrtField.source,
+        document.speakerLabeler(sourceLanguage),
+      ),
+    };
+    final translated = document.cues.any((c) => c.hasTranslation);
+    final target = !translated
+        ? null
+        : translationPath ?? await _freshTranslationPath();
+    if (target != null) {
+      contents[target] = _content(
         target,
         SrtField.translation,
         labelTranslation ? document.speakerLabeler(targetLanguage) : null,
       );
-      translationPath = target;
-      written.add(target);
     }
+    // 原文、译文一起写：另存为时写成一半就失败，不能留下只有原文的半套。
+    try {
+      await writeFilesAtomically(contents);
+    } catch (_) {
+      // 改名阶段失败时，已换成新内容的文件留着新内容：重新记时间戳，
+      // 否则下次保存会把自己刚写的当成外部修改。另存为失败由 writeTo 回滚。
+      await captureStamps();
+      rethrow;
+    }
+    translationPath = target;
     await captureStamps();
-    return written;
+    return contents.keys.toList();
   }
 
   Future<String> _freshTranslationPath() async {
@@ -487,13 +517,13 @@ class FileSession extends EditorSession {
     return path;
   }
 
-  Future<void> _write(
+  String _content(
     String path,
     SrtField field,
     String Function(int)? speakerLabel,
-  ) async {
+  ) {
     final ext = extensionOf(path);
-    final content = (ext.isEmpty ? 'srt' : ext) == 'vtt'
+    return (ext.isEmpty ? 'srt' : ext) == 'vtt'
         ? Srt.serializeVtt(
             document.cues,
             field: field,
@@ -504,6 +534,5 @@ class FileSession extends EditorSession {
             field: field,
             speakerLabel: speakerLabel,
           );
-    await writeFileAtomically(path, content);
   }
 }

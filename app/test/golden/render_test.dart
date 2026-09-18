@@ -288,14 +288,17 @@ void main() {
     WidgetTester tester, {
     required Brightness brightness,
     required String file,
+    bool running = false,
   }) async {
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
     // 跑完的任务、改了两处还没写进产物：顶栏 chip、保存按钮、行首圆点、
-    // 「本次修改」筛选与状态栏都显示未写入。
+    // 「本次修改」筛选与状态栏都显示未写入。[running] 时任务还在翻译，
+    // 编辑器只读：横幅、检视面板变灰、保存与翻译未译禁用。
     final task = _fixtures().first
-      ..status = TaskStatus.done
-      ..outputsWrittenAt = DateTime(2026, 9, 13, 14, 2);
+      ..status = running ? TaskStatus.running : TaskStatus.done
+      ..outputsWrittenAt = running ? null : DateTime(2026, 9, 13, 14, 2);
+    if (running) task.stage = TaskStage.translate;
     editorClock = () => DateTime(2026, 9, 13, 22);
     addTearDown(() => editorClock = DateTime.now);
     final controller = EditorController(
@@ -354,6 +357,15 @@ void main() {
 
   testWidgets('编辑器 · 浅色', (tester) async {
     await pumpEditor(tester, brightness: Brightness.light, file: 'editor_light');
+  });
+
+  testWidgets('编辑器 · 任务运行中只读', (tester) async {
+    await pumpEditor(
+      tester,
+      brightness: Brightness.light,
+      file: 'editor_running_light',
+      running: true,
+    );
   });
 
   testWidgets('任务页 · 浅色', (tester) async {
