@@ -124,7 +124,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
 
   List<RecentSession> _recents = const [];
 
-  /// 退出前把还没写盘的任务改动写掉。
+  /// 退出前把还没写盘的编辑进度写掉，字幕文件还没写入的先问一句。
   late final AppLifecycleListener _lifecycle;
 
   /// 「新建转写」页的表单。挂在根节点上，切去设置页再回来文件与参数还在。
@@ -153,16 +153,47 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     // 否则每一次进度回调都会重建 MaterialApp 以下整棵树。
     widget.settings.addListener(_refresh);
     _lifecycle = AppLifecycleListener(
-      onExitRequested: () async {
-        await widget.queue.flush();
-        return AppExitResponse.exit;
-      },
-      onPause: widget.queue.flush,
-      onDetach: widget.queue.flush,
+      onExitRequested: _onExitRequested,
+      onPause: _flushProgress,
+      onDetach: _flushProgress,
     );
     widget.editorStore.loadRecents().then((recents) {
       if (mounted) setState(() => _recents = recents);
     });
+  }
+
+  /// 编辑进度写盘：任务 JSON 与本地会话的草稿。
+  Future<void> _flushProgress() async {
+    await widget.queue.flush();
+    await _editor?.flushDraft();
+  }
+
+  /// 退出应用：编辑进度先落盘，再看字幕文件是不是最新的。修改已经存下来了，
+  /// 用户选「稍后再写」照样退出；只有「取消」才留下。
+  Future<AppExitResponse> _onExitRequested() async {
+    await _flushProgress();
+    final editor = _editor;
+    final context = _navigatorKey.currentContext;
+    if (editor != null &&
+        context != null &&
+        context.mounted &&
+        editor.unsavedEdits > 0) {
+      if (_section != AppSection.editor || _showOpen) {
+        setState(() {
+          _section = AppSection.editor;
+          _showOpen = false;
+        });
+      }
+      final ok = await confirmLeaveEditor(
+        context,
+        editor,
+        intent: LeaveIntent.exit,
+      );
+      if (!ok) return AppExitResponse.cancel;
+      // 写入产物后任务记下了新的时间戳，再落一次盘。
+      await _flushProgress();
+    }
+    return AppExitResponse.exit;
   }
 
   @override
@@ -205,7 +236,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     SnackBar(content: Text(message)),
   );
 
-  /// 换成新会话前：本地会话有未保存修改先问一句。
+  /// 换成新会话前：字幕文件还没写入最新修改的先问一句。
   Future<bool> _leaveCurrent() async {
     final editor = _editor;
     final context = _navigatorKey.currentContext;
@@ -258,23 +289,65 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     );
   }
 
-  /// 入口页「打开编辑器」。同一对文件上次保存过附加状态的，直接恢复。
-  Future<void> _openFiles() async {
+  /// 恢复横幅「丢弃，按文件重新打开」：扔掉草稿，按文件现在的内容重开。
+  /// 用户就是要丢弃，不再问「先写入字幕文件？」。
+  Future<void> _discardDraft() async {
+    final editor = _editor;
+    final session = editor?.session;
+    if (editor == null || session is! FileSession) return;
+    await editor.forgetDraft();
+    await _openForm.seed(
+      sourcePath: session.sourcePath,
+      translationPath: session.translationPath,
+    );
+    if (_openForm.source == null) {
+      _say('${baseName(session.sourcePath)} 读不了，可能已经移动或删除');
+      return;
+    }
+    await _openFiles(askLeave: false);
+  }
+
+  /// 入口页「打开编辑器」。同一对文件上次存过附加状态的直接恢复；
+  /// 还有没写回文件的编辑进度的，接着显示并用横幅说明。
+  Future<void> _openFiles({bool askLeave = true}) async {
     final form = _openForm;
     if (!form.canOpen) return;
-    if (!await _leaveCurrent()) return;
-    final restored = await widget.editorStore.loadFileState(
+    if (askLeave && !await _leaveCurrent()) return;
+    final state = await widget.editorStore.loadFileDraft(
       form.source!.path,
       form.translation?.path,
     );
-    final session = form.build(restored: restored);
-    _activate(
-      EditorController(
-        session: session,
-        settings: widget.settings,
-        store: widget.editorStore,
+    final session = form.build(restored: state?.current)
+      ..pendingEdits = state?.pendingEdits ?? 0;
+    if (state != null && state.changedOutside) {
+      // 草稿之后文件被别的程序改过：沿用草稿记下的时间戳，保存时才会
+      // 发现冲突、问用户覆盖还是另存。
+      session.trackedStamps.addAll(state.stamps);
+    } else {
+      await session.captureStamps();
+    }
+    final draft = state?.draft != null && session.pendingEdits > 0;
+    final controller = EditorController(
+      session: session,
+      settings: widget.settings,
+      store: widget.editorStore,
+      // 文件已经变了，存下的「上次写入的版本」不再是文件里的内容，不能拿来
+      // 「撤销到上次写入」。
+      saved: state == null || state.changedOutside ? null : state.saved,
+      recoveredAt: draft ? state!.draftAt ?? DateTime.now() : null,
+    )..recoveredOverChanged = state?.changedOutside ?? false;
+    // 另存为之后挂到了新文件上，「最近打开」跟着换成新路径。
+    controller.onRemount = () => _remember(
+      RecentSession(
+        title: session.title,
+        openedAt: DateTime.now(),
+        cueCount: session.document.cues.length,
+        speakerCount: session.document.speakerIds.length,
+        sourcePath: session.sourcePath,
+        translationPath: session.translationPath,
       ),
     );
+    _activate(controller);
     form.clear();
     _remember(
       RecentSession(
@@ -423,6 +496,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
             onReplace: (slot) => _stageReplacement(slot),
             onRepair: _repair,
             onOpenOther: _openOther,
+            onSave: () => _editorKey.currentState?.save(),
           ),
           actions: [
             EditorPageActions(
@@ -501,6 +575,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       controller: _editor!,
       onMountTranslation: () => _stageReplacement(OpenSlot.translation),
       onDropFiles: (path, slot) => _stageReplacement(slot, path: path),
+      onDiscardDraft: _discardDraft,
     ),
     AppSection.editor => ListenableBuilder(
       listenable: widget.queue,

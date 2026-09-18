@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../domain/cue.dart';
+import '../domain/file_stamp.dart';
+import 'file_stamps.dart';
 
 /// 编辑器自己的存档，放在应用支持目录的 `editor/` 下：
 ///
 /// - 本地会话的附加状态：已校对标记、置信度、说话人名单这些 SRT 装不下的
-///   东西。同时记下文件的大小与修改时间，文件在别处被改过就作废，免得把旧
-///   状态套到新内容上。
+///   东西，以及还没写回文件的编辑进度（草稿）。同时记下文件的大小与修改
+///   时间，文件在别处被改过就作废，免得把旧状态套到新内容上。
 /// - 最近打开的会话。
 class EditorStore {
   EditorStore(this.dir);
@@ -23,27 +25,66 @@ class EditorStore {
     'files-${_key('$sourcePath\n${translationPath ?? ''}')}.json',
   );
 
-  /// 保存本地会话的附加状态。须在字幕文件写完之后调用，记下的是写完后的
-  /// 文件大小与修改时间。
+  /// 保存本地会话的附加状态。
+  ///
+  /// - [document] 是上次写进字幕文件的版本（带已校对标记、说话人名单）。
+  /// - [draft] 是还没写进文件的编辑进度，没有就不给；[pendingEdits] 是它
+  ///   比 [document] 多出的修改数。
+  /// - [stamps] 是字幕文件上次读 / 写时的大小与修改时间。不给就现读 ——
+  ///   刚写完文件时这样调。
   Future<void> saveFileState({
     required String sourcePath,
     String? translationPath,
     required SubtitleDocument document,
+    SubtitleDocument? draft,
+    int pendingEdits = 0,
+    Map<String, FileStamp>? stamps,
   }) async {
     await _writeJson(_stateFile(sourcePath, translationPath), {
-      'version': 1,
+      'version': 2,
       'sourcePath': sourcePath,
       'translationPath': translationPath,
       'files': {
         for (final path in [sourcePath, ?translationPath])
-          path: await _stamp(path),
+          path: (stamps?[path] ?? await stampOf(path)).toJson(),
       },
       'document': document.toJson(),
+      if (draft != null) ...{
+        'draft': draft.toJson(),
+        'pendingEdits': pendingEdits,
+        'draftAt': DateTime.now().toIso8601String(),
+      },
     });
   }
 
-  /// 读回附加状态。没存过、存档坏了、或文件在别处被改过时返回 null。
+  /// 删掉一对文件的附加状态。另存为之后，旧文件那份已经没用了。
+  Future<void> forgetFileState(
+    String sourcePath,
+    String? translationPath,
+  ) async {
+    try {
+      await _stateFile(sourcePath, translationPath).delete();
+    } on FileSystemException {
+      // 本来就没有，不用管。
+    }
+  }
+
+  /// 读回附加状态（上次写进文件的版本）。文件在别处被改过时返回 null。
   Future<SubtitleDocument?> loadFileState(
+    String sourcePath,
+    String? translationPath,
+  ) async {
+    final state = await loadFileDraft(sourcePath, translationPath);
+    return state == null || state.changedOutside ? null : state.saved;
+  }
+
+  /// 读回附加状态与编辑进度。没存过、存档坏了时返回 null。
+  ///
+  /// 文件在别处被改过时：只有附加状态的作废（旧的已校对标记套不上新内容）；
+  /// 有没写回的编辑进度的照样返回并标上 [FileState.changedOutside] ——
+  /// 离开时答应过用户「不写入也不会丢」，不能因为文件被 touch 了一下就
+  /// 悄悄扔掉，由编辑器保存时走冲突询问。
+  Future<FileState?> loadFileDraft(
     String sourcePath,
     String? translationPath,
   ) async {
@@ -57,17 +98,27 @@ class EditorStore {
         return null;
       }
       final files = (json['files'] as Map).cast<String, Object?>();
+      final stamps = <String, FileStamp>{};
+      var changed = false;
       for (final path in [sourcePath, ?translationPath]) {
-        final saved = (files[path] as Map?)?.cast<String, Object?>();
-        final now = await _stamp(path);
-        if (saved == null ||
-            saved['size'] != now['size'] ||
-            saved['modifiedMs'] != now['modifiedMs']) {
-          return null;
-        }
+        final saved = FileStamp.fromJson(files[path]);
+        if (saved == null) return null;
+        if (saved != await stampOf(path)) changed = true;
+        stamps[path] = saved;
       }
-      return SubtitleDocument.fromJson(
-        (json['document'] as Map).cast<String, Object?>(),
+      final draft = json['draft'];
+      if (changed && draft is! Map) return null;
+      return FileState(
+        stamps: stamps,
+        changedOutside: changed,
+        saved: SubtitleDocument.fromJson(
+          (json['document'] as Map).cast<String, Object?>(),
+        ),
+        draft: draft is Map
+            ? SubtitleDocument.fromJson(draft.cast<String, Object?>())
+            : null,
+        pendingEdits: json['pendingEdits'] as int? ?? 0,
+        draftAt: DateTime.tryParse(json['draftAt'] as String? ?? ''),
       );
     } on Object {
       return null;
@@ -123,14 +174,6 @@ class EditorStore {
     return next;
   }
 
-  Future<Map<String, Object?>> _stamp(String path) async {
-    final stat = await File(path).stat();
-    return {
-      'size': stat.type == FileSystemEntityType.notFound ? -1 : stat.size,
-      'modifiedMs': stat.modified.millisecondsSinceEpoch,
-    };
-  }
-
   /// 先写临时文件再改名，与 TaskStore 一样。
   Future<void> _writeJson(File target, Object json) async {
     await Directory(dir).create(recursive: true);
@@ -149,6 +192,39 @@ class EditorStore {
     }
     return hash.toRadixString(16).padLeft(8, '0');
   }
+}
+
+/// 本地会话存下的附加状态。
+class FileState {
+  const FileState({
+    this.stamps = const {},
+    this.changedOutside = false,
+    required this.saved,
+    this.draft,
+    this.pendingEdits = 0,
+    this.draftAt,
+  });
+
+  /// 上次写进字幕文件的版本。
+  final SubtitleDocument saved;
+
+  /// 还没写进文件的编辑进度；没有为 null。
+  final SubtitleDocument? draft;
+
+  /// [draft] 比 [saved] 多出的修改数。
+  final int pendingEdits;
+
+  /// 编辑进度最后一次存下的时间。
+  final DateTime? draftAt;
+
+  /// 存下时字幕文件的时间戳。
+  final Map<String, FileStamp> stamps;
+
+  /// 存下之后字幕文件被别的程序改过（只在有草稿时才会返回这种状态）。
+  final bool changedOutside;
+
+  /// 打开时该显示的文档：有编辑进度用编辑进度。
+  SubtitleDocument get current => draft ?? saved;
 }
 
 /// 「最近打开」里的一项。任务会话记任务 id，本地会话记两个文件路径。

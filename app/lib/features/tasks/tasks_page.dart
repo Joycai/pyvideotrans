@@ -8,6 +8,7 @@ import '../../pipeline/task_queue.dart';
 import '../../services/reveal.dart';
 import 'new_transcribe_dialog.dart';
 import 'new_translate_dialog.dart';
+import 'task_resume_dialog.dart';
 import 'task_table.dart';
 import 'tasks_board.dart';
 
@@ -94,14 +95,26 @@ class TasksPageState extends State<TasksPage> {
     setState(() => _selectedId = widget.queue.tasks.first.id);
   }
 
+  /// 续跑前：会重建文档、而编辑器里改过的，先问一句。
+  Future<void> _resume(SubtitleTask task, VoidCallback resume) async {
+    switch (await confirmResume(context, task)) {
+      case ResumeChoice.proceed:
+        resume();
+      case ResumeChoice.openEditor:
+        widget.onOpenEditor(task);
+      case ResumeChoice.cancel:
+        break;
+    }
+  }
+
   void _handleAction(SubtitleTask task, TaskAction action) {
     switch (action) {
       case TaskAction.cancel:
         widget.queue.cancel(task.id);
       case TaskAction.resume:
-        widget.queue.resume(task.id);
+        _resume(task, () => widget.queue.resume(task.id));
       case TaskAction.resumeAuto:
-        widget.queue.resumeAuto(task.id);
+        _resume(task, () => widget.queue.resumeAuto(task.id));
       case TaskAction.prioritize:
         widget.queue.prioritize(task.id);
       case TaskAction.remove:

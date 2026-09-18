@@ -5,10 +5,12 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import 'editor_controller.dart';
-import 'editor_session.dart';
 import 'editor_widgets.dart';
 
-/// 顶栏右侧：视图切换 + 翻译未译 + 保存（本地会话）+ 导出。
+/// 顶栏右侧：视图切换 + 翻译未译 + 保存 + 导出…。
+///
+/// 两种会话都有「保存」：它写的是播放器读的那几份字幕文件，编辑进度本身
+/// 一直在自动存。「导出…」是另存到别处。
 class EditorPageActions extends StatelessWidget {
   const EditorPageActions({
     super.key,
@@ -27,7 +29,7 @@ class EditorPageActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = context.colors;
     final missing = controller.missingTranslationCount;
-    final dirty = controller.unsavedEdits > 0;
+    final sync = controller.sync;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -48,18 +50,22 @@ class EditorPageActions extends StatelessWidget {
           icon: Symbols.translate,
           onPressed: missing == 0 ? null : onTranslateMissing,
         ),
-        if (controller.session is FileSession) ...[
-          const SizedBox(width: AppSpacing.s3),
-          // 没有修改时禁用而不是隐藏，位置不跳。
-          _SaveButton(
-            dirty: dirty,
-            dot: cs.primary,
-            onPressed: dirty ? onSave : null,
-          ),
-        ],
+        const SizedBox(width: AppSpacing.s3),
+        // 没有修改时禁用而不是隐藏，位置不跳。
+        _SaveButton(
+          label: switch (sync) {
+            SyncState.noOutput => '生成文件',
+            SyncState.failed => '重试',
+            SyncState.conflict => '保存…',
+            _ => '保存',
+          },
+          dirty: sync == SyncState.dirty || sync == SyncState.failed,
+          dot: cs.primary,
+          onPressed: controller.canWrite ? onSave : null,
+        ),
         const SizedBox(width: AppSpacing.s3),
         PrimaryButton(
-          label: '导出',
+          label: '导出…',
           icon: Symbols.download,
           onPressed: controller.document.cues.isEmpty ? null : onExport,
         ),
@@ -115,8 +121,14 @@ class _ViewMenu extends StatelessWidget {
 }
 
 class _SaveButton extends StatelessWidget {
-  const _SaveButton({required this.dirty, required this.dot, this.onPressed});
+  const _SaveButton({
+    required this.label,
+    required this.dirty,
+    required this.dot,
+    this.onPressed,
+  });
 
+  final String label;
   final bool dirty;
   final Color dot;
   final VoidCallback? onPressed;
@@ -127,7 +139,7 @@ class _SaveButton extends StatelessWidget {
     final e = context.elevation;
     final enabled = onPressed != null;
     return Tooltip(
-      message: '⌘S',
+      message: '写入字幕文件 ⌘S',
       waitDuration: const Duration(milliseconds: 600),
       child: Container(
         height: 36,
@@ -172,7 +184,7 @@ class _SaveButton extends StatelessWidget {
                     const SizedBox(width: 6),
                   ],
                   Text(
-                    '保存',
+                    label,
                     style: context.texts.labelLarge?.copyWith(
                       color: enabled
                           ? cs.onSurface

@@ -82,7 +82,8 @@ class CueTableToolbar extends StatelessWidget {
                     // 窄窗口再藏掉数量为 0 的，「全部」与当前选中的除外。
                     if (switch (f) {
                           CueFilter.untranslated => controller.hasTranslations,
-                          CueFilter.unpaired => controller.countOf(f) > 0,
+                          CueFilter.unpaired ||
+                          CueFilter.edited => controller.countOf(f) > 0,
                           _ => true,
                         } &&
                         (!compact ||

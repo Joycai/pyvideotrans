@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../../domain/cue.dart';
+import '../../domain/file_stamp.dart';
 import '../../domain/language.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/output_naming.dart';
@@ -9,11 +10,15 @@ import '../../domain/srt.dart';
 import '../../domain/subtitle_pairing.dart';
 import '../../domain/task.dart';
 import '../../domain/task_options.dart';
+import '../../pipeline/subtitle_output_writer.dart';
+import '../../services/file_stamps.dart';
 
 /// 编辑器打开的是什么：一个任务，或者本地的一两份字幕文件。
 ///
-/// 两种会话共用同一张表格与检视面板，差别只在从哪儿来、存到哪儿去 ——
-/// 任务的改动随任务一起自动写盘，本地文件由用户保存时写回原文件。
+/// 两种会话共用同一张表格与检视面板，也共用同一套保存规则：
+/// **编辑进度自动存，字幕文件手动写**。编辑进度（任务 JSON / 本地会话的
+/// 草稿）每次改动都存；字幕文件只在用户保存时写 —— 任务写产物，本地会话
+/// 写回挂载的文件。两者之间差多少处修改记在 [pendingEdits]。
 sealed class EditorSession {
   SubtitleDocument get document;
   set document(SubtitleDocument value);
@@ -40,6 +45,63 @@ sealed class EditorSession {
 
   /// 字幕所在的路径：手动关联的音视频按它记，也在它旁边找同名文件。
   String get subtitlePath;
+
+  /// 还没写进字幕文件的修改数。随编辑进度一起存，重启后还在。
+  int get pendingEdits;
+  set pendingEdits(int value);
+
+  /// 记一次编辑。任务会话另记累计数，续跑前用来提醒修改会被覆盖。
+  void recordEdit() {}
+
+  /// 保存会写哪些文件。
+  List<String> get targetPaths;
+
+  /// 字幕文件是否已经有了：失败或取消的任务还没写过产物。
+  bool get hasOutputs => true;
+
+  /// 字幕文件上次写入（或读入）的时间；不知道时为 null。
+  DateTime? get writtenAt;
+
+  /// 写字幕文件，返回写了哪些路径。调用前先看 [externalChanges]。
+  Future<List<String>> write();
+
+  /// 另存到 [dir]，返回写了哪些路径。先用 [checkWriteTo] 查过。
+  Future<List<String>> writeTo(String dir);
+
+  /// 另存为的目标能不能用；不能用时返回给用户看的原因。
+  ///
+  /// 另存为是为了两边都留，所以不许写回原来的目录，也不许盖掉目标目录
+  /// 里已有的同名文件 —— 尤其是冲突对话框里点「另存为」、在默认打开的
+  /// 原目录直接确认的时候。
+  Future<String?> checkWriteTo(String dir) async {
+    if (dir == dirName(targetPaths.firstOrNull ?? exportDir)) {
+      return '选的是字幕文件原来的目录，请换一个';
+    }
+    for (final path in writeToPaths(dir)) {
+      if (await File(path).exists()) return '${baseName(path)} 已存在，请换一个目录';
+    }
+    return null;
+  }
+
+  /// 另存到 [dir] 时会写哪些路径。
+  List<String> writeToPaths(String dir);
+
+  /// 上次读 / 写之后被别的程序改过的字幕文件。只看这次会写的文件
+  /// （卸载了的译文不写，也就不用问）；已经删掉的不算 —— 直接写回去
+  /// 不会盖掉任何东西。
+  Future<List<FileChange>> externalChanges() async {
+    final targets = targetPaths.toSet();
+    return [
+      for (final MapEntry(key: path, value: before) in trackedStamps.entries)
+        if (targets.contains(path))
+          if (await stampOf(path) case final now
+              when now.exists && now != before)
+            (path: path, before: before, now: now),
+    ];
+  }
+
+  /// 记着的字幕文件时间戳：上次读 / 写完那一刻的。
+  Map<String, FileStamp> get trackedStamps;
 
   /// 找预览用的音视频，依次取：[linked]（上次手动关联的，文件还在才算）、
   /// 任务的源文件（本身是媒体时）、字幕旁边去掉语言段后同名的音视频。
@@ -81,7 +143,11 @@ Future<String?> findSiblingMedia(String subtitlePath, String stem) async {
   return candidates.first.$3;
 }
 
+/// 一份在外部被改过的字幕文件：[before] 是我们上次读 / 写时的样子。
+typedef FileChange = ({String path, FileStamp before, FileStamp now});
+
 /// 从任务打开。文档就是任务的文档，参数是任务入队时定下的那份。
+/// 字幕文件是任务的产物，与完成阶段同名同路径。
 class TaskSession extends EditorSession {
   TaskSession(this.task);
 
@@ -107,6 +173,39 @@ class TaskSession extends EditorSession {
 
   @override
   String get subtitlePath => task.sourcePath;
+
+  @override
+  int get pendingEdits => task.unsyncedEdits;
+
+  @override
+  set pendingEdits(int value) => task.unsyncedEdits = value;
+
+  @override
+  void recordEdit() => task.editorEdits++;
+
+  @override
+  List<String> get targetPaths => SubtitleOutputWriter.targets(task);
+
+  @override
+  bool get hasOutputs =>
+      task.outputs.isNotEmpty || task.status == TaskStatus.done;
+
+  @override
+  DateTime? get writtenAt => task.outputsWrittenAt;
+
+  @override
+  Map<String, FileStamp> get trackedStamps => task.outputs;
+
+  @override
+  Future<List<String>> write() => SubtitleOutputWriter.write(task);
+
+  @override
+  Future<List<String>> writeTo(String dir) =>
+      SubtitleOutputWriter.write(task, dir: dir);
+
+  @override
+  List<String> writeToPaths(String dir) =>
+      SubtitleOutputWriter.targets(task, dir: dir);
 
   /// 转写任务的源文件就是音视频，不用找。
   @override
@@ -238,10 +337,29 @@ class FileSession extends EditorSession {
     );
   }
 
-  final String sourcePath;
+  /// 原文文件。「另存为」之后换成新路径。
+  String sourcePath;
 
   /// 译文文件。只挂原文时为 null；在编辑器里翻译后第一次保存会补上。
   String? translationPath;
+
+  @override
+  int pendingEdits = 0;
+
+  /// 挂载的文件上次读 / 写完时的大小与修改时间。打开时由 [captureStamps] 记，
+  /// 每次保存后更新。
+  @override
+  final Map<String, FileStamp> trackedStamps = {};
+
+  /// 记下挂载文件当前的时间戳。打开会话后调一次。
+  Future<void> captureStamps() async {
+    trackedStamps
+      ..clear()
+      ..addAll({
+        for (final path in [sourcePath, ?translationPath])
+          path: await stampOf(path),
+      });
+  }
 
   @override
   TaskOptions options;
@@ -270,6 +388,45 @@ class FileSession extends EditorSession {
 
   @override
   String get subtitlePath => sourcePath;
+
+  @override
+  List<String> get targetPaths => [sourcePath, ?mountedTranslationPath];
+
+  @override
+  DateTime? get writtenAt => trackedStamps[sourcePath]?.modified;
+
+  @override
+  Future<List<String>> write() => save();
+
+  /// 另存到 [dir]：写出后编辑器就挂在新文件上。写失败时仍挂在原来的
+  /// 文件上 —— 否则之后的草稿、重试都会跟着一个写不进去的目录走。
+  @override
+  Future<List<String>> writeTo(String dir) async {
+    final (oldSource, oldTranslation) = (sourcePath, translationPath);
+    final stamps = {...trackedStamps};
+    final paths = writeToPaths(dir);
+    sourcePath = paths.first;
+    translationPath = mountedTranslationPath == null ? null : paths.last;
+    try {
+      return await save();
+    } catch (_) {
+      sourcePath = oldSource;
+      translationPath = oldTranslation;
+      trackedStamps
+        ..clear()
+        ..addAll(stamps);
+      rethrow;
+    }
+  }
+
+  @override
+  List<String> writeToPaths(String dir) {
+    final sep = Platform.pathSeparator;
+    return [
+      '$dir$sep${baseName(sourcePath)}',
+      if (mountedTranslationPath case final t?) '$dir$sep${baseName(t)}',
+    ];
+  }
 
   /// `interview_ep12.zh.srt` → `interview_ep12`：语言段也去掉，导出时再按
   /// 实际语言加回来。
@@ -303,16 +460,17 @@ class FileSession extends EditorSession {
 
     if (!document.cues.any((c) => c.hasTranslation)) {
       translationPath = null;
-      return written;
+    } else {
+      final target = translationPath ?? await _freshTranslationPath();
+      await _write(
+        target,
+        SrtField.translation,
+        labelTranslation ? document.speakerLabeler(targetLanguage) : null,
+      );
+      translationPath = target;
+      written.add(target);
     }
-    final target = translationPath ?? await _freshTranslationPath();
-    await _write(
-      target,
-      SrtField.translation,
-      labelTranslation ? document.speakerLabeler(targetLanguage) : null,
-    );
-    translationPath = target;
-    written.add(target);
+    await captureStamps();
     return written;
   }
 
@@ -329,7 +487,6 @@ class FileSession extends EditorSession {
     return path;
   }
 
-  /// 先写临时文件再改名：写到一半出错，原文件还是完整的。
   Future<void> _write(
     String path,
     SrtField field,
@@ -347,8 +504,6 @@ class FileSession extends EditorSession {
             field: field,
             speakerLabel: speakerLabel,
           );
-    final tmp = File('$path.tmp');
-    await tmp.writeAsString(content, flush: true);
-    await tmp.rename(path);
+    await writeFileAtomically(path, content);
   }
 }

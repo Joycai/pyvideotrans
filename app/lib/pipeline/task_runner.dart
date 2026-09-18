@@ -383,6 +383,8 @@ class TaskRunner {
   Future<void> _finish(SubtitleTask task, void Function() onChange) =>
       _stages.run(task, TaskStage.finish, onChange, () async {
         final outputs = await writeOutputs(task);
+        // 产物按完成这一刻的文档写出，编辑器里之前改的也都在里面了。
+        task.unsyncedEdits = 0;
         for (final path in outputs) {
           task.note('已写出 $path');
         }
