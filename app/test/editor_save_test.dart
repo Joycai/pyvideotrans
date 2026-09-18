@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/file_stamp.dart';
+import 'package:subtitle_studio/domain/paths.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
@@ -13,6 +14,7 @@ import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/editor_title.dart';
 import 'package:subtitle_studio/features/tasks/task_resume_dialog.dart';
 import 'package:subtitle_studio/services/editor_store.dart';
+import 'package:subtitle_studio/services/file_stamps.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 import 'helpers.dart';
@@ -282,6 +284,21 @@ void main() {
       c.dispose();
     });
 
+    test('另存为：译文写不进去时，原文也不留下', () async {
+      final t = task();
+      final c = controllerFor(TaskSession(t))..select(0);
+      c.editSource('一');
+      final other = await Directory('${dir.path}${sep}copy').create();
+      // 译文的临时文件位置被一个目录占着，写译文必然失败。
+      await Directory('${other.path}${sep}demo.en.srt.tmp').create();
+
+      await expectLater(c.saveAs(other.path), throwsA(anything));
+      final left = other.listSync().map((e) => baseName(e.path)).toList();
+      expect(left, ['demo.en.srt.tmp']);
+      expect(c.unsavedEdits, 1);
+      c.dispose();
+    });
+
     test('写入失败：记下原因，修改数不变', () async {
       final t = SubtitleTask(
         id: 't2',
@@ -484,6 +501,30 @@ void main() {
       expect(c.sync, SyncState.dirty);
     });
 
+    test('另存为：译文写不进去时一份都不留，仍挂在原来的文件上', () async {
+      final zh = '${dir.path}${sep}ep.zh.srt';
+      final en = '${dir.path}${sep}ep.en.srt';
+      await File(zh).writeAsString(_zh);
+      await File(en).writeAsString(_zh.replaceAll('大家好', 'Hello'));
+      final s = FileSession.open(
+        source: await LocalSubtitleFile.load(zh),
+        translation: await LocalSubtitleFile.load(en),
+        defaults: testOptions(),
+      );
+      await s.captureStamps();
+      final c = controllerFor(s)..select(0);
+      c.editSource('大家好呀');
+      final other = await Directory('${dir.path}${sep}other').create();
+      await Directory('${other.path}${sep}ep.en.srt.tmp').create();
+
+      await expectLater(c.saveAs(other.path), throwsA(anything));
+      final left = other.listSync().map((e) => baseName(e.path)).toList();
+      expect(left, ['ep.en.srt.tmp']);
+      expect((s.sourcePath, s.translationPath), (zh, en));
+      expect(await File(zh).readAsString(), _zh);
+      c.dispose();
+    });
+
     test('另存为写失败：仍挂在原来的文件上', () async {
       final path = '${dir.path}${sep}ep.zh.srt';
       await File(path).writeAsString(_zh);
@@ -499,6 +540,25 @@ void main() {
       expect(s.trackedStamps.keys, [path]);
       expect(c.sync, SyncState.failed);
       c.dispose();
+    });
+  });
+
+  group('成组写入', () {
+    test('改名阶段失败：删掉这次新建的，原有文件保持完整', () async {
+      final a = '${dir.path}${sep}a.srt';
+      final b = '${dir.path}${sep}b.srt';
+      final c = '${dir.path}${sep}c.srt';
+      await File(c).writeAsString('旧的');
+      // b 是一个非空目录，文件改名盖不过去。
+      await File('$b${sep}x').create(recursive: true);
+
+      await expectLater(
+        writeFilesAtomically({a: 'A', c: 'C', b: 'B'}),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(await File(a).exists(), isFalse);
+      expect(await File(c).readAsString(), 'C');
+      expect(await File('$b.tmp').exists(), isFalse);
     });
   });
 

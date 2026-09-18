@@ -450,28 +450,29 @@ class FileSession extends EditorSession {
   /// - 已校对标记、置信度 SRT 装不下，由 EditorStore 另存。
   /// - VTT 按 VTT 写回，但样式块、注释这类字幕以外的内容不保留。
   Future<List<String>> save() async {
-    final written = <String>[];
-    await _write(
-      sourcePath,
-      SrtField.source,
-      document.speakerLabeler(sourceLanguage),
-    );
-    written.add(sourcePath);
-
-    if (!document.cues.any((c) => c.hasTranslation)) {
-      translationPath = null;
-    } else {
-      final target = translationPath ?? await _freshTranslationPath();
-      await _write(
+    final contents = {
+      sourcePath: _content(
+        sourcePath,
+        SrtField.source,
+        document.speakerLabeler(sourceLanguage),
+      ),
+    };
+    final translated = document.cues.any((c) => c.hasTranslation);
+    final target = !translated
+        ? null
+        : translationPath ?? await _freshTranslationPath();
+    if (target != null) {
+      contents[target] = _content(
         target,
         SrtField.translation,
         labelTranslation ? document.speakerLabeler(targetLanguage) : null,
       );
-      translationPath = target;
-      written.add(target);
     }
+    // 原文、译文一起写：另存为时写成一半就失败，不能留下只有原文的半套。
+    await writeFilesAtomically(contents);
+    translationPath = target;
     await captureStamps();
-    return written;
+    return contents.keys.toList();
   }
 
   Future<String> _freshTranslationPath() async {
@@ -487,13 +488,13 @@ class FileSession extends EditorSession {
     return path;
   }
 
-  Future<void> _write(
+  String _content(
     String path,
     SrtField field,
     String Function(int)? speakerLabel,
-  ) async {
+  ) {
     final ext = extensionOf(path);
-    final content = (ext.isEmpty ? 'srt' : ext) == 'vtt'
+    return (ext.isEmpty ? 'srt' : ext) == 'vtt'
         ? Srt.serializeVtt(
             document.cues,
             field: field,
@@ -504,6 +505,5 @@ class FileSession extends EditorSession {
             field: field,
             speakerLabel: speakerLabel,
           );
-    await writeFileAtomically(path, content);
   }
 }

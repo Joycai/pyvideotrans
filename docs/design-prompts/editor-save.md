@@ -51,7 +51,7 @@
 
 ## 实现备注（给 Flutter 侧）
 
-已在分支 `feat/editor-save-model` 实现，与上面的设计有几处取舍：
+已合入（#36），与上面的设计有几处取舍：
 
 - 同步基线没用 `syncedRevision`，改成计数：任务 JSON 记 `unsyncedEdits`（未写入数）、`editorEdits`
   （累计编辑数，续跑提醒用）、`outputs`（每个产物写完后的大小 + 修改时间）、`outputsWrittenAt`。
@@ -63,3 +63,4 @@
 - 「另存为」不许写回原目录、不许覆盖同名文件；本地会话写成后挂到新文件并更新「最近打开」，
   任务会话只另存副本。「导出…」挑目录，落到字幕文件本身时拒绝并提示用「保存」。
 - 退出应用走 `AppLifecycleListener.onExitRequested` → `confirmLeaveEditor(intent: exit)`。
+- 原文、译文成组写：全部写成临时文件后才改名，任何一份失败都不留下半套（保存、另存为、导出同理）。

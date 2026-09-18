@@ -136,7 +136,7 @@ core/       domain/ ←──── services/
 - `settings.dart`：shared_preferences 设置和 provider 连接配置；不依赖 Registry，由调用方传 provider id。
 - `task_store.dart`：一个任务一份 JSON，进度更新时只重写变化的任务。
 - `editor_store.dart`：本地会话的附加状态与编辑进度草稿、媒体关联和最近打开。
-- `file_stamps.dart`：读文件时间戳、先写临时文件再改名的原子写。
+- `file_stamps.dart`：读文件时间戳；原子写（先写临时文件再改名），多份文件成组写，要么全成要么都不留。
 - `reveal.dart`：Finder / Explorer 中定位文件或打开目录。
 - `local/local_backend.dart`：本地 Python 后端客户端占位，第一期未实施。
 

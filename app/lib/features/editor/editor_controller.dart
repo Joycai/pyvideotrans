@@ -848,7 +848,6 @@ class EditorController extends ChangeNotifier {
       );
     }
     await Directory(dir).create(recursive: true);
-    final written = <String>[];
 
     String Function(String) wrap(Language language) {
       final limit = language.cjk
@@ -861,6 +860,7 @@ class EditorController extends ChangeNotifier {
     final wrapTranslation = wrap(session.targetLanguage);
     final speakerLabel = document.speakerLabeler(session.sourceLanguage);
 
+    final contents = <String, String>{};
     for (final field in fields) {
       final content = switch (options.format) {
         SubtitleFormat.srt => Srt.serialize(
@@ -885,11 +885,11 @@ class EditorController extends ChangeNotifier {
         SubtitleFormat.ass => '',
       };
       if (content.trim().isEmpty) continue;
-      final path = pathOf(field);
-      await writeFileAtomically(path, content);
-      written.add(path);
+      contents[pathOf(field)] = content;
     }
-    return written;
+    // 几份一起写，失败时不留半套。
+    await writeFilesAtomically(contents);
+    return contents.keys.toList();
   }
 
   static String _tag(String language) {
