@@ -59,6 +59,9 @@ sealed class EditorSession {
   /// 字幕文件是否已经有了：失败或取消的任务还没写过产物。
   bool get hasOutputs => true;
 
+  /// 文档正被编辑器以外的地方改着（任务排队或运行中），编辑器只能看。
+  bool get busy => false;
+
   /// 字幕文件上次写入（或读入）的时间；不知道时为 null。
   DateTime? get writtenAt;
 
@@ -189,6 +192,11 @@ class TaskSession extends EditorSession {
   @override
   bool get hasOutputs =>
       task.outputs.isNotEmpty || task.status == TaskStatus.done;
+
+  /// 排队的也算：一轮到它，流水线就从续跑阶段起重写文档。
+  @override
+  bool get busy =>
+      task.status == TaskStatus.running || task.status == TaskStatus.queued;
 
   @override
   DateTime? get writtenAt => task.outputsWrittenAt;

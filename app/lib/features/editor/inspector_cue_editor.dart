@@ -59,12 +59,16 @@ class _CueEditorState extends State<InspectorCueEditor> {
     if (cue == null) return;
     final changedRow = _boundIndex != controller.selected;
     _boundIndex = controller.selected;
-    if (changedRow || (!_sourceFocus.hasFocus && _source.text != cue.source)) {
+    // 只读时框里的字只可能来自流水线，焦点还在也照样重填。
+    final locked = controller.locked;
+    if (changedRow ||
+        ((locked || !_sourceFocus.hasFocus) && _source.text != cue.source)) {
       _source.text = cue.source;
     }
     final translation = cue.translation ?? '';
     if (changedRow ||
-        (!_translationFocus.hasFocus && _translation.text != translation)) {
+        ((locked || !_translationFocus.hasFocus) &&
+            _translation.text != translation)) {
       _translation.text = translation;
     }
   }

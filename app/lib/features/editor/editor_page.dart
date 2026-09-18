@@ -10,6 +10,7 @@ import '../../core/widgets/buttons.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/paths.dart';
 import '../../domain/srt.dart';
+import '../../domain/task.dart';
 import '../../services/provider_api.dart';
 import 'cue_table.dart';
 import 'editor_controller.dart';
@@ -188,7 +189,9 @@ class EditorPageState extends State<EditorPage> {
     await writeSubtitleFiles(context, controller);
   }
 
-  void manageSpeakers() => showSpeakerManager(context, controller);
+  void manageSpeakers() {
+    if (!controller.locked) showSpeakerManager(context, controller);
+  }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
@@ -269,7 +272,7 @@ class EditorPageState extends State<EditorPage> {
         Expanded(
           child: CueTable(
             controller: controller,
-            onManageSpeakers: manageSpeakers,
+            onManageSpeakers: controller.locked ? null : manageSpeakers,
             onMountTranslation: widget.onMountTranslation,
           ),
         ),
@@ -279,7 +282,7 @@ class EditorPageState extends State<EditorPage> {
           child: Inspector(
             controller: controller,
             onRetranslate: retranslate,
-            onManageSpeakers: manageSpeakers,
+            onManageSpeakers: controller.locked ? null : manageSpeakers,
             onMountTranslation: widget.onMountTranslation,
             playback: _playback,
             onAttachMedia: attachMedia,
@@ -287,19 +290,22 @@ class EditorPageState extends State<EditorPage> {
         ),
       ],
     );
-    final page = controller.recoveredEdits == 0
+    final lockNote = editorLockNote(controller);
+    final banner = lockNote != null
+        ? _LockedBanner(title: lockNote)
+        : controller.recoveredEdits == 0
+        ? null
+        : _RecoveryBanner(
+            controller: controller,
+            onWrite: save,
+            onDiscard: widget.onDiscardDraft,
+          );
+    final page = banner == null
         ? table
         : Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: AppSpacing.s3,
-            children: [
-              _RecoveryBanner(
-                controller: controller,
-                onWrite: save,
-                onDiscard: widget.onDiscardDraft,
-              ),
-              Expanded(child: table),
-            ],
+            children: [banner, Expanded(child: table)],
           );
 
     final onDrop = widget.onDropFiles;
@@ -421,6 +427,66 @@ class _DropOverlay extends StatelessWidget {
   }
 }
 
+/// 任务排队或运行中打开编辑器时的横幅：说明为什么改不了、什么时候能改。
+/// 与恢复横幅同形，用中性色 —— 这不是出了问题，只是还没轮到编辑。
+class _LockedBanner extends StatelessWidget {
+  const _LockedBanner({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.colors;
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.s4,
+          vertical: AppSpacing.s3,
+        ),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: cs.outlineVariant),
+        ),
+        child: Row(
+          spacing: AppSpacing.s3,
+          children: [
+            Icon(Symbols.lock, size: 20, weight: 400, color: cs.onSurfaceVariant),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 2,
+                children: [
+                  Text(title, style: context.texts.titleSmall),
+                  Text(
+                    '流水线会随时更新这份字幕，这时改动会和它互相覆盖。'
+                    '跑完后自动解锁，字幕文件也会按最终结果写出。',
+                    style: context.texts.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 编辑器只读时的说明；不只读时为 null。
+String? editorLockNote(EditorController controller) {
+  if (!controller.locked) return null;
+  final session = controller.session;
+  if (session is! TaskSession) return '编辑器暂时只读';
+  final task = session.task;
+  return task.status == TaskStatus.queued
+      ? '任务在排队，编辑器暂时只读'
+      : '任务正在${task.stage.label}，编辑器暂时只读';
+}
+
 /// 本地会话接着上次没写回文件的编辑进度打开时的横幅（画板 3）。
 class _RecoveryBanner extends StatelessWidget {
   const _RecoveryBanner({
@@ -527,7 +593,7 @@ String editorSubtitle(EditorController controller) {
 
 /// 状态栏右侧：字幕文件落后多少、正在写、刚写了哪些（画板 1 的表）。
 String? editorStatusNote(EditorController controller) =>
-    switch (controller.sync) {
+    controller.locked ? '任务跑完后会写出字幕文件' : switch (controller.sync) {
       SyncState.synced => null,
       SyncState.dirty => '字幕文件落后 ${controller.unsavedEdits} 处修改 · ⌘S 写入',
       SyncState.writing => '正在写入…',

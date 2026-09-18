@@ -53,11 +53,22 @@ class Inspector extends StatelessWidget {
                     playback: playback,
                     onAttachMedia: onAttachMedia,
                   ),
-                  InspectorCueEditor(
-                    controller: controller,
-                    onRetranslate: onRetranslate,
-                    onManageSpeakers: onManageSpeakers,
-                    onMountTranslation: onMountTranslation,
+                  // 只读时整块挡住：输入框、按钮都不接受点击和焦点，
+                  // 内容照样跟着流水线刷新。
+                  ExcludeFocus(
+                    excluding: controller.locked,
+                    child: AbsorbPointer(
+                      absorbing: controller.locked,
+                      child: Opacity(
+                        opacity: controller.locked ? 0.6 : 1,
+                        child: InspectorCueEditor(
+                          controller: controller,
+                          onRetranslate: onRetranslate,
+                          onManageSpeakers: onManageSpeakers,
+                          onMountTranslation: onMountTranslation,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),

@@ -10,6 +10,8 @@ import 'package:subtitle_studio/domain/paths.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
+import 'package:subtitle_studio/features/editor/editor_leave_dialog.dart';
+import 'package:subtitle_studio/features/editor/editor_page.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/editor_title.dart';
 import 'package:subtitle_studio/features/tasks/task_resume_dialog.dart';
@@ -540,6 +542,117 @@ void main() {
       expect(s.trackedStamps.keys, [path]);
       expect(c.sync, SyncState.failed);
       c.dispose();
+    });
+  });
+
+  group('任务运行中', () {
+    // 任务队列：流水线每改一次文档就通知一次。
+    final queue = ValueNotifier(0);
+
+    SubtitleDocument translated(SubtitleDocument doc, String suffix) =>
+        doc.copyWith(
+          cues: [
+            for (final c in doc.cues)
+              c.copyWith(translation: '${c.translation}$suffix'),
+          ],
+        );
+
+    EditorController follow(SubtitleTask t) => EditorController(
+      session: TaskSession(t),
+      settings: settings,
+      follow: queue,
+    )..select(0);
+
+    test('排队、运行中只读：改不了、撤销不了、不写文件', () async {
+      for (final status in [TaskStatus.queued, TaskStatus.running]) {
+        final t = task(status: status);
+        final before = t.document;
+        final c = follow(t);
+        expect(c.locked, isTrue);
+        c
+          ..editSource('一')
+          ..toggleReviewed()
+          ..split()
+          ..undo()
+          ..revertToWritten();
+        expect(identical(t.document, before), isTrue);
+        expect(t.unsyncedEdits, 0);
+        expect(t.editorEdits, 0);
+        expect(c.canWrite, isFalse);
+        expect(await c.save(), isEmpty);
+        await expectLater(
+          c.saveAs('${dir.path}${sep}copy'),
+          throwsA(isA<TargetRejected>()),
+        );
+        expect(await c.translateMissing(), 0);
+        expect(editorLockNote(c), isNotNull);
+        c.dispose();
+      }
+    });
+
+    test('流水线换了文档：跟着刷新，撤销栈清掉，不算本次修改', () {
+      final t = task(status: TaskStatus.paused);
+      final c = follow(t);
+      c.editSource('暂停时改的');
+      expect(c.canUndo, isTrue);
+
+      // 续跑：排队 → 运行，流水线写进一批译文。
+      t.status = TaskStatus.running;
+      queue.value++;
+      expect(c.locked, isTrue);
+      var notified = 0;
+      c.addListener(() => notified++);
+      t.document = translated(t.document, '·新');
+      queue.value++;
+      expect(notified, 1);
+      expect(c.canUndo, isFalse);
+      expect(c.isEdited(c.document.cues.first), isFalse);
+      expect(c.document.cues.first.source, '暂停时改的');
+
+      // 跑完：完成阶段写出产物、清零未写入数。
+      t
+        ..status = TaskStatus.done
+        ..unsyncedEdits = 0;
+      queue.value++;
+      expect(c.locked, isFalse);
+      expect(c.sync, SyncState.synced);
+      // 撤销不会把流水线的结果换回运行前的样子。
+      c.undo();
+      expect(c.document.cues.first.translation, 'First·新');
+      c.editSource('跑完再改');
+      expect(c.sync, SyncState.dirty);
+      c.dispose();
+    });
+
+    test('文档被换得更短：选中条收回范围内', () {
+      final t = task(status: TaskStatus.running);
+      final c = follow(t)..select(2);
+      t.document = t.document.copyWith(cues: [t.document.cues.first]);
+      queue.value++;
+      expect(c.selected, 0);
+      expect(c.current, isNotNull);
+      c.dispose();
+    });
+
+    testWidgets('运行中切走不问「先写入字幕文件？」', (tester) async {
+      final t = task(status: TaskStatus.paused);
+      final c = follow(t)..editSource('一');
+      t.status = TaskStatus.running;
+      late bool left;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async => left = await confirmLeaveEditor(context, c),
+              child: const Text('走'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('走'));
+      await tester.pumpAndSettle();
+      expect(find.text('先写入字幕文件？'), findsNothing);
+      expect(left, isTrue);
     });
   });
 

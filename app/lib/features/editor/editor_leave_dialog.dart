@@ -32,7 +32,8 @@ Future<bool> confirmLeaveEditor(
   // 先把排着的编辑进度写掉：撤销回原样后 300ms 内就切走，盘上还是
   // 撤销前的草稿，下次打开会把撤销掉的修改当成「恢复」。
   await controller.flushDraft();
-  final edits = controller.unsavedEdits;
+  // 任务还在跑：完成阶段会按最终的文档写出产物，这时不必也不能写。
+  final edits = controller.locked ? 0 : controller.unsavedEdits;
   if (edits == 0 || !context.mounted) return edits == 0;
 
   final files = [for (final p in controller.session.targetPaths) baseName(p)];

@@ -48,7 +48,9 @@ class EditorPageActions extends StatelessWidget {
         ControlButton(
           label: missing == 0 ? '全部已翻译' : '翻译未译 $missing 条',
           icon: Symbols.translate,
-          onPressed: missing == 0 ? null : onTranslateMissing,
+          onPressed: missing == 0 || controller.locked
+              ? null
+              : onTranslateMissing,
         ),
         const SizedBox(width: AppSpacing.s3),
         // 没有修改时禁用而不是隐藏，位置不跳。
