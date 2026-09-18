@@ -129,12 +129,14 @@ class EditorController extends ChangeNotifier {
     this.recoveredAt,
     DateTime Function()? clock,
     Listenable? follow,
+    this.translator,
   }) : _saved = saved ?? (session.pendingEdits == 0 ? session.document : null),
        _clock = clock ?? DateTime.now,
        _follow = follow {
     _baseline = _saved ?? session.document;
     _seen = session.document;
     _wasLocked = locked;
+    _phase = session.phase;
     if (recoveredAt != null) recoveredEdits = session.pendingEdits;
     follow?.addListener(_sourceChanged);
   }
@@ -147,12 +149,17 @@ class EditorController extends ChangeNotifier {
 
   final DateTime Function() _clock;
 
+  /// 测试用：替换按设置建出来的翻译服务。
+  @visibleForTesting
+  final TranslationProvider Function()? translator;
+
   /// 文档可能在编辑器以外被改的来源（任务队列）；它一通知就看看文档换没换。
   final Listenable? _follow;
 
   /// 编辑器最后一次看到的文档，用来分辨文档是不是被别处换掉了。
   late SubtitleDocument _seen;
   late bool _wasLocked;
+  Object? _phase;
 
   /// 本地会话打开时恢复了上次没写回文件的修改：草稿存下的时间。
   final DateTime? recoveredAt;
@@ -748,12 +755,18 @@ class EditorController extends ChangeNotifier {
   void _sourceChanged() {
     if (_disposed) return;
     final wasLocked = _wasLocked;
+    final phase = _phase;
     _wasLocked = locked;
+    _phase = session.phase;
     if (identical(document, _seen)) {
-      if (wasLocked == locked) return;
-      // 跑完了：完成阶段已按这份文档写出产物、清零了未写入数。
-      if (!locked && session.pendingEdits == 0) _saved = document;
-      notifyListeners();
+      if (wasLocked != locked && session.justFinished) {
+        // 跑完了：完成阶段已按这份文档写出产物、清零了未写入数。
+        _saved = document;
+        _baseline = document;
+        _baselineKeys = null;
+      }
+      // 阶段变了（排队 → 识别 → 翻译）也要刷新只读横幅上的说明。
+      if (wasLocked != locked || phase != _phase) notifyListeners();
       return;
     }
     _seen = document;
@@ -780,6 +793,7 @@ class EditorController extends ChangeNotifier {
   }
 
   TranslationProvider _translationProvider() {
+    if (translator case final build?) return build();
     final options = session.options;
     return Registry.buildTranslation(
       options.translationProviderId,
@@ -839,22 +853,26 @@ class EditorController extends ChangeNotifier {
     final provider = _translationProvider();
     final token = CancellationToken();
     final batchSize = session.options.translationBatchSize;
-    final cues = [...document.cues];
-    _push();
+    var done = 0;
+    var pushed = false;
 
     for (var start = 0; start < pending.length; start += batchSize) {
-      final slice = pending.sublist(
-        start,
-        (start + batchSize).clamp(0, pending.length),
-      );
+      final slice = [
+        for (final i in pending.sublist(
+          start,
+          (start + batchSize).clamp(0, pending.length),
+        ))
+          if (i < document.cues.length) i,
+      ];
+      final sources = [for (final i in slice) document.cues[i].source];
       final result = await provider.translateBatch(
-        lines: [for (final i in slice) cues[i].source],
+        lines: sources,
         sourceLanguage: session.sourceLanguage.name,
         targetLanguage: session.targetLanguage.name,
         token: token,
       );
       // 翻到一半任务被续跑了：文档归流水线，再写回去会盖掉它的结果。
-      if (locked) return start;
+      if (locked || _disposed) return done;
       if (result.length != slice.length) {
         throw ProviderException(
           '译文与原文条数对不上',
@@ -862,18 +880,36 @@ class EditorController extends ChangeNotifier {
           hint: '模型合并或丢弃了字幕行，请减小批量后重试。',
         );
       }
+      // 等译文期间文档可能又变了（用户接着改、拆分合并、流水线续跑过又停了）：
+      // 译文写到**现在**的文档上，只填原文没变、还没有译文的那几条，
+      // 别的条目一律不碰 —— 不能拿开始时的快照整份盖回去。
+      final cues = [...document.cues];
+      var filled = 0;
       for (final (j, i) in slice.indexed) {
-        cues[i] = cues[i].copyWith(translation: result[j]);
+        if (i >= cues.length) continue;
+        final cue = cues[i];
+        if (cue.source != sources[j] || cue.hasTranslation) continue;
+        cues[i] = cue.copyWith(translation: result[j]);
+        filled++;
+      }
+      if (filled == 0) continue;
+      if (!pushed) {
+        _push();
+        pushed = true;
       }
       session.document = document.copyWith(cues: cues);
+      done += filled;
       _changed();
     }
-    return pending.length;
+    return done;
   }
+
 
   /// 导出到 [dir]（默认源文件所在目录或设置里指定的输出目录）。返回写出
   /// 的路径。导出是另存一份，不改变同步状态。
   Future<List<String>> export(Set<SrtField> fields, {String? dir}) async {
+    // 与另存为一致：跑到一半的文档导出去也没用。
+    if (locked) throw const TargetRejected('任务还在运行，完成后再导出');
     final options = session.options;
     if (!options.format.implemented) {
       throw const ProviderException(

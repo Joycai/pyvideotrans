@@ -69,7 +69,9 @@ class EditorPageActions extends StatelessWidget {
         PrimaryButton(
           label: '导出…',
           icon: Symbols.download,
-          onPressed: controller.document.cues.isEmpty ? null : onExport,
+          onPressed: controller.document.cues.isEmpty || controller.locked
+              ? null
+              : onExport,
         ),
       ],
     );

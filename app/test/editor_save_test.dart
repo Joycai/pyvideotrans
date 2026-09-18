@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -15,8 +16,10 @@ import 'package:subtitle_studio/features/editor/editor_page.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/editor_title.dart';
 import 'package:subtitle_studio/features/tasks/task_resume_dialog.dart';
+import 'package:subtitle_studio/pipeline/subtitle_output_writer.dart';
 import 'package:subtitle_studio/services/editor_store.dart';
 import 'package:subtitle_studio/services/file_stamps.dart';
+import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 import 'helpers.dart';
@@ -61,6 +64,28 @@ class _Clock {
   void advance(Duration d) => now = now.add(d);
 
   DateTime call() => now;
+}
+
+/// 手动放行的假翻译：在等译文的那段时间里改文档，看回来的译文怎么落地。
+class _GatedTranslator implements TranslationProvider {
+  final gate = Completer<void>();
+  final calls = <List<String>>[];
+
+  @override
+  ProviderInfo get info =>
+      const ProviderInfo(id: 'fake_mt', name: '假翻译', vendor: '测试');
+
+  @override
+  Future<List<String>> translateBatch({
+    required List<String> lines,
+    required String sourceLanguage,
+    required String targetLanguage,
+    required CancellationToken token,
+  }) async {
+    calls.add(lines);
+    await gate.future;
+    return [for (final l in lines) '译:$l'];
+  }
 }
 
 void main() {
@@ -653,6 +678,130 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('先写入字幕文件？'), findsNothing);
       expect(left, isTrue);
+      c.dispose();
+    });
+
+    test('阶段变了也刷新只读说明', () {
+      final t = task(status: TaskStatus.queued)..stage = TaskStage.queued;
+      final c = follow(t);
+      var notified = 0;
+      c.addListener(() => notified++);
+      expect(editorLockNote(c), contains('排队'));
+      t
+        ..status = TaskStatus.running
+        ..stage = TaskStage.recognize;
+      queue.value++;
+      expect(notified, 1);
+      expect(editorLockNote(c), contains('识别'));
+      c.dispose();
+    });
+
+    test('跑完解锁才认产物已同步；取消解锁时修改标记还在', () {
+      for (final (end, synced) in [
+        (TaskStatus.done, true),
+        (TaskStatus.cancelled, false),
+      ]) {
+        final t = task(status: TaskStatus.paused);
+        final c = follow(t)..editSource('暂停时改的');
+        final cue = c.document.cues.first;
+        expect(c.isEdited(cue), isTrue);
+        // 从翻译阶段续跑：文档不换，跑完或被取消。
+        t.status = TaskStatus.running;
+        queue.value++;
+        t.status = end;
+        if (end == TaskStatus.done) t.unsyncedEdits = 0;
+        queue.value++;
+        expect(c.locked, isFalse);
+        expect(c.isEdited(cue), !synced);
+        expect(c.unsavedEdits == 0, synced);
+        c.dispose();
+      }
+    });
+
+    test('翻译未译：等译文时文档被换掉或又改了，译文只填原文没变的空位', () async {
+      final t = task()
+        ..document = _doc().copyWith(
+          cues: [
+            for (final c in _doc().cues) c.copyWith(translation: ''),
+          ],
+        );
+      final translator = _GatedTranslator();
+      final c = EditorController(
+        session: TaskSession(t),
+        settings: settings,
+        follow: queue,
+        translator: () => translator,
+      )..select(1);
+      final running = c.translateMissing();
+      await Future<void>.delayed(Duration.zero);
+      expect(translator.calls.single, ['第一句', '第二句话', '第三句']);
+
+      // 等译文期间：用户改了第 2 条原文，流水线（续跑后又失败）换掉了第 3 条。
+      c.editSource('改过的第二句');
+      final cues = [...t.document.cues];
+      cues[2] = cues[2].copyWith(source: '重新断句的第三句');
+      t.document = t.document.copyWith(cues: cues);
+      queue.value++;
+
+      translator.gate.complete();
+      expect(await running, 1);
+      final after = t.document.cues;
+      expect(after[0].translation, '译:第一句');
+      expect(after[1].source, '改过的第二句');
+      expect(after[1].hasTranslation, isFalse);
+      expect(after[2].source, '重新断句的第三句');
+      expect(after[2].hasTranslation, isFalse);
+      c.dispose();
+    });
+
+    test('翻译未译：等译文时任务开跑了，译文不写回', () async {
+      final t = task(status: TaskStatus.paused)
+        ..document = _doc().copyWith(
+          cues: [for (final c in _doc().cues) c.copyWith(translation: '')],
+        );
+      final translator = _GatedTranslator();
+      final c = EditorController(
+        session: TaskSession(t),
+        settings: settings,
+        follow: queue,
+        translator: () => translator,
+      );
+      final running = c.translateMissing();
+      await Future<void>.delayed(Duration.zero);
+      t.status = TaskStatus.running;
+      queue.value++;
+      final pipeline = t.document;
+      translator.gate.complete();
+      expect(await running, 0);
+      expect(identical(t.document, pipeline), isTrue);
+      // 一条没写回，不算编辑。
+      expect(t.unsyncedEdits, 0);
+      expect(t.editorEdits, 0);
+      c.dispose();
+    });
+
+    test('重新翻译此条：等译文时文档被换掉，结果不要了', () async {
+      final t = task(status: TaskStatus.paused);
+      final translator = _GatedTranslator();
+      final c = EditorController(
+        session: TaskSession(t),
+        settings: settings,
+        follow: queue,
+        translator: () => translator,
+      );
+      final running = c.retranslate(0);
+      await Future<void>.delayed(Duration.zero);
+      t.document = t.document.copyWith(
+        cues: [
+          t.document.cues.first.copyWith(source: '别的'),
+          ...t.document.cues.skip(1),
+        ],
+      );
+      queue.value++;
+      translator.gate.complete();
+      await running;
+      expect(t.document.cues.first.translation, 'First');
+      c.dispose();
     });
   });
 
@@ -672,6 +821,54 @@ void main() {
       expect(await File(a).exists(), isFalse);
       expect(await File(c).readAsString(), 'C');
       expect(await File('$b.tmp').exists(), isFalse);
+    });
+
+    test('改名阶段失败：已换成新内容的产物重新记时间戳，下次保存不误报冲突', () async {
+      final t = task();
+      final zh = '${dir.path}${sep}demo.zh.srt';
+      final en = '${dir.path}${sep}demo.en.srt';
+      await SubtitleOutputWriter.write(t);
+      // 译文产物被一个非空目录占了，改名盖不过去；原文先改名成功。
+      await File(en).delete();
+      await File('$en${sep}x').create(recursive: true);
+      t.document = t.document.copyWith(
+        cues: [
+          t.document.cues.first.copyWith(source: '新的'),
+          ...t.document.cues.skip(1),
+        ],
+      );
+      // 让修改时间看得出差别。
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      await expectLater(SubtitleOutputWriter.write(t), throwsA(anything));
+      expect(await File(zh).readAsString(), contains('新的'));
+      final changes = await TaskSession(t).externalChanges();
+      expect(changes.map((c) => c.path), isNot(contains(zh)));
+    });
+
+    test('本地会话改名阶段失败：原文重新记时间戳', () async {
+      final zh = '${dir.path}${sep}ep.zh.srt';
+      final en = '${dir.path}${sep}ep.en.srt';
+      await File(zh).writeAsString(_zh);
+      await File(en).writeAsString(_zh.replaceAll('大家好', 'Hello'));
+      final s = FileSession.open(
+        source: await LocalSubtitleFile.load(zh),
+        translation: await LocalSubtitleFile.load(en),
+        defaults: testOptions(),
+      );
+      await s.captureStamps();
+      await File(en).delete();
+      await File('$en${sep}x').create(recursive: true);
+      s.document = s.document.replaceAt(
+        0,
+        s.document.cues.first.copyWith(source: '新的'),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      await expectLater(s.save(), throwsA(anything));
+      expect(await File(zh).readAsString(), contains('新的'));
+      final changes = await s.externalChanges();
+      expect(changes.map((c) => c.path), isNot(contains(zh)));
     });
   });
 

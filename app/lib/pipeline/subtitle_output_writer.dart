@@ -84,7 +84,20 @@ abstract final class SubtitleOutputWriter {
     }
     // 产物可能正被播放器读着：先写临时文件再改名，写到一半出错不留半截文件；
     // 原文、译文一起写，不会只写成一份。
-    await writeFilesAtomically(contents);
+    try {
+      await writeFilesAtomically(contents);
+    } catch (_) {
+      // 改名阶段失败时，已经换成新内容的产物留着新内容；不重新记时间戳的话，
+      // 下次保存会把应用自己刚写的当成「在别处被改过」。
+      if (dir == null) {
+        for (final path in contents.keys) {
+          if (task.outputs.containsKey(path)) {
+            task.outputs[path] = await stampOf(path);
+          }
+        }
+      }
+      rethrow;
+    }
     final written = contents.keys.toList();
 
     if (dir == null) {

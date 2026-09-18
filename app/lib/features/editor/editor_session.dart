@@ -62,6 +62,12 @@ sealed class EditorSession {
   /// 文档正被编辑器以外的地方改着（任务排队或运行中），编辑器只能看。
   bool get busy => false;
 
+  /// 进行到哪一步；变了编辑器就刷新只读说明。
+  Object? get phase => null;
+
+  /// 刚跑完且产物已按当前文档写出：解锁时据此认定字幕文件已同步。
+  bool get justFinished => false;
+
   /// 字幕文件上次写入（或读入）的时间；不知道时为 null。
   DateTime? get writtenAt;
 
@@ -197,6 +203,14 @@ class TaskSession extends EditorSession {
   @override
   bool get busy =>
       task.status == TaskStatus.running || task.status == TaskStatus.queued;
+
+  @override
+  Object? get phase => (task.status, task.stage);
+
+  /// 取消、失败也会解锁，但那时产物没按这份文档写过。
+  @override
+  bool get justFinished =>
+      task.status == TaskStatus.done && task.unsyncedEdits == 0;
 
   @override
   DateTime? get writtenAt => task.outputsWrittenAt;
@@ -477,7 +491,14 @@ class FileSession extends EditorSession {
       );
     }
     // 原文、译文一起写：另存为时写成一半就失败，不能留下只有原文的半套。
-    await writeFilesAtomically(contents);
+    try {
+      await writeFilesAtomically(contents);
+    } catch (_) {
+      // 改名阶段失败时，已换成新内容的文件留着新内容：重新记时间戳，
+      // 否则下次保存会把自己刚写的当成外部修改。另存为失败由 writeTo 回滚。
+      await captureStamps();
+      rethrow;
+    }
     translationPath = target;
     await captureStamps();
     return contents.keys.toList();
