@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -8,6 +10,7 @@ import '../../domain/line_wrap.dart';
 import '../../domain/srt.dart';
 import '../../domain/task_options.dart';
 import '../../services/editor_store.dart';
+import '../../services/file_stamps.dart';
 import '../../services/provider_api.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
@@ -21,11 +24,59 @@ enum CueFilter {
   all('全部'),
   review('待校对'),
   untranslated('未翻译'),
-  unpaired('未配对');
+  unpaired('未配对'),
+
+  /// 与上次写进字幕文件的版本不一样的条目。
+  edited('本次修改');
 
   const CueFilter(this.label);
 
   final String label;
+}
+
+/// 字幕文件与编辑器里的文档对得上吗。顶栏 chip、保存按钮、状态栏都按它显示。
+enum SyncState {
+  /// 字幕文件就是编辑器里这一版。
+  synced,
+
+  /// 有修改还没写进字幕文件。
+  dirty,
+
+  /// 正在写。
+  writing,
+
+  /// 刚写完，停留 2 秒后回到 [synced]。
+  written,
+
+  /// 上次写入失败；继续编辑也保持，直到下一次写成功。
+  failed,
+
+  /// 保存前发现字幕文件在别处被改过，等用户决定。
+  conflict,
+
+  /// 任务没跑完，还没写过产物。
+  noOutput,
+}
+
+/// 保存前发现字幕文件在外部被改过。界面接住它，问用户覆盖还是另存。
+class WriteConflict implements Exception {
+  const WriteConflict(this.changes);
+
+  final List<FileChange> changes;
+
+  @override
+  String toString() => '${changes.map((c) => c.path).join('、')} 在别处被改过';
+}
+
+/// 另存为 / 导出的目标不能用（原目录、有同名文件）。不算写入失败，
+/// 同步状态不变，界面直接把原因告诉用户。
+class TargetRejected implements Exception {
+  const TargetRejected(this.reason);
+
+  final String reason;
+
+  @override
+  String toString() => reason;
 }
 
 /// 界面上显示的状态。整份文档都没有译文时（只挂了原文），「未翻译」没有
@@ -61,15 +112,49 @@ class SpeakerSummary {
 
 /// 编辑器的状态与操作。文档是不可变的，每次改动换一份新的 —— 撤销栈因此
 /// 只需要存快照，不用记反向操作。
+///
+/// 保存分两层：编辑进度每次改动都自动存（任务会话由上层随任务 JSON 写盘，
+/// 本地会话在这里攒 300ms 写草稿）；字幕文件只在 [save] 时写。
 class EditorController extends ChangeNotifier {
-  EditorController({required this.session, required this.settings, this.store})
-    : _saved = session.document;
+  /// [saved] 是上次写进字幕文件的版本。不给时：没有未写入修改的会话就是
+  /// 打开时的文档；有的话（任务重开）就不知道了，「撤销到上次写入」不可用。
+  ///
+  /// [recoveredAt] 不为空表示本地会话接着上次没写回文件的编辑进度打开，
+  /// 界面据此显示恢复横幅。
+  EditorController({
+    required this.session,
+    required this.settings,
+    this.store,
+    SubtitleDocument? saved,
+    this.recoveredAt,
+    DateTime Function()? clock,
+  }) : _saved = saved ?? (session.pendingEdits == 0 ? session.document : null),
+       _clock = clock ?? DateTime.now {
+    _baseline = _saved ?? session.document;
+    if (recoveredAt != null) recoveredEdits = session.pendingEdits;
+  }
 
   final EditorSession session;
   final AppSettings settings;
 
-  /// 本地会话保存时顺带写附加状态；为空就不写。
+  /// 本地会话的附加状态与编辑进度写在这里；为空就不写。
   final EditorStore? store;
+
+  final DateTime Function() _clock;
+
+  /// 本地会话打开时恢复了上次没写回文件的修改：草稿存下的时间。
+  final DateTime? recoveredAt;
+
+  /// 恢复的草稿之后，字幕文件又被别的程序改过。横幅要说明，保存时会问。
+  bool recoveredOverChanged = false;
+
+  /// 本地会话另存为后挂到了新文件上；上层据此更新「最近打开」。
+  VoidCallback? onRemount;
+
+  bool _disposed = false;
+
+  /// 恢复了几处修改。横幅关掉后归零。
+  int recoveredEdits = 0;
 
   CueView view = CueView.both;
   CueFilter filter = CueFilter.all;
@@ -87,18 +172,89 @@ class EditorController extends ChangeNotifier {
   final List<SubtitleDocument> _undo = [];
   static const _undoLimit = 50;
 
-  /// 上次保存时的文档。文档不可变，比较引用就知道有没有改过。
-  SubtitleDocument _saved;
-  int _editsSinceSave = 0;
+  /// 上次写进字幕文件的文档。文档不可变，比较引用就知道有没有改过。
+  /// 不知道时为 null（见构造函数）。
+  SubtitleDocument? _saved;
+
+  /// 「本次修改」的比较基准：上次写入的版本，不知道就用打开时的。
+  late SubtitleDocument _baseline;
+  Set<String>? _baselineKeys;
+
+  /// 连续编辑同一条同一字段时合并成一次修改：检视面板每敲一个字都会
+  /// 提交一次，不合并的话「N 处修改」按字数涨、撤销也按字退。
+  static const _coalesceWindow = Duration(seconds: 1);
+  String? _coalesceKey;
+  DateTime? _coalesceAt;
+
+  bool _writing = false;
+  String? _failure;
+  List<FileChange> _conflicts = const [];
+  List<String>? _justWritten;
+  Timer? _writtenTimer;
+
+  Timer? _draftTimer;
+  bool _draftDirty = false;
+
+  /// 编辑进度最后一次变化的时间；打开后没改过为 null。
+  DateTime? progressAt;
 
   SubtitleDocument get document => session.document;
 
   bool get canUndo => _undo.isNotEmpty;
 
-  /// 本地会话里还没保存的修改数。任务会话随任务自动写盘，恒为 0。
+  /// 还没写进字幕文件的修改数。
   int get unsavedEdits {
-    if (session is! FileSession || identical(document, _saved)) return 0;
-    return _editsSinceSave < 1 ? 1 : _editsSinceSave;
+    if (identical(document, _saved)) return 0;
+    final n = session.pendingEdits;
+    // 撤销越过了上次写入的版本：文档与文件不一样了，至少算一处。
+    return n < 1 ? (_saved == null ? 0 : 1) : n;
+  }
+
+  /// 能「撤销到上次写入」：知道上次写的是哪一版，且现在不一样。
+  bool get canRevertToWritten => _saved != null && unsavedEdits > 0;
+
+  SyncState get sync {
+    if (_writing) return SyncState.writing;
+    if (_failure != null) return SyncState.failed;
+    if (_conflicts.isNotEmpty) return SyncState.conflict;
+    if (_justWritten != null) return SyncState.written;
+    if (!session.hasOutputs) return SyncState.noOutput;
+    return unsavedEdits > 0 ? SyncState.dirty : SyncState.synced;
+  }
+
+  /// 现在按「保存」有没有事可做：有修改、没生成过产物、上次失败或冲突了。
+  bool get canWrite => switch (sync) {
+    SyncState.dirty ||
+    SyncState.noOutput ||
+    SyncState.failed ||
+    SyncState.conflict => true,
+    SyncState.synced || SyncState.writing || SyncState.written => false,
+  };
+
+  /// 上次写入失败的原因。
+  String? get failure => _failure;
+
+  /// 保存前发现在外部被改过的文件。
+  List<FileChange> get conflicts => _conflicts;
+
+  /// 刚写完的文件（停留 2 秒）。
+  List<String> get justWritten => _justWritten ?? const [];
+
+  /// 这一条与上次写入的版本不一样。
+  bool isEdited(Cue cue) => !_keys.contains(_cueKey(cue));
+
+  Set<String> get _keys =>
+      _baselineKeys ??= {for (final c in _baseline.cues) _cueKey(c)};
+
+  /// 比较内容而不是对象：拆分合并会给后面每一条重新编号，按对象比就全成了
+  /// 「改过」。
+  static String _cueKey(Cue c) =>
+      '${c.startMs}|${c.endMs}|${c.speaker}|${c.reviewed}|'
+      '${c.source}|${c.translation}';
+
+  void dismissRecovery() {
+    recoveredEdits = 0;
+    notifyListeners();
   }
 
   /// 文档里有没有任何译文。只挂了原文的会话没有，这时「未翻译」不算一种
@@ -124,6 +280,7 @@ class EditorController extends ChangeNotifier {
         CueFilter.review => state == CueState.review,
         CueFilter.untranslated => state == CueState.untranslated,
         CueFilter.unpaired => state == CueState.unpaired,
+        CueFilter.edited => isEdited(cue),
       };
       if (!passesFilter) return false;
       if (speakerFilter.isNotEmpty && !speakerFilter.contains(cue.speaker)) {
@@ -141,6 +298,7 @@ class EditorController extends ChangeNotifier {
 
   int countOf(CueFilter f) {
     if (f == CueFilter.all) return document.cues.length;
+    if (f == CueFilter.edited) return document.cues.where(isEdited).length;
     final translated = hasTranslations;
     final want = switch (f) {
       CueFilter.review => CueState.review,
@@ -232,8 +390,23 @@ class EditorController extends ChangeNotifier {
 
   void _push() {
     _undo.add(document);
-    _editsSinceSave++;
+    session.pendingEdits++;
+    session.recordEdit();
+    _coalesceKey = null;
     if (_undo.length > _undoLimit) _undo.removeAt(0);
+  }
+
+  /// 文档换了之后：记下编辑进度、排一次草稿写盘、通知界面。
+  ///
+  /// 「刚写入」让位给新的修改，否则写完 2 秒内再改、再按 ⌘S 会被当成
+  /// 没事可做。写入失败的红色保留到下一次写成。
+  void _changed() {
+    progressAt = _clock();
+    _justWritten = null;
+    _writtenTimer?.cancel();
+    _draftDirty = true;
+    _scheduleDraft();
+    notifyListeners();
   }
 
   /// 改文档的操作都走这里：先存快照再换新文档。没变化就什么都不做，
@@ -242,16 +415,45 @@ class EditorController extends ChangeNotifier {
     if (identical(next, document)) return;
     _push();
     session.document = next;
-    notifyListeners();
+    _changed();
+  }
+
+  /// 文字编辑：同一条同一字段 1 秒内的连续改动并进上一次提交。
+  void _commitText(SubtitleDocument next, String key) {
+    if (identical(next, document)) return;
+    final now = _clock();
+    final last = _coalesceAt;
+    if (_coalesceKey == key &&
+        last != null &&
+        now.difference(last) < _coalesceWindow &&
+        _undo.isNotEmpty) {
+      session.document = next;
+      _coalesceAt = now;
+      _changed();
+      return;
+    }
+    _commit(next);
+    _coalesceKey = key;
+    _coalesceAt = now;
   }
 
   void undo() {
     if (_undo.isEmpty) return;
     session.document = _undo.removeLast();
-    if (_editsSinceSave > 0) _editsSinceSave--;
+    if (session.pendingEdits > 0) session.pendingEdits--;
+    _coalesceKey = null;
     selected = document.cues.isEmpty
         ? 0
         : selected.clamp(0, document.cues.length - 1);
+    _changed();
+  }
+
+  /// 「撤销到上次写入」：换回上次写进字幕文件的版本。本身也能撤销。
+  void revertToWritten() {
+    final saved = _saved;
+    if (saved == null || identical(saved, document)) return;
+    _commit(saved);
+    session.pendingEdits = 0;
     notifyListeners();
   }
 
@@ -260,13 +462,19 @@ class EditorController extends ChangeNotifier {
   void editSource(String text) {
     final cue = current;
     if (cue == null || cue.source == text) return;
-    _replaceCurrent(cue.copyWith(source: text));
+    _commitText(
+      document.replaceAt(selected, cue.copyWith(source: text)),
+      '$selected:source',
+    );
   }
 
   void editTranslation(String text) {
     final cue = current;
     if (cue == null || cue.translation == text) return;
-    _replaceCurrent(cue.copyWith(translation: text));
+    _commitText(
+      document.replaceAt(selected, cue.copyWith(translation: text)),
+      '$selected:translation',
+    );
   }
 
   void editStart(int ms) {
@@ -371,21 +579,156 @@ class EditorController extends ChangeNotifier {
         : selected.clamp(0, document.cues.length - 1);
   }
 
-  /// 保存本地会话，返回写了哪些文件。任务会话自动保存，这里什么都不做。
-  Future<List<String>> save() async {
+  /// 把文档写进字幕文件，返回写了哪些路径。
+  ///
+  /// 写之前先看文件在上次读 / 写之后有没有被别的程序改过，改过就抛
+  /// [WriteConflict] 交给界面去问；[overwrite] 为真时不看，直接覆盖。
+  Future<List<String>> save({bool overwrite = false}) async {
+    if (_writing) return const [];
+    if (!overwrite) {
+      final changes = await session.externalChanges();
+      if (changes.isNotEmpty) {
+        _conflicts = changes;
+        notifyListeners();
+        throw WriteConflict(changes);
+      }
+    }
+    return _write(session.write);
+  }
+
+  /// 另存到 [dir]。本地会话写完就挂在新文件上；任务会话只是另存一份，
+  /// 产物与同步状态不变。目标不能用时抛 [TargetRejected]。
+  Future<List<String>> saveAs(String dir) async {
     final s = session;
-    if (s is! FileSession) return const [];
+    if (await s.checkWriteTo(dir) case final reason?) {
+      throw TargetRejected(reason);
+    }
+    if (s is! FileSession) {
+      final written = await s.writeTo(dir);
+      _showWritten(written);
+      notifyListeners();
+      return written;
+    }
+    final (oldSource, oldTranslation) = (s.sourcePath, s.translationPath);
+    final written = await _write(() => s.writeTo(dir));
+    // 旧文件那份草稿里的修改已经写到新文件了，留着下次打开旧文件会误报。
+    await store?.forgetFileState(oldSource, oldTranslation);
+    onRemount?.call();
+    return written;
+  }
+
+  Future<List<String>> _write(Future<List<String>> Function() write) async {
     final saving = document;
-    final written = await s.save();
-    _saved = saving;
-    _editsSinceSave = 0;
-    await store?.saveFileState(
+    final pendingBefore = session.pendingEdits;
+    _writing = true;
+    _failure = null;
+    // 写完会连同附加状态一起存，排着的草稿不用再写；写文件期间新来的改动
+    // 会重新标记。写失败时再把草稿补上。
+    final draftPending = _draftDirty;
+    _draftDirty = false;
+    _draftTimer?.cancel();
+    notifyListeners();
+    try {
+      final written = await write();
+      _saved = saving;
+      _baseline = saving;
+      _baselineKeys = null;
+      _coalesceKey = null;
+      _conflicts = const [];
+      // 写文件要等 IO，期间又改了的留到下一次写入。
+      session.pendingEdits = identical(document, saving)
+          ? 0
+          : math.max(1, session.pendingEdits - pendingBefore);
+      _writing = false;
+      recoveredOverChanged = false;
+      await _saveFileState();
+      if (identical(document, saving)) _showWritten(written);
+      return written;
+    } catch (e) {
+      _failure = _describeFailure(e);
+      if (draftPending) {
+        _draftDirty = true;
+        _scheduleDraft();
+      }
+      rethrow;
+    } finally {
+      _writing = false;
+      // 写到一半切走了会话：控制器已经 dispose，不能再通知。
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  void _showWritten(List<String> written) {
+    if (_disposed) return;
+    _justWritten = written;
+    _writtenTimer?.cancel();
+    _writtenTimer = Timer(const Duration(seconds: 2), () {
+      _justWritten = null;
+      notifyListeners();
+    });
+  }
+
+  static String _describeFailure(Object e) {
+    if (e is FileSystemException) {
+      final code = e.osError?.errorCode;
+      // EACCES / EPERM（POSIX）与 ERROR_ACCESS_DENIED（Windows）。
+      if (code == 13 || code == 1 || code == 5) return '目录没有写权限';
+      if (code == 28 || code == 112) return '磁盘空间不足';
+      return e.message;
+    }
+    if (e is ProviderException) return e.message;
+    return '$e';
+  }
+
+  void _scheduleDraft() {
+    if (session is! FileSession || store == null) return;
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 300), flushDraft);
+  }
+
+  /// 把还没写盘的编辑进度写掉。退出应用、切换会话前调。
+  Future<void> flushDraft() async {
+    _draftTimer?.cancel();
+    _draftTimer = null;
+    if (!_draftDirty) return;
+    _draftDirty = false;
+    await _saveFileState();
+  }
+
+  /// 扔掉这对文件存下的附加状态与草稿，之后也不再写。按文件重新打开前调。
+  Future<void> forgetDraft() async {
+    _draftTimer?.cancel();
+    _draftDirty = false;
+    final s = session;
+    if (s is FileSession) {
+      await store?.forgetFileState(s.sourcePath, s.translationPath);
+    }
+  }
+
+  /// 本地会话的附加状态：上次写入的版本 + 还没写回的编辑进度。
+  Future<void> _saveFileState() async {
+    final s = session;
+    final store = this.store;
+    if (s is! FileSession || store == null) return;
+    final pending = unsavedEdits;
+    await store.saveFileState(
       sourcePath: s.sourcePath,
       translationPath: s.translationPath,
-      document: saving,
+      document: _saved ?? document,
+      draft: pending == 0 ? null : document,
+      pendingEdits: pending,
+      stamps: s.trackedStamps,
     );
-    notifyListeners();
-    return written;
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _writtenTimer?.cancel();
+    // 关掉前把编辑进度写掉；写盘是异步的，不必等。
+    if (_draftDirty) unawaited(flushDraft().catchError((Object _) {}));
+    _draftTimer?.cancel();
+    super.dispose();
   }
 
   TranslationProvider _translationProvider() {
@@ -466,13 +809,14 @@ class EditorController extends ChangeNotifier {
         cues[i] = cues[i].copyWith(translation: result[j]);
       }
       session.document = document.copyWith(cues: cues);
-      notifyListeners();
+      _changed();
     }
     return pending.length;
   }
 
-  /// 导出到源文件所在目录（或设置里指定的输出目录）。返回写出的路径。
-  Future<List<String>> export(Set<SrtField> fields) async {
+  /// 导出到 [dir]（默认源文件所在目录或设置里指定的输出目录）。返回写出
+  /// 的路径。导出是另存一份，不改变同步状态。
+  Future<List<String>> export(Set<SrtField> fields, {String? dir}) async {
     final options = session.options;
     if (!options.format.implemented) {
       throw const ProviderException(
@@ -480,9 +824,30 @@ class EditorController extends ChangeNotifier {
         hint: '先在任务参数中选择 SRT、WebVTT 或纯文本。',
       );
     }
-    final dir = session.exportDir;
-    await Directory(dir).create(recursive: true);
+    dir ??= session.exportDir;
     final stem = session.exportStem;
+    String pathOf(SrtField field) {
+      final suffix = switch (field) {
+        SrtField.source => _tag(session.sourceLanguage.code),
+        SrtField.translation => _tag(session.targetLanguage.code),
+        SrtField.bilingualTargetAbove || SrtField.bilingualTargetBelow =>
+          '${_tag(session.sourceLanguage.code)}-'
+              '${_tag(session.targetLanguage.code)}',
+      };
+      // 用平台分隔符：要与 targetPaths 比对，Windows 上混用 / 与 \ 会比不上。
+      return '$dir${Platform.pathSeparator}$stem.$suffix.'
+          '${options.format.extension}';
+    }
+
+    // 导出是另存一份。落到字幕文件自己身上就成了绕过冲突检查的「保存」，
+    // 而同步状态还以为文件没更新 —— 让用户改用保存。
+    final own = session.targetPaths.toSet();
+    if (fields.map(pathOf).any(own.contains)) {
+      throw const TargetRejected(
+        '这个目录里就是字幕文件本身，想更新它们请用「保存」（⌘S）；导出请换一个目录',
+      );
+    }
+    await Directory(dir).create(recursive: true);
     final written = <String>[];
 
     String Function(String) wrap(Language language) {
@@ -520,15 +885,8 @@ class EditorController extends ChangeNotifier {
         SubtitleFormat.ass => '',
       };
       if (content.trim().isEmpty) continue;
-      final suffix = switch (field) {
-        SrtField.source => _tag(session.sourceLanguage.code),
-        SrtField.translation => _tag(session.targetLanguage.code),
-        SrtField.bilingualTargetAbove || SrtField.bilingualTargetBelow =>
-          '${_tag(session.sourceLanguage.code)}-'
-              '${_tag(session.targetLanguage.code)}',
-      };
-      final path = '$dir/$stem.$suffix.${options.format.extension}';
-      await File(path).writeAsString(content);
+      final path = pathOf(field);
+      await writeFileAtomically(path, content);
       written.add(path);
     }
     return written;

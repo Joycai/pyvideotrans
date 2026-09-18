@@ -291,11 +291,23 @@ void main() {
   }) async {
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
-    final task = _fixtures().first;
+    // 跑完的任务、改了两处还没写进产物：顶栏 chip、保存按钮、行首圆点、
+    // 「本次修改」筛选与状态栏都显示未写入。
+    final task = _fixtures().first
+      ..status = TaskStatus.done
+      ..outputsWrittenAt = DateTime(2026, 9, 13, 14, 2);
+    editorClock = () => DateTime(2026, 9, 13, 22);
+    addTearDown(() => editorClock = DateTime.now);
     final controller = EditorController(
       session: TaskSession(task),
       settings: settings,
-    )..select(4);
+    );
+    for (final i in [1, 2]) {
+      controller
+        ..select(i)
+        ..toggleReviewed();
+    }
+    controller.select(4);
 
     tester.view
       ..physicalSize = const Size(1440, 900)
@@ -315,21 +327,21 @@ void main() {
             title: '编辑器',
             subtitle:
                 '${task.fileName} · ${task.document.cues.length} 条 · 中文 → 英文',
-            titleTrailing: EditorReviewBadge(
-              count: task.document.reviewCount,
-            ),
+            titleTrailing: EditorTitleTrailing(controller: controller),
             actions: [
               EditorPageActions(
                 controller: controller,
                 onTranslateMissing: () {},
                 onExport: () {},
+                onSave: () {},
               ),
             ],
           ),
-          status: () => const StatusSnapshot(
+          status: () => StatusSnapshot(
             localEngine: 'ffmpeg · 就绪',
             cloud: (connected: true, label: 'OpenAI · 已配置'),
             localBackend: (connected: true, label: 'DeepSeek · 已配置'),
+            note: editorStatusNote(controller),
           ),
           child: EditorPage(controller: controller),
         ),

@@ -1,4 +1,5 @@
 import 'cue.dart';
+import 'file_stamp.dart';
 import 'language.dart';
 import 'paths.dart';
 import 'recognition_checkpoint.dart';
@@ -122,7 +123,12 @@ class SubtitleTask {
     this.eta,
     this.transcode,
     DateTime? createdAt,
+    Map<String, FileStamp>? outputs,
+    this.outputsWrittenAt,
+    this.unsyncedEdits = 0,
+    this.editorEdits = 0,
   }) : createdAt = createdAt ?? DateTime.now(),
+       outputs = outputs ?? {},
        stages = stages ?? {for (final s in TaskStage.values) s: const StageRecord()},
        log = log ?? [];
 
@@ -163,6 +169,21 @@ class SubtitleTask {
   /// 转码任务的参数与产物；字幕任务为 null。[options] 对转码任务无意义。
   final TranscodeJob? transcode;
 
+  /// 上次写出的字幕产物，与写完那一刻的大小 / 修改时间。编辑器保存前拿它
+  /// 判断产物有没有被别的程序改过。旧存档没有这一项，此时不做比对。
+  Map<String, FileStamp> outputs;
+
+  /// 上次写出产物的时间；没写过为 null。
+  DateTime? outputsWrittenAt;
+
+  /// 编辑器里改了、还没写进产物的修改数。编辑进度随任务 JSON 自动存，
+  /// 产物只在用户保存时写 —— 两者之间差多少，由它记着，重启后还在。
+  int unsyncedEdits;
+
+  /// 编辑器里一共改过多少处（写进产物后也不清零）。从识别 / 断句阶段续跑
+  /// 会重建文档，续跑前拿它判断要不要提醒用户修改会被覆盖。
+  int editorEdits;
+
   /// 同时兼容 POSIX 与 Windows 分隔符。
   String get fileName => baseName(sourcePath);
 
@@ -196,6 +217,12 @@ class SubtitleTask {
     if (recognition != null) 'recognition': recognition!.toJson(),
     if (mediaDuration != null) 'mediaDurationMs': mediaDuration!.inMilliseconds,
     if (transcode != null) 'transcode': transcode!.toJson(),
+    if (outputs.isNotEmpty)
+      'outputs': {for (final e in outputs.entries) e.key: e.value.toJson()},
+    if (outputsWrittenAt != null)
+      'outputsWrittenAt': outputsWrittenAt!.toIso8601String(),
+    if (unsyncedEdits > 0) 'unsyncedEdits': unsyncedEdits,
+    if (editorEdits > 0) 'editorEdits': editorEdits,
   };
 
   /// 从存档读回。参数缺项回落到 [fallbackOptions]；未知的阶段 / 状态名按
@@ -255,6 +282,16 @@ class SubtitleTask {
         final m? => TranscodeJob.fromJson(m),
         null => null,
       },
+      outputs: {
+        for (final MapEntry(:key, :value)
+            in (map(json['outputs']) ?? const {}).entries)
+          key: ?FileStamp.fromJson(value),
+      },
+      outputsWrittenAt: DateTime.tryParse(
+        json['outputsWrittenAt'] as String? ?? '',
+      ),
+      unsyncedEdits: json['unsyncedEdits'] as int? ?? 0,
+      editorEdits: json['editorEdits'] as int? ?? 0,
     );
     task.recognition = switch (map(json['recognition'])) {
       final m? => RecognitionCheckpoint.fromJson(m),

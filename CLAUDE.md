@@ -96,8 +96,10 @@ Python 后端都说 OpenAI 兼容协议，于是共用 `OpenAiCompatibleAsrProvi
 - 各页表单控制器（`TranscribeFormController` 等）**挂在根节点上**，切走再回来文件与参数还在。
 - 顶栏 / 状态栏靠 `Listenable.merge` 出来的 `_live` + `ListenableBuilder` 局部驱动 ——
   直接 `setState` 会让每次进度回调重建 MaterialApp 以下整棵树。
-- 编辑器会话是 sealed 的 `EditorSession`：`TaskSession`（改动随任务自动写盘）与
-  `FileSession`（用户保存时写回原文件），共用同一张表格与检视面板。
+- 编辑器会话是 sealed 的 `EditorSession`：`TaskSession` 与 `FileSession` 共用同一张表格、
+  检视面板和同一套保存规则 —— **编辑进度自动存，字幕文件手动写**。编辑进度（任务 JSON /
+  本地会话草稿）每次改动都存；字幕文件（任务产物 / 挂载的本地文件）只在 ⌘S 时写，写前
+  比对时间戳防止盖掉外部修改。「导出…」是另存到别处，不改变同步状态。
 
 ### 持久化与外部依赖
 

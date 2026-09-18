@@ -97,7 +97,6 @@ class CueTable extends StatelessWidget {
             controller: controller,
             visibleCount: visible.length,
             showHint: isFile || speakers,
-            canSave: isFile,
           ),
         ],
       ),
@@ -198,6 +197,7 @@ class _CueListState extends State<_CueList> {
           speakerNamed:
               cue.speaker != null && doc.speakers.containsKey(cue.speaker),
           view: controller.view,
+          edited: controller.isEdited(cue),
           selected: position == controller.selected,
           onTap: () => controller.select(position),
         );
@@ -211,13 +211,11 @@ class _Footer extends StatelessWidget {
     required this.controller,
     required this.visibleCount,
     required this.showHint,
-    required this.canSave,
   });
 
   final EditorController controller;
   final int visibleCount;
   final bool showHint;
-  final bool canSave;
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +236,8 @@ class _Footer extends StatelessWidget {
       }
     }
     final hint = showHint
-        ? ' · J/K 上下条 · Enter 校对${canSave ? ' · ⌘S 保存' : ''}'
+        // 两种会话都能 ⌘S：写的是字幕文件，编辑进度本来就在自动存。
+        ? ' · J/K 上下条 · Enter 校对 · ⌘S 保存到文件'
         : '';
     return Container(
       padding: const EdgeInsets.symmetric(

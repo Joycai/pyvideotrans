@@ -229,6 +229,12 @@ class TaskQueue extends ChangeNotifier {
         task.stages[entry.key] = const StageRecord();
       }
     }
+    // 从翻译之前的阶段续跑会重建整份文档，编辑器里的修改随之作废
+    // （续跑前界面已经问过用户）。
+    if (task.resumeStage.index < TaskStage.translate.index) {
+      task.editorEdits = 0;
+      task.unsyncedEdits = 0;
+    }
     final cp = task.recognition;
     task.note(
       cp != null && cp.doneCount > 0 && task.resumeStage == TaskStage.recognize

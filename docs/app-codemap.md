@@ -71,6 +71,7 @@ core/       domain/ ←──── services/
 ### `core/widgets/`
 
 - `buttons.dart`：主按钮、控制按钮、静默按钮、图标按钮、分段选择、筛选条。
+- `glass_dialog.dart`：询问对话框外壳（标题、正文、说明条、左侧文字操作 + 右侧按钮）。
 - `fields.dart`：表单控件公共入口，只 export 下面两个实现文件。
 - `dropdown.dart`：`AppDropdown`、分组 / 条目模型、菜单定位与条目渲染。
 - `form_fields.dart`：标签、输入表面、数字 / 多行输入、开关、表单分区。
@@ -99,6 +100,7 @@ core/       domain/ ←──── services/
 | `task_options.dart` | 入队时冻结的全部参数、产物目录规则、JSON |
 | `task.dart` | `SubtitleTask`、阶段记录、日志、错误、产物和 JSON；export `task_kind.dart` |
 | `media_kinds.dart` | 按扩展名判断媒体 / 音频 / 字幕 |
+| `file_stamp.dart` | 文件大小 + 修改时间，判断字幕文件是否在外部被改过 |
 
 ### `domain/transcode/`
 
@@ -133,7 +135,8 @@ core/       domain/ ←──── services/
 - `transcoder.dart`：编码器检测、试编码、ffprobe、执行转码和错误解释。
 - `settings.dart`：shared_preferences 设置和 provider 连接配置；不依赖 Registry，由调用方传 provider id。
 - `task_store.dart`：一个任务一份 JSON，进度更新时只重写变化的任务。
-- `editor_store.dart`：SRT 装不下的编辑状态、媒体关联和最近打开。
+- `editor_store.dart`：本地会话的附加状态与编辑进度草稿、媒体关联和最近打开。
+- `file_stamps.dart`：读文件时间戳、先写临时文件再改名的原子写。
 - `reveal.dart`：Finder / Explorer 中定位文件或打开目录。
 - `local/local_backend.dart`：本地 Python 后端客户端占位，第一期未实施。
 
@@ -144,7 +147,7 @@ core/       domain/ ←──── services/
 | `task_queue.dart` | 串行队列；入队、取消、继续、优先、删除、恢复；脏任务攒 300ms 批量写盘 |
 | `task_runner.dart` | 选择字幕 / 转码分支、统一捕获取消 / provider / 未知错误；字幕的准备、识别、断句、翻译编排 |
 | `task_stage_runner.dart` | 所有阶段共用的断点跳过、active / done 状态、耗时与通知 |
-| `subtitle_output_writer.dart` | SRT / VTT / TXT 写出、按语言折行、双语命名、说话人标签 |
+| `subtitle_output_writer.dart` | SRT / VTT / TXT 原子写出、按语言折行、双语命名、说话人标签、记产物时间戳；完成阶段与编辑器「保存」共用 |
 | `transcode_task_pipeline.dart` | 转码准备、执行 `.part` 临时文件、完成校验 |
 | `task_progress.dart` | 字幕按条目、转码按毫秒共用的 ETA 外推公式 |
 
@@ -165,6 +168,7 @@ core/       domain/ ←──── services/
 ### 任务列表
 
 - `tasks_page.dart`：筛选、选中、对话框入口。
+- `task_resume_dialog.dart`：续跑会重建文档、而编辑器里改过时的提醒。
 - `tasks_board.dart`：列表、详情和拖放区的组合。
 - `task_table.dart`：任务表格、行内操作与空态。
 - `stage_bar.dart`：阶段进度条。
@@ -209,17 +213,17 @@ core/       domain/ ←──── services/
 
 ### 会话与状态
 
-- `editor_session.dart`：sealed `EditorSession`；`TaskSession` 自动跟任务写盘，`FileSession` 用户保存时写回文件。
-- `editor_controller.dart`：筛选、搜索、选中、撤销、改字 / 时间、拆分 / 合并、说话人、翻译与导出。
+- `editor_session.dart`：sealed `EditorSession`；两种会话同一套保存规则 —— 编辑进度自动存，字幕文件（任务产物 / 挂载的本地文件）只在保存时写；写前比对时间戳。
+- `editor_controller.dart`：筛选、搜索、选中、撤销、改字 / 时间、拆分 / 合并、说话人、翻译与导出；保存状态 `SyncState`、连续编辑合并、本地草稿。
 - `editor_open_form.dart`：本地原文 / 译文槽位、解析与配对预检。
 - `preview_playback.dart`：media_kit 播放器封装和按时间定位字幕。
 
 ### 编辑页
 
-- `editor_page.dart`：快捷键、拖放、页面组合、编辑器状态文案。
+- `editor_page.dart`：快捷键、拖放、页面组合、恢复横幅、编辑器状态文案。
 - `editor_page_actions.dart`：视图菜单、保存 / 导出 / 翻译操作。
-- `editor_title.dart`：来源浮层、标题尾随内容、待校对徽标。
-- `editor_leave_dialog.dart`：带未保存改动离开时的确认。
+- `editor_title.dart`：来源浮层、保存状态 chip 与弹层、待校对徽标。
+- `editor_leave_dialog.dart`：离开 / 退出前「先写入字幕文件？」、写入流程与外部修改冲突询问。
 
 字幕表格拆成：
 
@@ -264,7 +268,7 @@ core/       domain/ ←──── services/
 5. **翻译**：已有译文跳过；条数不符只对可信的 `batchTooLarge` 错误减半重试。
 6. **写字幕**：`SubtitleOutputWriter` 在落盘时折行；文档内始终保持无硬换行文本。
 7. **转码**：先写 `.part`，成功后改名；失败和取消清理临时文件。
-8. **编辑器**：任务会话随队列持久化；文件会话只在用户保存时写回原文件。
+8. **编辑器**：编辑进度自动存（任务 JSON / 本地草稿）；字幕文件只在保存时写，任务会话写产物，文件会话写回原文件。
 
 ## 十三、按功能反查
 

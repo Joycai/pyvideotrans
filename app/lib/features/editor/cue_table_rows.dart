@@ -124,6 +124,7 @@ class CueTableRow extends StatefulWidget {
     required this.speakerName,
     required this.speakerNamed,
     required this.view,
+    this.edited = false,
     required this.selected,
     required this.onTap,
   });
@@ -141,6 +142,9 @@ class CueTableRow extends StatefulWidget {
   final String? speakerName;
   final bool speakerNamed;
   final CueView view;
+
+  /// 与上次写进字幕文件的版本不一样：序号前加一个小圆点。
+  final bool edited;
   final bool selected;
   final VoidCallback onTap;
 
@@ -196,56 +200,73 @@ class _CueRowState extends State<CueTableRow> {
               left: BorderSide(color: edge, width: 3),
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.only(left: 10),
-            child: CueTableGrid(
-              columns: widget.columns,
-              children: [
-                Timecode(
-                  cue.index.toString().padLeft(3, '0'),
-                  color: cs.onSurfaceVariant,
-                ),
-                Timecode(Srt.formatTimecode(cue.startMs)),
-                if (widget.speakers)
-                  _SpeakerCell(
-                    id: cue.speaker,
-                    name: widget.speakerName,
-                    named: widget.speakerNamed,
-                    continues: widget.continuesSpeaker,
-                    badgeOnly: widget.compact,
-                  )
-                else
-                  Timecode(Srt.formatTimecode(cue.endMs)),
-                if (widget.view != CueView.translation)
-                  Text(
-                    sourceText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.texts.bodyMedium?.copyWith(
-                      color: unpaired ? cs.onSurfaceVariant : null,
+          // 左边 10px 的留白里放「改过」的小圆点，序号本身不挪位置。
+          child: Row(
+            children: [
+              SizedBox(
+                width: 10,
+                child: Center(
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: widget.edited ? cs.primary : null,
+                      shape: BoxShape.circle,
                     ),
-                  )
-                else
-                  const SizedBox.shrink(),
-                if (widget.view != CueView.source)
-                  Text(
-                    cue.hasTranslation ? cue.translation! : '—',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: context.texts.bodyMedium?.copyWith(
-                      color: cue.hasTranslation
-                          ? cs.onSurface
-                          : cs.onSurfaceVariant,
-                    ),
-                  )
-                else
-                  const SizedBox.shrink(),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: CueStateTag(state: widget.state),
+                  ),
                 ),
-              ],
-            ),
+              ),
+              Expanded(
+                child: CueTableGrid(
+                  columns: widget.columns,
+                  children: [
+                    Timecode(
+                      cue.index.toString().padLeft(3, '0'),
+                      color: cs.onSurfaceVariant,
+                    ),
+                    Timecode(Srt.formatTimecode(cue.startMs)),
+                    if (widget.speakers)
+                      _SpeakerCell(
+                        id: cue.speaker,
+                        name: widget.speakerName,
+                        named: widget.speakerNamed,
+                        continues: widget.continuesSpeaker,
+                        badgeOnly: widget.compact,
+                      )
+                    else
+                      Timecode(Srt.formatTimecode(cue.endMs)),
+                    if (widget.view != CueView.translation)
+                      Text(
+                        sourceText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.texts.bodyMedium?.copyWith(
+                          color: unpaired ? cs.onSurfaceVariant : null,
+                        ),
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    if (widget.view != CueView.source)
+                      Text(
+                        cue.hasTranslation ? cue.translation! : '—',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.texts.bodyMedium?.copyWith(
+                          color: cue.hasTranslation
+                              ? cs.onSurface
+                              : cs.onSurfaceVariant,
+                        ),
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: CueStateTag(state: widget.state),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),

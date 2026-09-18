@@ -153,7 +153,7 @@ void main() {
     });
   });
 
-  group('关闭本地会话前的询问', () {
+  group('离开编辑器前的询问', () {
     Future<bool?> ask(
       WidgetTester tester,
       EditorController c,
@@ -174,7 +174,7 @@ void main() {
       );
       await tester.tap(find.text('go'));
       await tester.pumpAndSettle();
-      expect(find.text('保存修改？'), findsOneWidget);
+      expect(find.text('先写入字幕文件？'), findsOneWidget);
       await tester.tap(find.text(button));
       await tester.pumpAndSettle();
       return result;
@@ -195,15 +195,17 @@ void main() {
       );
       await tester.tap(find.text('go'));
       await tester.pumpAndSettle();
-      expect(find.text('保存修改？'), findsNothing);
+      expect(find.text('先写入字幕文件？'), findsNothing);
     });
 
-    testWidgets('「不保存」可以继续，「取消」不行', (tester) async {
+    testWidgets('「稍后再写」可以继续，「取消」不行', (tester) async {
       final c = await _controller()
         ..select(0)
         ..toggleReviewed();
-      expect(await ask(tester, c, '不保存'), isTrue);
+      expect(await ask(tester, c, '稍后再写'), isTrue);
       expect(await ask(tester, c, '取消'), isFalse);
+      // 两个选项都不动字幕文件：修改还在，等下次写入。
+      expect(c.unsavedEdits, 1);
     });
   });
 

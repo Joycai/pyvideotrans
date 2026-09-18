@@ -6,12 +6,14 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/buttons.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import '../../services/provider_api.dart';
 import 'cue_table.dart';
 import 'editor_controller.dart';
+import 'editor_leave_dialog.dart';
 import 'editor_open_form.dart';
 import 'editor_session.dart';
 import 'editor_widgets.dart';
@@ -26,6 +28,7 @@ class EditorPage extends StatefulWidget {
     required this.controller,
     this.onMountTranslation,
     this.onDropFiles,
+    this.onDiscardDraft,
   });
 
   final EditorController controller;
@@ -35,6 +38,10 @@ class EditorPage extends StatefulWidget {
 
   /// 把字幕文件拖到正在编辑的页面上：先交给入口页确认，不立即写入。
   final void Function(String path, OpenSlot slot)? onDropFiles;
+
+  /// 恢复横幅「丢弃，按文件重新打开」：文件在草稿之后被改过时，存下的
+  /// 旧版本已经不是文件里的内容，只能由上层按文件重新打开会话。
+  final Future<void> Function()? onDiscardDraft;
 
   @override
   State<EditorPage> createState() => EditorPageState();
@@ -155,28 +162,30 @@ class EditorPageState extends State<EditorPage> {
     }
   }
 
+  /// 「导出…」：挑一个目录另存一份。不改变字幕文件的同步状态 ——
+  /// 想更新播放器读的那几份文件用「保存」。
   Future<void> export() async {
+    final dir = await getDirectoryPath(
+      initialDirectory: controller.session.exportDir,
+      confirmButtonText: '导出到这里',
+    );
+    if (dir == null) return;
     try {
       final written = await controller.export({
         SrtField.source,
         if (controller.hasTranslations) SrtField.translation,
-      });
-      _report(written.isEmpty ? '没有可导出的内容' : '已导出 ${written.length} 个文件到源文件目录');
+      }, dir: dir);
+      _report(written.isEmpty ? '没有可导出的内容' : '已导出 ${written.length} 个文件到 $dir');
     } catch (e) {
       _report('导出失败：${_describe(e)}');
     }
   }
 
+  /// ⌘S / 「保存」：把修改写进字幕文件。写完的结果显示在状态栏与顶栏
+  /// chip 上，不再弹 SnackBar 挡住表格。
   Future<void> save() async {
-    if (controller.session is! FileSession || controller.unsavedEdits == 0) {
-      return;
-    }
-    try {
-      final written = await controller.save();
-      _report('已保存 ${written.map(baseName).join('、')}');
-    } catch (e) {
-      _report('保存失败：${_describe(e)}');
-    }
+    if (!controller.canWrite) return;
+    await writeSubtitleFiles(context, controller);
   }
 
   void manageSpeakers() => showSpeakerManager(context, controller);
@@ -254,7 +263,7 @@ class EditorPageState extends State<EditorPage> {
 
   @override
   Widget build(BuildContext context) {
-    final page = Row(
+    final table = Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
@@ -278,6 +287,20 @@ class EditorPageState extends State<EditorPage> {
         ),
       ],
     );
+    final page = controller.recoveredEdits == 0
+        ? table
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: AppSpacing.s3,
+            children: [
+              _RecoveryBanner(
+                controller: controller,
+                onWrite: save,
+                onDiscard: widget.onDiscardDraft,
+              ),
+              Expanded(child: table),
+            ],
+          );
 
     final onDrop = widget.onDropFiles;
     return Focus(
@@ -398,6 +421,97 @@ class _DropOverlay extends StatelessWidget {
   }
 }
 
+/// 本地会话接着上次没写回文件的编辑进度打开时的横幅（画板 3）。
+class _RecoveryBanner extends StatelessWidget {
+  const _RecoveryBanner({
+    required this.controller,
+    required this.onWrite,
+    this.onDiscard,
+  });
+
+  final EditorController controller;
+  final Future<void> Function() onWrite;
+  final Future<void> Function()? onDiscard;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.colors;
+    final fg = cs.onPrimaryContainer;
+    final files = controller.session.targetPaths.map(baseName).join('、');
+    final at = controller.recoveredAt;
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.s4,
+          vertical: AppSpacing.s3,
+        ),
+        decoration: BoxDecoration(
+          color: cs.primaryContainer,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          spacing: AppSpacing.s3,
+          children: [
+            Icon(Symbols.history, size: 20, weight: 400, color: fg),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 2,
+                children: [
+                  Text(
+                    '上次关闭时有 ${controller.recoveredEdits} 处修改没写回 $files，已接着显示',
+                    style: context.texts.titleSmall?.copyWith(color: fg),
+                  ),
+                  if (at != null)
+                    Text(
+                      controller.recoveredOverChanged
+                          ? '修改来自 ${friendlyTime(at)} 的编辑进度；文件在那之后被别的程序改过，写入前会先问你。'
+                          : '修改来自 ${friendlyTime(at)} 的编辑进度；文件本身之后没有被改过。',
+                      style: context.texts.bodySmall?.copyWith(
+                        color: fg.withValues(alpha: 0.8),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (controller.recoveredOverChanged && onDiscard != null)
+              EditorTextAction(
+                label: '丢弃，按文件重新打开',
+                color: fg,
+                onTap: onDiscard!,
+              )
+            else if (controller.canRevertToWritten)
+              EditorTextAction(
+                label: '丢弃，按文件重新打开',
+                color: fg,
+                onTap: () {
+                  controller
+                    ..revertToWritten()
+                    ..dismissRecovery();
+                },
+              ),
+            PrimaryButton(
+              label: '写入文件',
+              height: 30,
+              onPressed: () async {
+                await onWrite();
+                if (controller.unsavedEdits == 0) controller.dismissRecovery();
+              },
+            ),
+            IconActionButton(
+              icon: Symbols.close,
+              tooltip: '关闭提示',
+              onPressed: controller.dismissRecovery,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// 顶栏副标题。
 String editorSubtitle(EditorController controller) {
   final session = controller.session;
@@ -411,8 +525,15 @@ String editorSubtitle(EditorController controller) {
   };
 }
 
-/// 状态栏右侧的「未保存 3 处修改」。
-String? editorStatusNote(EditorController controller) {
-  final edits = controller.unsavedEdits;
-  return edits == 0 ? null : '未保存 $edits 处修改';
-}
+/// 状态栏右侧：字幕文件落后多少、正在写、刚写了哪些（画板 1 的表）。
+String? editorStatusNote(EditorController controller) =>
+    switch (controller.sync) {
+      SyncState.synced => null,
+      SyncState.dirty => '字幕文件落后 ${controller.unsavedEdits} 处修改 · ⌘S 写入',
+      SyncState.writing => '正在写入…',
+      SyncState.written =>
+        '已写入 ${controller.justWritten.map(baseName).join('、')}',
+      SyncState.failed => '修改仍在编辑进度里，没有丢',
+      SyncState.conflict => '保存前会先问怎么处理',
+      SyncState.noOutput => '任务没有跑完，字幕文件还没生成 · ⌘S 生成',
+    };

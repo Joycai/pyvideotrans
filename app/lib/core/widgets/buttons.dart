@@ -13,12 +13,16 @@ class PrimaryButton extends StatelessWidget {
     this.icon,
     this.onPressed,
     this.height = 36,
+    this.autofocus = false,
   });
 
   final String label;
   final IconData? icon;
   final VoidCallback? onPressed;
   final double height;
+
+  /// 对话框里的默认按钮：打开就拿到焦点，回车即按下。
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
@@ -50,6 +54,7 @@ class PrimaryButton extends StatelessWidget {
         type: MaterialType.transparency,
         child: InkWell(
           onTap: onPressed,
+          autofocus: autofocus,
           borderRadius: radius,
           hoverColor: cs.onPrimary.withValues(alpha: AppStateLayer.hover),
           focusColor: cs.onPrimary.withValues(alpha: AppStateLayer.focus),
