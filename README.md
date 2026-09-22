@@ -1,4 +1,4 @@
-# 字幕工具（Flutter 重构）
+# Joycai Subtitle Studio · 字幕工具（Flutter 重构）
 
 > 用 Flutter 重做 [pyVideoTrans](archive/python/README.md) 的桌面客户端。
 >

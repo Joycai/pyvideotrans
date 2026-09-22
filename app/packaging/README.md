@@ -17,11 +17,27 @@ python3 packaging/icons/generate_icons.py   # 需要 Pillow
 | `icons/app_icon.icns` | dmg 卷图标 |
 | `icons/app_icon_1024.png` / `app_icon_square_1024.png` | 两个版本的原图 |
 
+## 应用名
+
+英文环境 `Joycai Subtitle Studio`，中文环境 `Joycai字幕工具`。同一个名字在五处各存一份，
+**改名要五处一起改** —— 系统层面的名字在 Dart 起来之前就定了，共用不了一份：
+
+| 位置 | 管什么 |
+|------|--------|
+| `macos/Runner/Configs/AppInfo.xcconfig` 的 `PRODUCT_NAME` | `.app` 的文件名（也是非中英语言下的兜底名） |
+| `macos/Runner/{en,zh-Hans,zh-Hant}.lproj/InfoPlist.strings` | 访达、程序坞、菜单栏里按系统语言显示的名字 |
+| `windows/runner/main.cpp` + `Runner.rc` | 窗口标题、任务管理器里的说明 |
+| `packaging/windows/installer.iss` 的 `[CustomMessages]` | 开始菜单、桌面快捷方式、「应用和功能」里的名字（跟安装语言走） |
+| `linux/subtitle_studio.desktop` + `linux/runner/my_application.cc` | 应用菜单条目、窗口标题 |
+
+界面内的那份在 `lib/domain/app_branding.dart`（`MaterialApp.title`）。可执行文件名、安装目录、
+dmg / setup 的文件名都保持英文不跟语言走 —— 落盘的路径换语言就变，升级和脚本都会找不到。
+
 ## macOS dmg
 
 ```bash
 brew install create-dmg
-packaging/macos/make_dmg.sh        # 产物 build/dist/字幕工具-<版本>.dmg
+packaging/macos/make_dmg.sh        # 产物 build/dist/Joycai Subtitle Studio-<版本>.dmg
 ```
 
 ## Windows 安装包
@@ -34,7 +50,8 @@ flutter build windows --release
 iscc packaging\windows\installer.iss
 ```
 
-产物在 `build\dist\字幕工具-<版本>-setup.exe`。
+产物在 `build\dist\JoycaiSubtitleStudio-<版本>-setup.exe`。安装向导里选中文，装出来叫
+「Joycai字幕工具」；选英文叫「Joycai Subtitle Studio」（见下节）。
 
 ## Linux
 

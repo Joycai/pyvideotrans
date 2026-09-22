@@ -100,6 +100,7 @@ core/       domain/ ←──── services/
 | `task_options.dart` | 入队时冻结的全部参数、产物目录规则、JSON |
 | `task.dart` | `SubtitleTask`、阶段记录、日志、错误、产物和 JSON；export `task_kind.dart` |
 | `media_kinds.dart` | 按扩展名判断媒体 / 音频 / 字幕 |
+| `app_branding.dart` | 应用名的中英两份；另有五份在各平台的清单与 runner 里，见 `packaging/README.md` |
 | `file_stamp.dart` | 文件大小 + 修改时间，判断字幕文件是否在外部被改过 |
 
 ### `domain/transcode/`
