@@ -27,7 +27,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"subtitle_studio", origin, size)) {
+  // 窗口标题在 Dart 起来之前就要定，读不到 domain/app_branding.dart 里那份，
+  // 只能自己按系统界面语言选。简体繁体同名，判到 LANG_CHINESE 即可。
+  const wchar_t* title =
+      PRIMARYLANGID(::GetUserDefaultUILanguage()) == LANG_CHINESE
+          ? L"Joycai字幕工具"
+          : L"Joycai Subtitle Studio";
+  if (!window.Create(title, origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

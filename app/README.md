@@ -1,4 +1,4 @@
-# 字幕工具 · Flutter 客户端
+# Joycai Subtitle Studio · Flutter 客户端
 
 跨平台桌面应用（macOS / Windows / Linux）。核心能力：
 

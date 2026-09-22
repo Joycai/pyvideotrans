@@ -1,0 +1,4 @@
+/* 应用名：Finder、程序坞、菜单栏和「关于」都读它。
+   MainMenu.xib 里的 APP_NAME 占位符也由 CFBundleName 替换。 */
+"CFBundleName" = "Joycai字幕工具";
+"CFBundleDisplayName" = "Joycai字幕工具";

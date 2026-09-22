@@ -19,6 +19,18 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+// 窗口标题在 Dart 起来之前就要定，读不到 domain/app_branding.dart 里那份，
+// 只能自己按系统语言选。g_get_language_names() 已按优先级展开好（zh_CN.UTF-8
+// → zh_CN → zh → C），取第一条判前缀即可。
+static const char* app_title() {
+  const gchar* const* languages = g_get_language_names();
+  if (languages != nullptr && languages[0] != nullptr &&
+      g_str_has_prefix(languages[0], "zh")) {
+    return "Joycai字幕工具";
+  }
+  return "Joycai Subtitle Studio";
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -45,11 +57,11 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "subtitle_studio");
+    gtk_header_bar_set_title(header_bar, app_title());
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "subtitle_studio");
+    gtk_window_set_title(window, app_title());
   }
 
   gtk_window_set_default_size(window, 1280, 720);

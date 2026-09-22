@@ -8,8 +8,10 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$APP_DIR"
 
-APP_NAME="subtitle_studio"
-DISPLAY_NAME="字幕工具"
+# .app 的名字跟 AppInfo.xcconfig 的 PRODUCT_NAME 一致；中文名由 app 内的
+# zh-Hans.lproj/InfoPlist.strings 提供，dmg 这类落盘文件不跟语言走，统一用英文。
+APP_NAME="Joycai Subtitle Studio"
+DISPLAY_NAME="Joycai Subtitle Studio"
 VERSION="$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)"
 ICNS="$APP_DIR/packaging/icons/app_icon.icns"
 APP_BUNDLE="$APP_DIR/build/macos/Build/Products/Release/${APP_NAME}.app"

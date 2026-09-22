@@ -1,11 +1,12 @@
 import 'dart:io';
-import 'dart:ui' show AppExitResponse;
+import 'dart:ui' show AppExitResponse, PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart' show MediaKit;
 import 'package:path_provider/path_provider.dart';
 
 import 'core/theme/app_theme.dart';
+import 'domain/app_branding.dart';
 import 'domain/paths.dart';
 import 'domain/task.dart';
 import 'features/editor/editor_controller.dart';
@@ -518,7 +519,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     return MaterialApp(
       navigatorKey: _navigatorKey,
       scaffoldMessengerKey: _messengerKey,
-      title: '字幕工具',
+      title: appNameFor(PlatformDispatcher.instance.locale.languageCode),
       debugShowCheckedModeBanner: false,
       theme: lightTheme,
       darkTheme: darkTheme,
