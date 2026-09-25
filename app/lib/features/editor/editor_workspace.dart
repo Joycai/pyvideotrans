@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/widgets.dart';
 
 import '../../domain/paths.dart';
@@ -100,7 +98,8 @@ class EditorWorkspace extends ChangeNotifier {
   }
 
   /// 「最近打开」的写盘排成一队：连着换两次会话时，两次写入会争同一个
-  /// 临时文件，后改名的那次就失败了。记不下来也不影响这次打开，失败就算了。
+  /// 临时文件，后改名的那次就失败了。记不下来也不影响这次打开，失败就算了 ——
+  /// 什么错都接住：链上有一环抛出去，后面排队的写入就再也不会执行。
   Future<void> _recentsWrite = Future.value();
 
   @visibleForTesting
@@ -111,7 +110,7 @@ class EditorWorkspace extends ChangeNotifier {
       try {
         _recents = await store.touchRecent(entry);
         _notify();
-      } on FileSystemException {
+      } on Object {
         // 见上。
       }
     });

@@ -50,8 +50,6 @@ class EditorPage extends StatefulWidget {
 class EditorPageState extends State<EditorPage> {
   final _focus = FocusNode();
 
-  /// 拖文件进来时悬停在哪一半；null 表示没在拖。
-
   /// 检视面板的播放器；会话没有音视频时为 null。
   PreviewPlayback? _playback;
 

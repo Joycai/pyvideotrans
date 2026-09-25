@@ -74,7 +74,7 @@ core/       domain/ ←──── services/
 
 - `buttons.dart`：主按钮、控制按钮、静默按钮、图标按钮、分段选择、筛选条。
 - `glass_dialog.dart`：询问对话框外壳（标题、正文、说明条、左侧文字操作 + 右侧按钮）。
-- `fields.dart`：表单控件公共入口，只 export 下面两个实现文件。
+- `fields.dart`：表单控件公共入口，只 export 下面三个实现文件。
 - `dropdown.dart`：`AppDropdown`、分组 / 条目模型、菜单定位与条目渲染。
 - `form_fields.dart`：标签、输入表面、数字 / 多行输入、开关、表单分区。
 - `form_layout.dart`：整行可点、链接文字、单选行、两列与平铺段。
@@ -125,7 +125,7 @@ core/       domain/ ←──── services/
 
 ### Provider
 
-- `provider_api.dart`：取消令牌、`ProviderException`、`ProviderInfo`、ASR / 翻译接口。
+- `provider_api.dart`：取消令牌、`ProviderException`、`ProviderInfo`、`Endpoint`、ASR / 翻译接口。
 - `registry.dart`：可选服务登记表和 provider 工厂。
 - `openai_compatible.dart`：OpenAI 兼容 ASR 与翻译实现；在线服务、Ollama、LM Studio、
   将来的本地 Python 后端共用。
@@ -331,5 +331,6 @@ flutter test --tags golden --run-skipped
 - `test/paths_test.dart` 钉死 POSIX / Windows 路径、盘符根目录与产物语言标签。
 - `test/editor_workspace_test.dart` 覆盖换会话、入口页开合与「最近打开」的串行写盘；
   `test/text_focus_test.dart` 钉死「焦点在输入框里」的判断（单行 / 多行）。
-- golden 测试共 44 张场景图；拆 UI 文件后必须保持逐像素一致。
+- `test/status_snapshot_test.dart` 钉死状态栏快照的服务文案（未选择 / 未配置 / 已配置）与任务计数。
+- golden 测试共 45 张场景图；拆 UI 文件后必须保持逐像素一致。
 - `live` 测试需要真实密钥，默认跳过；ffmpeg / 平台硬件编码用例会按本机能力跳过。

@@ -72,7 +72,7 @@ sudo apt install libmpv-dev mpv    # Debian / Ubuntu；Fedora 用 mpv-libs-devel
 lib/
   main.dart          装配点：服务对象、根级表单控制器、页面切换、顶栏与状态栏
   core/theme/        设计令牌 → ThemeData 与 ThemeExtension
-  core/widgets/      无业务语义控件；fields.dart 是 dropdown / form_fields 的公共入口
+  core/widgets/      无业务语义控件；fields.dart 是 dropdown / form_fields / form_layout 的公共入口
   domain/            纯数据与纯规则，不碰网络 / 外部进程
   domain/transcode/  编解码枚举、编码器目录、参数、探测结果、ffmpeg 命令
   services/          provider、ffmpeg / ffprobe、设置与持久化

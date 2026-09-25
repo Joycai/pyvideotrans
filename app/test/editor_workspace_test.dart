@@ -112,9 +112,4 @@ void main() {
     // 连着换两次会话：两次写盘排队，不会互相踩掉临时文件。
     expect(workspace.recents.map((r) => r.taskId), ['b', 'a']);
   });
-
-  test('TaskRunner 默认建的 Transcoder 与自身共用同一个 Media', () {
-    final runner = TaskRunner(settings: queue.settings, workDir: dir.path);
-    expect(runner.transcoder.media, same(runner.media));
-  });
 }

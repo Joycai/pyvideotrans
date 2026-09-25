@@ -454,6 +454,11 @@ void main() {
     });
   });
 
+  test('TaskRunner 默认建的 Transcoder 与自身共用同一个 Media', () {
+    final runner = TaskRunner(settings: settings, workDir: work.path);
+    expect(runner.transcoder.media, same(runner.media));
+  });
+
   group('队列', () {
     test('插队任务会在当前任务完成后优先执行', () async {
       final runner = _BlockingRunner(settings: settings, workDir: work.path);
