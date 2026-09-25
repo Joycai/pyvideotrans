@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
-import '../../domain/media_kinds.dart';
 import '../../domain/task.dart';
+import '../../domain/task_filter.dart';
 import '../../pipeline/task_queue.dart';
 import '../../services/reveal.dart';
 import '../shared/enqueue_request.dart';
@@ -11,18 +11,24 @@ import '../shared/page_chrome.dart';
 import 'task_resume_dialog.dart';
 import 'task_table.dart';
 import 'tasks_board.dart';
+import 'tasks_controller.dart';
 
-/// 任务页：把队列接到 [TasksBoard] 上。展示逻辑都在 board 里。
+/// 任务页：把队列与 [TasksController] 接到 [TasksBoard] 上。展示逻辑都在
+/// board 里，筛选与选中在 controller 里；这里只剩要 BuildContext 的建任务对话框。
 class TasksPage extends StatefulWidget {
   const TasksPage({
     super.key,
     required this.queue,
+    required this.controller,
     required this.onOpenEditor,
     required this.showNewTranscribe,
     required this.showNewTranslate,
   });
 
   final TaskQueue queue;
+
+  /// 筛选与选中。挂在根节点上，页面重建不丢。
+  final TasksController controller;
   final ValueChanged<SubtitleTask> onOpenEditor;
 
   /// 「新建转写」对话框。它属于 transcribe feature，由装配层注入，
@@ -46,33 +52,20 @@ class TasksPage extends StatefulWidget {
 }
 
 class TasksPageState extends State<TasksPage> {
-  String _filter = 'all';
-  String? _selectedId;
+  TasksController get _tasks => widget.controller;
 
-  static bool _matches(SubtitleTask task, String filter) => switch (filter) {
-    'running' =>
-      task.status == TaskStatus.running || task.status == TaskStatus.queued,
-    'failed' =>
-      task.status == TaskStatus.failed || task.status == TaskStatus.cancelled,
-    'done' => task.status == TaskStatus.done,
-    _ => true,
-  };
-
-  /// 拖进来的文件：音视频走「新建转写」，字幕走「新建翻译」。
+  /// 拖进来的文件按 [TasksController.routeDrop] 分给两个对话框。
   ///
   /// 不再用默认参数直接入队 —— 语言、服务、双语排版这些事值得在建任务前
   /// 确认一次，这正是两个对话框存在的理由。
-  ///
-  /// 两类混在一起时走文件多的那一边，整把原样转过去：另一类由对话框自己
-  /// 列出并说明被忽略了。在这里就地丢掉的话，用户只会觉得文件没拖进去。
   Future<void> addFiles(List<String> paths) async {
-    final subtitles = paths.where(MediaKinds.isSubtitle).length;
-    final media = paths.where(MediaKinds.isMedia).length;
-    if (subtitles == 0 && media == 0) return;
-    if (subtitles >= media) {
-      await newTranslate(paths: paths);
-    } else {
-      await newTranscribe(paths: paths);
+    switch (TasksController.routeDrop(paths)) {
+      case DropRoute.translate:
+        await newTranslate(paths: paths);
+      case DropRoute.transcribe:
+        await newTranscribe(paths: paths);
+      case DropRoute.none:
+        break;
     }
   }
 
@@ -80,8 +73,9 @@ class TasksPageState extends State<TasksPage> {
   Future<void> newTranscribe({List<String> paths = const []}) async {
     final result = await widget.showNewTranscribe(context, paths);
     if (result == null) return;
-    widget.queue.enqueueAll(result.paths, options: result.options);
-    _selectFirst();
+    _tasks.selectEnqueued(
+      widget.queue.enqueueAll(result.paths, options: result.options),
+    );
   }
 
   /// 顶栏的「新建翻译」，也是拖入字幕后的落点。
@@ -93,13 +87,9 @@ class TasksPageState extends State<TasksPage> {
       (media) => newTranscribe(paths: media),
     );
     if (result == null) return;
-    widget.queue.enqueueAll(result.paths, options: result.options);
-    _selectFirst();
-  }
-
-  void _selectFirst() {
-    if (!mounted || widget.queue.tasks.isEmpty) return;
-    setState(() => _selectedId = widget.queue.tasks.first.id);
+    _tasks.selectEnqueued(
+      widget.queue.enqueueAll(result.paths, options: result.options),
+    );
   }
 
   /// 续跑前：会重建文档、而编辑器里改过的，先问一句。
@@ -126,7 +116,7 @@ class TasksPageState extends State<TasksPage> {
         widget.queue.prioritize(task.id);
       case TaskAction.remove:
         widget.queue.remove(task.id);
-        if (_selectedId == task.id) setState(() => _selectedId = null);
+        _tasks.forget(task.id);
       case TaskAction.openEditor:
         widget.onOpenEditor(task);
       case TaskAction.reveal:
@@ -136,18 +126,13 @@ class TasksPageState extends State<TasksPage> {
 
   @override
   Widget build(BuildContext context) {
-    final all = widget.queue.tasks;
     return TasksBoard(
-      tasks: all.where((t) => _matches(t, _filter)).toList(),
-      filter: _filter,
-      counts: {
-        for (final key in ['all', 'running', 'failed', 'done'])
-          key: all.where((t) => _matches(t, key)).length,
-      },
-      selectedId: _selectedId,
-      onFilterChanged: (v) => setState(() => _filter = v),
-      onSelect: (id) =>
-          setState(() => _selectedId = _selectedId == id ? null : id),
+      tasks: _tasks.visible,
+      filter: _tasks.filter,
+      counts: _tasks.counts,
+      selectedId: _tasks.selectedId,
+      onFilterChanged: _tasks.setFilter,
+      onSelect: _tasks.toggleSelect,
       onAction: _handleAction,
       onFiles: addFiles,
       onBrowse: newTranscribe,
@@ -162,8 +147,9 @@ PageChrome tasksChrome(
   required VoidCallback onNewTranslate,
   required VoidCallback onNewTranscribe,
 }) {
-  final running = queue.countWhere((t) => t.status == TaskStatus.running);
-  final failed = queue.countWhere((t) => t.status == TaskStatus.failed);
+  // 与筛选 chip、状态栏同一口径：排队算进行中，取消算失败。
+  final running = queue.countWhere(TaskFilter.running.matches);
+  final failed = queue.countWhere(TaskFilter.failed.matches);
   return PageChrome(
     title: '任务',
     subtitle: '${queue.tasks.length} 个任务 · $running 个进行中 · $failed 个失败',

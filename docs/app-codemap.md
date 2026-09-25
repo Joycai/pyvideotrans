@@ -49,7 +49,7 @@ core/       domain/ ←──── services/
 2. 载入 `AppSettings`，创建应用支持目录。
 3. 构造 `Ffmpeg`、`Transcoder`、`TaskRunner`、`TaskQueue`、`TaskStore`、`EditorStore`。
 4. 恢复任务后启动 `SubtitleStudioApp`。
-5. 持有转写、翻译、转码的表单控制器和编辑器的 `EditorWorkspace`，保证切页不丢状态。
+5. 持有任务页的 `TasksController`、转写 / 翻译 / 转码的表单控制器和编辑器的 `EditorWorkspace`，保证切页不丢状态。
 6. 用 `Listenable.merge` 只驱动顶栏、状态栏和需要实时更新的页面，避免进度回调重建整棵应用树。
 
 只做接线：各页的顶栏内容由各自的 `xxxChrome()` 给出，状态栏快照由
@@ -61,7 +61,7 @@ core/       domain/ ←──── services/
 |---|---|
 | `nav_rail.dart` | `AppSection` 六个导航项和 72px 导航栏 |
 | `app_shell.dart` | Rail + 顶栏 + 内容区 + 状态栏的总体栅格 |
-| `status_bar.dart` | `StatusSnapshot`（`from` 按设置、ffmpeg 与队列拼出快照）与底部状态栏；控件只画快照 |
+| `status_bar.dart` | `StatusSnapshot`（`from` 按设置、ffmpeg 与队列拼出快照；后台任务数按 `TaskFilter.running` 算）与底部状态栏；控件只画快照 |
 
 ## 三、视觉基座 `lib/core/`
 
@@ -106,6 +106,7 @@ core/       domain/ ←──── services/
 | `speech_segments.dart` | 静音区间 → 可逐段识别的语音区间 |
 | `recognition_checkpoint.dart` | 段级识别检查点，支持失败、取消和重启后的续跑 |
 | `task_kind.dart` | `TaskStage` 与 `TaskKind`；独立放置以避免 `TaskOptions ↔ SubtitleTask` 循环 |
+| `task_filter.dart` | `TaskFilter` 状态分组（排队算进行中、取消算失败）；任务页筛选 chip、顶栏副标题与状态栏计数共用 |
 | `task_options.dart` | 入队时冻结的全部参数、产物目录规则、JSON；各项取值范围 `*Range`；换服务的规则 `withAsrProvider` / `withTranslationProvider` |
 | `task.dart` | `SubtitleTask`、阶段记录、日志、错误、产物和 JSON；续跑点 `resumeStage` 与「续跑会不会盖掉编辑」`resumeOverwritesEdits`；export `task_kind.dart` |
 | `media_kinds.dart` | 按扩展名判断媒体 / 音频 / 字幕 |
@@ -202,7 +203,8 @@ core/       domain/ ←──── services/
 
 ### 任务列表 `lib/features/tasks/`
 
-- `tasks_page.dart`：筛选、选中；建任务对话框由装配层注入。
+- `tasks_page.dart`：把队列与 `TasksController` 接到 board 上；建任务对话框由装配层注入。
+- `tasks_controller.dart`：`TasksController`，筛选与选中（挂在根节点上，离开任务页再回来还在）、建完任务选中这一批的第一个文件、拖入文件按多数分流（`routeDrop`）。
 - `task_resume_dialog.dart`：续跑会重建文档、而编辑器里改过时的提醒（判断规则是 `SubtitleTask.resumeOverwritesEdits`）。
 - `tasks_board.dart`：列表、详情和拖放区的组合。
 - `task_table.dart`：任务表格、行内操作与空态。
@@ -320,6 +322,8 @@ core/       domain/ ←──── services/
 | 加非兼容 provider | `services/provider_api.dart` + 新适配器，参照 `dashscope_*.dart` |
 | 服务未配置 / 语言不支持提示 | `services/readiness.dart` + `features/shared/provider_fields.dart` |
 | 任务类型与阶段顺序 | `domain/task_kind.dart` |
+| 任务筛选分组、后台任务计数 | `domain/task_filter.dart` |
+| 任务页选中、拖入分流 | `features/tasks/tasks_controller.dart` |
 | 阶段断点、状态与耗时 | `pipeline/task_stage_runner.dart` |
 | 字幕任务执行 | `pipeline/task_runner.dart` |
 | 转码任务执行 | `pipeline/transcode_task_pipeline.dart` |
@@ -358,5 +362,7 @@ flutter test --tags golden --run-skipped
 - `test/editor_workspace_test.dart` 覆盖换会话、入口页开合与「最近打开」的串行写盘；
   `test/text_focus_test.dart` 钉死「焦点在输入框里」的判断（单行 / 多行）。
 - `test/status_snapshot_test.dart` 钉死状态栏快照的服务文案（未选择 / 未配置 / 已配置）与任务计数。
+- `test/task_filter_test.dart` 钉死状态分组；`test/tasks_controller_test.dart` 覆盖筛选、选中、拖入分流，
+  以及拆掉任务页再装回来后选中与筛选仍在。
 - golden 测试共 45 张场景图；拆 UI 文件后必须保持逐像素一致。
 - `live` 测试需要真实密钥，默认跳过；ffmpeg / 平台硬件编码用例会按本机能力跳过。
