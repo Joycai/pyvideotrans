@@ -1,5 +1,6 @@
 import 'enum_by_name.dart';
 import 'language.dart';
+import 'numbers.dart';
 import 'paths.dart';
 import 'srt.dart';
 import 'task_kind.dart';
@@ -68,6 +69,14 @@ enum OutputLocation {
 /// 后面的改动影响——这类 bug 事后极难复现。全局设置只作为这里的默认值。
 class TaskOptions {
   static const _unset = Object();
+
+  // 各项的取值范围。设置、建任务页的输入框与读回旧 JSON 都用这一份 ——
+  // 各写一份时，任务里能填的与默认值能设的就会对不上。
+  static const batchSizeRange = IntRange(1, 100);
+  static const cjkLineLengthRange = IntRange(4, 60);
+  static const latinLineLengthRange = IntRange(8, 120);
+  static const minCueMsRange = IntRange(0, 3000);
+  static const maxCueMsRange = IntRange(2000, 60000);
 
   const TaskOptions({
     required this.sourceLanguage,
@@ -210,10 +219,9 @@ class TaskOptions {
         'translationModel',
         fallback.translationModel,
       ),
-      translationBatchSize: pick(
-        'translationBatchSize',
-        fallback.translationBatchSize,
-      ).clamp(1, 100),
+      translationBatchSize: batchSizeRange.clamp(
+        pick('translationBatchSize', fallback.translationBatchSize),
+      ),
       translationGuidance: pick(
         'translationGuidance',
         fallback.translationGuidance,
@@ -223,13 +231,14 @@ class TaskOptions {
             pick('bilingual', fallback.bilingual.name).trim(),
           ) ??
           BilingualLayout.targetOnly,
-      cjkLineLength: pick('cjkLineLength', fallback.cjkLineLength).clamp(4, 60),
-      latinLineLength: pick(
-        'latinLineLength',
-        fallback.latinLineLength,
-      ).clamp(8, 120),
-      minCueMs: pick('minCueMs', fallback.minCueMs).clamp(0, 3000),
-      maxCueMs: pick('maxCueMs', fallback.maxCueMs).clamp(2000, 60000),
+      cjkLineLength: cjkLineLengthRange.clamp(
+        pick('cjkLineLength', fallback.cjkLineLength),
+      ),
+      latinLineLength: latinLineLengthRange.clamp(
+        pick('latinLineLength', fallback.latinLineLength),
+      ),
+      minCueMs: minCueMsRange.clamp(pick('minCueMs', fallback.minCueMs)),
+      maxCueMs: maxCueMsRange.clamp(pick('maxCueMs', fallback.maxCueMs)),
       format: SubtitleFormat.byExtension(
         pick('format', fallback.format.extension),
       ),
@@ -286,6 +295,19 @@ class TaskOptions {
         ? this.outputDir
         : outputDir as String?,
   );
+
+  /// 换识别服务。模型一并清掉，否则会把上一家的模型名发给下一家；新服务
+  /// 不支持说话人分离就把开关关掉，别留一个界面上看不见的 true。
+  TaskOptions withAsrProvider(String id, {required bool supportsDiarization}) =>
+      copyWith(
+        asrProviderId: id,
+        asrModel: null,
+        diarize: diarize && supportsDiarization,
+      );
+
+  /// 换翻译服务。模型一并清掉，理由同上。
+  TaskOptions withTranslationProvider(String id) =>
+      copyWith(translationProviderId: id, translationModel: null);
 
   /// 产物目录：设了自定义输出目录就用它，否则与源文件同目录。
   String outputDirFor(String sourcePath) => switch (outputLocation) {

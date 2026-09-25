@@ -122,8 +122,8 @@ class DefaultsSection extends StatelessWidget {
                 NumberField(
                   key: ValueKey('cjk-${settings.cjkLineLength}'),
                   value: settings.cjkLineLength,
-                  min: 4,
-                  max: 60,
+                  min: TaskOptions.cjkLineLengthRange.min,
+                  max: TaskOptions.cjkLineLengthRange.max,
                   width: 132,
                   onChanged: (v) {
                     if (v == settings.cjkLineLength) return;
@@ -137,8 +137,8 @@ class DefaultsSection extends StatelessWidget {
                 NumberField(
                   key: ValueKey('latin-${settings.latinLineLength}'),
                   value: settings.latinLineLength,
-                  min: 8,
-                  max: 120,
+                  min: TaskOptions.latinLineLengthRange.min,
+                  max: TaskOptions.latinLineLengthRange.max,
                   width: 132,
                   onChanged: (v) {
                     if (v == settings.latinLineLength) return;
@@ -163,8 +163,8 @@ class DefaultsSection extends StatelessWidget {
                 NumberField(
                   key: ValueKey('min-cue-${settings.minCueMs}'),
                   value: settings.minCueMs,
-                  min: 0,
-                  max: 3000,
+                  min: TaskOptions.minCueMsRange.min,
+                  max: TaskOptions.minCueMsRange.max,
                   width: 132,
                   onChanged: (v) {
                     if (v == settings.minCueMs) return;
@@ -178,8 +178,8 @@ class DefaultsSection extends StatelessWidget {
                 NumberField(
                   key: ValueKey('max-cue-${settings.maxCueMs}'),
                   value: settings.maxCueMs ~/ 1000,
-                  min: 2,
-                  max: 60,
+                  min: TaskOptions.maxCueMsRange.min ~/ 1000,
+                  max: TaskOptions.maxCueMsRange.max ~/ 1000,
                   width: 132,
                   onChanged: (v) {
                     if (v * 1000 == settings.maxCueMs) return;

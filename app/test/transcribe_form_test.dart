@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:subtitle_studio/domain/language.dart';
+import 'package:subtitle_studio/domain/task_options.dart';
+import 'package:subtitle_studio/features/shared/footer_message.dart';
 import 'package:subtitle_studio/features/transcribe/transcribe_form.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
@@ -148,6 +151,89 @@ void main() {
       );
       expect(form.submit(), isNull);
       expect(settings.lastTranscribeOptions, isNull);
+    });
+  });
+
+  group('产物名示例', () {
+    // 与流水线写出的同名：原文带语言段，开了翻译再列上译文那份。
+    test('带语言段；开翻译后列出两份', () async {
+      final media = GatedFfmpeg();
+      final form = TranscribeFormController(
+        settings: await _settings(),
+        media: media,
+      );
+      form.update(
+        (o) => o.copyWith(
+          sourceLanguage: Languages.resolve('zh'),
+          translate: false,
+        ),
+      );
+      expect(
+        form.outputNameExample,
+        'interview_ep12.mp4 → interview_ep12.zh.srt',
+      );
+
+      final done = form.add(['/v/talk.mov']);
+      media.finish('/v/talk.mov');
+      await done;
+      form.update(
+        (o) => o.copyWith(
+          translate: true,
+          targetLanguage: Languages.resolve('en'),
+        ),
+      );
+      expect(form.outputNameExample, 'talk.mov → talk.zh.srt、talk.en.srt');
+    });
+  });
+
+  group('输出位置', () {
+    test('选「指定目录」时取消选择框：留在原来的位置', () async {
+      String? picked;
+      final form = TranscribeFormController(
+        settings: await _settings(),
+        media: GatedFfmpeg(),
+        pickDirectory: () async => picked,
+      );
+      form.chooseOutputLocation(OutputLocation.custom);
+      await pumpEventQueue();
+      expect(form.options.outputLocation, OutputLocation.besideSource);
+      expect(form.options.outputDir, isNull);
+
+      picked = '/out';
+      form.chooseOutputLocation(OutputLocation.custom);
+      await pumpEventQueue();
+      expect(form.options.outputLocation, OutputLocation.custom);
+      expect(form.options.outputDir, '/out');
+
+      // 已有目录时来回切不再弹框。
+      picked = null;
+      form
+        ..chooseOutputLocation(OutputLocation.besideSource)
+        ..chooseOutputLocation(OutputLocation.custom);
+      expect(form.options.outputLocation, OutputLocation.custom);
+      expect(form.options.outputDir, '/out');
+    });
+  });
+
+  group('换服务', () {
+    test('模型清掉；新识别服务不支持说话人分离时关掉开关', () async {
+      final form = TranscribeFormController(
+        settings: await _settings(),
+        media: GatedFfmpeg(),
+      );
+      form
+        ..selectAsrProvider('dashscope_qwen_asr')
+        ..update((o) => o.copyWith(asrModel: 'm1', diarize: true))
+        ..selectAsrProvider('openai');
+      expect(form.options.asrProviderId, 'openai');
+      expect(form.options.asrModel, isNull);
+      expect(form.options.diarize, isFalse);
+
+      form
+        ..update((o) => o.copyWith(translationModel: 'm2'))
+        ..selectTranslationProvider('ollama');
+      expect(form.options.translationProviderId, 'ollama');
+      expect(form.options.translationModel, isNull);
     });
   });
 }

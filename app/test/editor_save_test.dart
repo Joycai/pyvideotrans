@@ -1017,7 +1017,7 @@ void main() {
     test('改过的任务从断句及之前的阶段续跑才提醒', () {
       final t = task(status: TaskStatus.failed)..editorEdits = 2;
       t.stages[TaskStage.segment] = const StageRecord(state: StageState.failed);
-      expect(resumeOverwritesEdits(t), isTrue);
+      expect(t.resumeOverwritesEdits, isTrue);
 
       t.stages[TaskStage.segment] = const StageRecord(state: StageState.done);
       t.stages[TaskStage.translate] = const StageRecord(
@@ -1031,11 +1031,11 @@ void main() {
         t.stages[s] = const StageRecord(state: StageState.done);
       }
       expect(t.resumeStage, TaskStage.translate);
-      expect(resumeOverwritesEdits(t), isFalse);
+      expect(t.resumeOverwritesEdits, isFalse);
 
       t.editorEdits = 0;
       t.stages[TaskStage.segment] = const StageRecord(state: StageState.failed);
-      expect(resumeOverwritesEdits(t), isFalse);
+      expect(t.resumeOverwritesEdits, isFalse);
     });
   });
 

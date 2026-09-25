@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
 import '../../pipeline/task_queue.dart';
 import '../shared/new_task_page.dart';
@@ -92,7 +91,7 @@ class NewTranslatePageState extends NewTaskPageState<NewTranslatePage> {
       form: form,
       footerOverride: note == null
           ? null
-          : (text: note, icon: Symbols.block, error: false),
+          : (text: note, tone: FooterTone.rejected),
       onOpenSettings: widget.onOpenSettings,
       onStart: start,
     );

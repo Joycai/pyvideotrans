@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
+import '../../domain/srt.dart';
 import '../../pipeline/task_queue.dart';
 import '../shared/new_task_page.dart';
 import '../shared/new_task_panels.dart';
@@ -13,11 +13,12 @@ import 'transcribe_form.dart';
 /// 放在这里而不是 main.dart，截图测试才能用同一份。
 PageChrome newTranscribeChrome(TranscribeFormController form) {
   final n = form.enqueueable.length;
+  final total = Srt.formatDuration(form.totalDuration, alwaysHours: true);
   return PageChrome(
     title: '新建转写',
     subtitle: form.files.isEmpty
         ? '从音视频生成字幕，可接着翻译'
-        : '$n 个文件 · 总时长 ${_hms(form.totalDuration)} · '
+        : '$n 个文件 · 总时长 $total · '
               '将创建 $n 个${form.kindLabel}任务',
     actions: [
       LastUsedButton(
@@ -26,14 +27,6 @@ PageChrome newTranscribeChrome(TranscribeFormController form) {
       ),
     ],
   );
-}
-
-/// 总时长固定写成 h:mm:ss —— 批量文件加起来经常过小时，位数稳定才好比较。
-String _hms(Duration d) {
-  final h = d.inHours;
-  final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-  final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-  return '$h:$m:$s';
 }
 
 /// 导航栏里的「新建转写」页：常驻的工作台。
@@ -95,7 +88,7 @@ class NewTranscribePageState extends NewTaskPageState<NewTranscribePage> {
       form: form,
       footerOverride: note == null
           ? null
-          : (text: note, icon: Symbols.block, error: false),
+          : (text: note, tone: FooterTone.rejected),
       onOpenSettings: widget.onOpenSettings,
       onStart: start,
     );

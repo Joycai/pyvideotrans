@@ -74,8 +74,8 @@ class TranscribeAdvancedSection extends StatelessWidget {
         label: '每行最大字符数 · 中日韩',
         child: NumberField(
           value: o.cjkLineLength,
-          min: 4,
-          max: 60,
+          min: TaskOptions.cjkLineLengthRange.min,
+          max: TaskOptions.cjkLineLengthRange.max,
           width: flat ? double.infinity : 88,
           onChanged: (v) => form.update((o) => o.copyWith(cjkLineLength: v)),
         ),
@@ -84,8 +84,8 @@ class TranscribeAdvancedSection extends StatelessWidget {
         label: '每行最大字符数 · 其他语言',
         child: NumberField(
           value: o.latinLineLength,
-          min: 8,
-          max: 120,
+          min: TaskOptions.latinLineLengthRange.min,
+          max: TaskOptions.latinLineLengthRange.max,
           width: flat ? double.infinity : 88,
           onChanged: (v) => form.update((o) => o.copyWith(latinLineLength: v)),
         ),
@@ -151,13 +151,7 @@ class TranscribeAdvancedSection extends StatelessWidget {
               children: [
                 SegmentedToggle<OutputLocation>(
                   value: o.outputLocation,
-                  onChanged: (v) {
-                    form.update((o) => o.copyWith(outputLocation: v));
-                    if (v == OutputLocation.custom &&
-                        form.options.outputDir == null) {
-                      form.pickOutputDir();
-                    }
-                  },
+                  onChanged: form.chooseOutputLocation,
                   segments: [
                     for (final v in OutputLocation.values)
                       (value: v, label: v.label, enabled: true),
@@ -201,11 +195,6 @@ class _OutputLocationRadios extends StatelessWidget {
     final cs = context.colors;
     final o = form.options;
     final custom = o.outputLocation == OutputLocation.custom;
-    final sample =
-        form.enqueueable.firstOrNull?.fileName ?? 'interview_ep12.mp4';
-    final stem = sample.contains('.')
-        ? sample.substring(0, sample.lastIndexOf('.'))
-        : sample;
     final mono = AppTextStyles.timecode.copyWith(
       fontSize: 12,
       fontWeight: FontWeight.w400,
@@ -224,9 +213,7 @@ class _OutputLocationRadios extends StatelessWidget {
         RadioRow(
           selected: !custom,
           label: OutputLocation.besideSource.label,
-          onTap: () => form.update(
-            (o) => o.copyWith(outputLocation: OutputLocation.besideSource),
-          ),
+          onTap: () => form.chooseOutputLocation(OutputLocation.besideSource),
         ),
         const SizedBox(height: AppSpacing.s1),
         RadioRow(
@@ -243,19 +230,14 @@ class _OutputLocationRadios extends StatelessWidget {
                   ),
                 )
               : null,
-          onTap: () {
-            form.update(
-              (o) => o.copyWith(outputLocation: OutputLocation.custom),
-            );
-            if (form.options.outputDir == null) form.pickOutputDir();
-          },
+          onTap: () => form.chooseOutputLocation(OutputLocation.custom),
         ),
         const SizedBox(height: AppSpacing.s2),
         Text.rich(
           TextSpan(
             children: [
               TextSpan(
-                text: '$sample → $stem.${o.format.extension}',
+                text: form.outputNameExample,
                 style: mono,
               ),
               const TextSpan(text: '，同名文件会被覆盖'),

@@ -8,6 +8,7 @@ import 'package:subtitle_studio/features/editor/editor_media.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/preview_playback.dart';
 import 'package:subtitle_studio/services/editor_store.dart';
+import 'package:subtitle_studio/services/file_io.dart';
 
 import 'helpers.dart';
 

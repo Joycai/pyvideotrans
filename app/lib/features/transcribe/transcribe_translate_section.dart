@@ -4,6 +4,7 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/language.dart';
+import '../../domain/task_options.dart';
 import '../../services/readiness.dart';
 import '../../services/registry.dart';
 import '../shared/provider_fields.dart';
@@ -87,9 +88,7 @@ class TranscribeTranslateSection extends StatelessWidget {
             model: id == o.translationProviderId ? o.translationModel : null,
           ),
         ),
-        onChanged: (id) => form.update(
-          (o) => o.copyWith(translationProviderId: id, translationModel: null),
-        ),
+        onChanged: form.selectTranslationProvider,
       ),
     );
     final model = modelField(
@@ -104,8 +103,8 @@ class TranscribeTranslateSection extends StatelessWidget {
     );
     final batch = NumberField(
       value: o.translationBatchSize,
-      min: 1,
-      max: 100,
+      min: TaskOptions.batchSizeRange.min,
+      max: TaskOptions.batchSizeRange.max,
       width: flat ? double.infinity : 88,
       onChanged: (v) => form.update((o) => o.copyWith(translationBatchSize: v)),
     );

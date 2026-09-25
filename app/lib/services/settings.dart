@@ -126,7 +126,7 @@ class AppSettings extends ChangeNotifier {
   /// 每批送给模型的字幕条数。太大容易丢条，太小费 token。
   int get translationBatchSize => _prefs.getInt(_kBatchSize) ?? 20;
   set translationBatchSize(int v) {
-    _prefs.setInt(_kBatchSize, v.clamp(1, 100));
+    _prefs.setInt(_kBatchSize, TaskOptions.batchSizeRange.clamp(v));
     notifyListeners();
   }
 
@@ -152,27 +152,27 @@ class AppSettings extends ChangeNotifier {
   /// 单行字数上限。默认值沿用原 Python 实现：中日韩 15、其他 40。
   int get cjkLineLength => _prefs.getInt(_kCjkLineLength) ?? 15;
   set cjkLineLength(int v) {
-    _prefs.setInt(_kCjkLineLength, v.clamp(4, 60));
+    _prefs.setInt(_kCjkLineLength, TaskOptions.cjkLineLengthRange.clamp(v));
     notifyListeners();
   }
 
   int get latinLineLength => _prefs.getInt(_kLatinLineLength) ?? 40;
   set latinLineLength(int v) {
-    _prefs.setInt(_kLatinLineLength, v.clamp(8, 120));
+    _prefs.setInt(_kLatinLineLength, TaskOptions.latinLineLengthRange.clamp(v));
     notifyListeners();
   }
 
   /// 断句的字幕时长下限（毫秒）。短于它且紧跟上一条的并进上一条。
   int get minCueMs => _prefs.getInt(_kMinCueMs) ?? 500;
   set minCueMs(int v) {
-    _prefs.setInt(_kMinCueMs, v.clamp(0, 3000));
+    _prefs.setInt(_kMinCueMs, TaskOptions.minCueMsRange.clamp(v));
     notifyListeners();
   }
 
   /// 断句的字幕时长上限（毫秒）。长于它的按标点拆开。
   int get maxCueMs => _prefs.getInt(_kMaxCueMs) ?? 10000;
   set maxCueMs(int v) {
-    _prefs.setInt(_kMaxCueMs, v.clamp(2000, 60000));
+    _prefs.setInt(_kMaxCueMs, TaskOptions.maxCueMsRange.clamp(v));
     notifyListeners();
   }
 

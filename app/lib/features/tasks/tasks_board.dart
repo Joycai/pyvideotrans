@@ -4,6 +4,7 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../domain/task.dart';
+import '../../domain/task_filter.dart';
 import 'drop_zone.dart';
 import 'task_detail_panel.dart';
 import 'task_table.dart';
@@ -27,10 +28,10 @@ class TasksBoard extends StatelessWidget {
   });
 
   final List<SubtitleTask> tasks;
-  final String filter;
-  final Map<String, int> counts;
+  final TaskFilter filter;
+  final Map<TaskFilter, int> counts;
   final String? selectedId;
-  final ValueChanged<String> onFilterChanged;
+  final ValueChanged<TaskFilter> onFilterChanged;
   final ValueChanged<String> onSelect;
   final void Function(SubtitleTask, TaskAction) onAction;
   final ValueChanged<List<String>> onFiles;
@@ -62,21 +63,12 @@ class TasksBoard extends StatelessWidget {
                 Row(
                   children: [
                     FilterChipBar(
-                      value: filter,
-                      onChanged: onFilterChanged,
+                      value: filter.name,
+                      onChanged: (name) =>
+                          onFilterChanged(TaskFilter.values.byName(name)),
                       items: [
-                        (key: 'all', label: '全部', count: counts['all'] ?? 0),
-                        (
-                          key: 'running',
-                          label: '进行中',
-                          count: counts['running'] ?? 0,
-                        ),
-                        (
-                          key: 'failed',
-                          label: '失败',
-                          count: counts['failed'] ?? 0,
-                        ),
-                        (key: 'done', label: '已完成', count: counts['done'] ?? 0),
+                        for (final f in TaskFilter.values)
+                          (key: f.name, label: f.label, count: counts[f] ?? 0),
                       ],
                     ),
                     const Spacer(),

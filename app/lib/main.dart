@@ -21,6 +21,7 @@ import 'features/shared/page_chrome.dart';
 import 'features/shell/app_shell.dart';
 import 'features/shell/nav_rail.dart';
 import 'features/shell/status_bar.dart';
+import 'features/tasks/tasks_controller.dart';
 import 'features/tasks/tasks_page.dart';
 import 'features/transcode/transcode_form.dart';
 import 'features/transcode/transcode_page.dart';
@@ -128,6 +129,9 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   /// 退出前把还没写盘的编辑进度写掉，字幕文件还没写入的先问一句。
   late final AppLifecycleListener _lifecycle;
 
+  /// 任务页的筛选与选中。挂在根节点上，去编辑器看一眼再回来选中还在。
+  late final _tasks = TasksController(queue: widget.queue);
+
   /// 「新建转写」页的表单。挂在根节点上，切去设置页再回来文件与参数还在。
   late final _transcribeForm = TranscribeFormController(
     settings: widget.settings,
@@ -191,6 +195,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     _workspace.removeListener(_refresh);
     _lifecycle.dispose();
     _workspace.dispose();
+    _tasks.dispose();
     _transcribeForm.dispose();
     _translateForm.dispose();
     _transcodeForm.dispose();
@@ -280,12 +285,13 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   }
 
   Widget get _body => switch (_section) {
-    // 任务页自己不监听队列，靠这里的 ListenableBuilder 跟进度走。
+    // 任务页自己不监听队列与筛选，靠这里的 ListenableBuilder 跟着走。
     AppSection.tasks => ListenableBuilder(
-      listenable: widget.queue,
+      listenable: Listenable.merge([widget.queue, _tasks]),
       builder: (_, _) => TasksPage(
         key: _tasksKey,
         queue: widget.queue,
+        controller: _tasks,
         onOpenEditor: _workspace.openTask,
         showNewTranscribe: (context, paths) => showNewTranscribeDialog(
           context,

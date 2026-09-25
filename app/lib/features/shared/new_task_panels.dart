@@ -7,10 +7,11 @@ import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dashed_border.dart';
 import '../../core/widgets/indicators.dart';
 import 'enqueued_banner.dart';
+import 'footer_message.dart';
 import 'step_dots.dart';
 
-/// 页脚那行校验文案：图标 + 文字，阻断时 [error] 为真。
-typedef FooterMessage = ({String text, IconData icon, bool error});
+export 'footer_message.dart';
+
 
 /// 建任务页左列的外框：标题行（文件数、清空、添加）、入队横幅、正文。
 ///
@@ -293,6 +294,15 @@ class TaskFooterLine extends StatelessWidget {
 
   final FooterMessage message;
 
+  static const _icons = {
+    FooterTone.add: Symbols.add_circle,
+    FooterTone.info: Symbols.info,
+    FooterTone.ok: Symbols.check_circle,
+    FooterTone.warning: Symbols.warning,
+    FooterTone.rejected: Symbols.block,
+    FooterTone.error: Symbols.error,
+  };
+
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
@@ -300,7 +310,7 @@ class TaskFooterLine extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(message.icon, size: 16, weight: 400, color: color),
+        Icon(_icons[message.tone], size: 16, weight: 400, color: color),
         const SizedBox(width: AppSpacing.s1 + 2),
         Expanded(
           child: Text(
