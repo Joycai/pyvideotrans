@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -920,7 +919,7 @@ class EditorController extends ChangeNotifier {
               '${languageTag(session.targetLanguage)}',
       };
       // 用平台分隔符：要与 targetPaths 比对，Windows 上混用 / 与 \ 会比不上。
-      return '$dir${Platform.pathSeparator}$stem.$suffix.'
+      return '$dir$pathSeparator$stem.$suffix.'
           '${options.format.extension}';
     }
 
@@ -932,7 +931,7 @@ class EditorController extends ChangeNotifier {
         '这个目录里就是字幕文件本身，想更新它们请用「保存」（⌘S）；导出请换一个目录',
       );
     }
-    await Directory(dir).create(recursive: true);
+    await ensureDir(dir);
 
     String Function(String) wrap(Language language) {
       final limit = language.cjk

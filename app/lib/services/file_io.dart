@@ -1,6 +1,33 @@
 import 'dart:io';
 
 import '../domain/file_stamp.dart';
+import '../domain/media_kinds.dart';
+import '../domain/paths.dart';
+
+// 界面层要按读写失败的种类给提示，但不该为此直接依赖 dart:io ——
+// 文件系统只在 services 里碰。
+export 'dart:io' show FileSystemException;
+
+/// 当前平台的路径分隔符。拼出的路径要与别处按平台拼的比对，不能写死 `/`。
+String get pathSeparator => Platform.pathSeparator;
+
+Future<bool> fileExists(String path) => File(path).exists();
+
+/// 文件字节数；读不了（不存在、无权限）时为 0。
+Future<int> fileLength(String path) async {
+  try {
+    return await File(path).length();
+  } on FileSystemException {
+    return 0;
+  }
+}
+
+/// 按 UTF-8 读整份文本。编码不对时抛 [FileSystemException]。
+Future<String> readText(String path) => File(path).readAsString();
+
+Future<void> ensureDir(String path) async {
+  await Directory(path).create(recursive: true);
+}
 
 /// 读 [path] 当前的大小与修改时间；文件不存在时返回 [FileStamp.missing]。
 Future<FileStamp> stampOf(String path) async {
@@ -58,4 +85,32 @@ Future<void> _deleteQuietly(File file) async {
   } on FileSystemException {
     // 清理失败不掩盖真正的写入错误。
   }
+}
+
+/// 在 [subtitlePath] 所在目录里找与之配套的音视频：主干等于 [stem]（语言段
+/// 已去掉）或等于字幕自己去掉扩展名后的名字。视频优先于音频，同类里按名字排。
+/// 目录读不了（不存在、无权限）时返回 null。
+Future<String?> findSiblingMedia(String subtitlePath, String stem) async {
+  final dir = File(subtitlePath).parent;
+  final ownStem = stemOf(baseName(subtitlePath));
+  final stems = {stem, ownStem};
+  final candidates = <(int, String, String)>[];
+  try {
+    await for (final entry in dir.list(followLinks: false)) {
+      if (entry is! File) continue;
+      final name = baseName(entry.path);
+      if (!MediaKinds.isMedia(name)) continue;
+      if (!stems.contains(stemOf(name))) continue;
+      final rank = MediaKinds.isAudio(name) ? 1 : 0;
+      candidates.add((rank, name.toLowerCase(), entry.path));
+    }
+  } on FileSystemException {
+    return null;
+  }
+  if (candidates.isEmpty) return null;
+  candidates.sort((a, b) {
+    final byRank = a.$1.compareTo(b.$1);
+    return byRank != 0 ? byRank : a.$2.compareTo(b.$2);
+  });
+  return candidates.first.$3;
 }

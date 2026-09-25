@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -17,6 +16,7 @@ import '../../domain/transcode/encoder_params.dart';
 import '../../domain/transcode/options.dart';
 import '../../domain/transcode/probe.dart';
 import '../../services/ffmpeg.dart';
+import '../../services/file_io.dart';
 import '../../services/settings.dart';
 import '../../services/transcoder.dart';
 
@@ -83,7 +83,7 @@ class TranscodeFormController extends ChangeNotifier {
     TranscodeOptions? initial,
     Future<int> Function(String path)? fileSize,
   }) : _options = initial ?? defaults,
-       _fileSize = fileSize ?? _defaultFileSize {
+       _fileSize = fileSize ?? fileLength {
     transcoder.addListener(_notify);
   }
 
@@ -92,14 +92,6 @@ class TranscodeFormController extends ChangeNotifier {
 
   /// 读文件大小。截图测试里换成假的：真 IO 在测试的假时钟里不会完成。
   final Future<int> Function(String path) _fileSize;
-
-  static Future<int> _defaultFileSize(String path) async {
-    try {
-      return await File(path).length();
-    } on FileSystemException {
-      return 0;
-    }
-  }
 
   /// 默认参数：H.264 · x264 · CRF 23 · AAC 160k · MP4。
   static TranscodeOptions get defaults => TranscodeOptions(

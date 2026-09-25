@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 
@@ -10,6 +8,7 @@ import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import '../../domain/subtitle_pairing.dart';
 import '../../domain/task_options.dart';
+import '../../services/file_io.dart';
 import 'editor_session.dart';
 
 /// 入口页上的两个位置。

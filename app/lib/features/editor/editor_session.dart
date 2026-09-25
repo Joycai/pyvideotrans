@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import '../../domain/cue.dart';
 import '../../domain/file_stamp.dart';
 import '../../domain/language.dart';
@@ -87,7 +85,7 @@ sealed class EditorSession {
       return '选的是字幕文件原来的目录，请换一个';
     }
     for (final path in writeToPaths(dir)) {
-      if (await File(path).exists()) return '${baseName(path)} 已存在，请换一个目录';
+      if (await fileExists(path)) return '${baseName(path)} 已存在，请换一个目录';
     }
     return null;
   }
@@ -116,40 +114,12 @@ sealed class EditorSession {
   /// 任务的源文件（本身是媒体时）、字幕旁边去掉语言段后同名的音视频。
   /// 都没有时保持 null。
   Future<String?> locateMedia({String? linked}) async {
-    if (linked != null && await File(linked).exists()) {
+    if (linked != null && await fileExists(linked)) {
       return mediaPath = linked;
     }
-    if (mediaPath != null && await File(mediaPath!).exists()) return mediaPath;
+    if (mediaPath != null && await fileExists(mediaPath!)) return mediaPath;
     return mediaPath = await findSiblingMedia(subtitlePath, exportStem);
   }
-}
-
-/// 在 [subtitlePath] 所在目录里找与之配套的音视频：主干等于 [stem]（语言段
-/// 已去掉）或等于字幕自己去掉扩展名后的名字。视频优先于音频，同类里按名字排。
-/// 目录读不了（不存在、无权限）时返回 null。
-Future<String?> findSiblingMedia(String subtitlePath, String stem) async {
-  final dir = File(subtitlePath).parent;
-  final ownStem = stemOf(baseName(subtitlePath));
-  final stems = {stem, ownStem};
-  final candidates = <(int, String, String)>[];
-  try {
-    await for (final entry in dir.list(followLinks: false)) {
-      if (entry is! File) continue;
-      final name = baseName(entry.path);
-      if (!MediaKinds.isMedia(name)) continue;
-      if (!stems.contains(stemOf(name))) continue;
-      final rank = MediaKinds.isAudio(name) ? 1 : 0;
-      candidates.add((rank, name.toLowerCase(), entry.path));
-    }
-  } on FileSystemException {
-    return null;
-  }
-  if (candidates.isEmpty) return null;
-  candidates.sort((a, b) {
-    final byRank = a.$1.compareTo(b.$1);
-    return byRank != 0 ? byRank : a.$2.compareTo(b.$2);
-  });
-  return candidates.first.$3;
 }
 
 /// 从任务打开。文档就是任务的文档，参数是任务入队时定下的那份。
@@ -229,11 +199,11 @@ final class TaskSession extends EditorSession {
   /// 转写任务的源文件就是音视频，不用找。
   @override
   Future<String?> locateMedia({String? linked}) async {
-    if (linked != null && await File(linked).exists()) {
+    if (linked != null && await fileExists(linked)) {
       return mediaPath = linked;
     }
     if (MediaKinds.isMedia(task.sourcePath) &&
-        await File(task.sourcePath).exists()) {
+        await fileExists(task.sourcePath)) {
       return mediaPath = task.sourcePath;
     }
     return super.locateMedia();
@@ -280,7 +250,7 @@ class LocalSubtitleFile {
 
   /// 按 UTF-8 读文件。编码不对或解析不出字幕时抛异常，由界面提示「换一个」。
   static Future<LocalSubtitleFile> load(String path) async =>
-      parse(path, await File(path).readAsString());
+      parse(path, await readText(path));
 }
 
 /// 从本地字幕文件打开。
@@ -440,7 +410,7 @@ final class FileSession extends EditorSession {
 
   @override
   List<String> writeToPaths(String dir) {
-    final sep = Platform.pathSeparator;
+    final sep = pathSeparator;
     return [
       '$dir$sep${baseName(sourcePath)}',
       if (mountedTranslationPath case final t?) '$dir$sep${baseName(t)}',
@@ -503,12 +473,12 @@ final class FileSession extends EditorSession {
 
   Future<String> _freshTranslationPath() async {
     final dir = dirName(sourcePath);
-    final sep = Platform.pathSeparator;
+    final sep = pathSeparator;
     final tag = languageTag(targetLanguage);
     final sourceExt = extensionOf(sourcePath);
     final ext = sourceExt.isEmpty ? 'srt' : sourceExt;
     var path = '$dir$sep$exportStem.$tag.$ext';
-    for (var n = 2; await File(path).exists(); n++) {
+    for (var n = 2; await fileExists(path); n++) {
       path = '$dir$sep$exportStem-$n.$tag.$ext';
     }
     return path;
