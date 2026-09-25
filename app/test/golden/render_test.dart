@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/task.dart';
+import 'package:subtitle_studio/domain/task_filter.dart';
 import 'package:subtitle_studio/features/editor/editor_chrome.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_open_form.dart';
@@ -259,12 +260,12 @@ void main() {
           ),
           child: TasksBoard(
             tasks: tasks,
-            filter: 'all',
+            filter: TaskFilter.all,
             counts: const {
-              'all': 5,
-              'running': 2,
-              'failed': 1,
-              'done': 1,
+              TaskFilter.all: 5,
+              TaskFilter.running: 2,
+              TaskFilter.failed: 1,
+              TaskFilter.done: 1,
             },
             // 选中失败的那条，好让详情面板把错误块也一起渲染出来。
             selectedId: '3',

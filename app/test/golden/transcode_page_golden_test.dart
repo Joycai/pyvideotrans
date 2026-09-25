@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/task.dart';
+import 'package:subtitle_studio/domain/task_filter.dart';
 import 'package:subtitle_studio/domain/transcode/codecs.dart';
 import 'package:subtitle_studio/domain/transcode/command.dart';
 import 'package:subtitle_studio/domain/transcode/encoder_catalog.dart';
@@ -385,8 +386,13 @@ void main() {
       live: ChangeNotifier(),
       child: TasksBoard(
         tasks: tasks,
-        filter: 'all',
-        counts: const {'all': 3, 'running': 2, 'failed': 0, 'done': 1},
+        filter: TaskFilter.all,
+        counts: const {
+          TaskFilter.all: 3,
+          TaskFilter.running: 2,
+          TaskFilter.failed: 0,
+          TaskFilter.done: 1,
+        },
         selectedId: 'tc1',
         onFilterChanged: (_) {},
         onSelect: (_) {},
