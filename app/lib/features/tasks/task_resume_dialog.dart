@@ -8,18 +8,13 @@ import '../../domain/task.dart';
 /// 续跑前的检查结果。
 enum ResumeChoice { proceed, openEditor, cancel }
 
-/// 续跑会不会盖掉编辑器里的修改：从翻译之前的阶段（准备 / 识别 / 断句）
-/// 继续会重建整份文档；从翻译阶段继续只补没有译文的条目，不动已有修改。
-bool resumeOverwritesEdits(SubtitleTask task) =>
-    task.editorEdits > 0 && task.resumeStage.index < TaskStage.translate.index;
-
 /// 改过的任务被「继续」时的询问（设计稿「编辑器保存模型」画板 4 ③）。
 /// 不会覆盖修改时直接返回 [ResumeChoice.proceed]，不问。
 Future<ResumeChoice> confirmResume(
   BuildContext context,
   SubtitleTask task,
 ) async {
-  if (!resumeOverwritesEdits(task)) return ResumeChoice.proceed;
+  if (!task.resumeOverwritesEdits) return ResumeChoice.proceed;
   final reviewed = task.document.cues.where((c) => c.reviewed).length;
   final stage = task.resumeStage;
   final choice = await showDialog<ResumeChoice>(
