@@ -4,13 +4,13 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../domain/task_control.dart';
 import '../domain/transcode/codecs.dart';
 import '../domain/transcode/command.dart';
 import '../domain/transcode/encoder_catalog.dart';
 import '../domain/transcode/encoder_params.dart';
 import '../domain/transcode/probe.dart';
-import 'media.dart';
-import 'provider_api.dart';
+import 'ffmpeg.dart';
 
 /// 一个编码器在这台电脑上能不能用。
 enum EncoderState {
@@ -46,9 +46,9 @@ class EncoderStatus {
 /// 真的试编码一帧。只看列表不够 —— Windows 上常见的「全功能」ffmpeg 把 NVENC、
 /// QSV、AMF 全编进去了，但一台电脑通常只有其中一家的显卡。
 class Transcoder extends ChangeNotifier {
-  Transcoder({Media? media}) : media = media ?? Media();
+  Transcoder({Ffmpeg? media}) : media = media ?? Ffmpeg();
 
-  final Media media;
+  final Ffmpeg media;
 
   Map<String, EncoderStatus> _encoders = const {};
   Set<String> _compiled = const {};
@@ -59,7 +59,7 @@ class Transcoder extends ChangeNotifier {
   String? get ffmpegProblem => _ffmpegProblem;
   String? _ffmpegProblem;
 
-  /// 找不到时该怎么办。文案按平台分好在 [Media] 里，界面直接显示，
+  /// 找不到时该怎么办。文案按平台分好在 [Ffmpeg] 里，界面直接显示，
   /// 免得每个用到的地方各写一份 `Platform.isWindows ? …`。
   String? get ffmpegHint => _ffmpegHint;
   String? _ffmpegHint;
@@ -104,7 +104,7 @@ class Transcoder extends ChangeNotifier {
         exe = media.ffmpeg;
         _ffmpegProblem = null;
         _ffmpegHint = null;
-      } on ProviderException catch (e) {
+      } on ActionableException catch (e) {
         _ffmpegProblem = e.message;
         _ffmpegHint = e.hint;
         _encoders = {
@@ -245,7 +245,7 @@ class Transcoder extends ChangeNotifier {
     return (codec.encoder, const []);
   }
 
-  /// 读源文件的流信息。读不出来抛 [ProviderException]。
+  /// 读源文件的流信息。读不出来抛 [ActionableException]。
   Future<MediaProbe> probe(String path) async {
     final ProcessResult result;
     try {
@@ -259,10 +259,10 @@ class Transcoder extends ChangeNotifier {
         path,
       ], stdoutEncoding: utf8, stderrEncoding: utf8);
     } on ProcessException catch (e) {
-      throw ProviderException('无法运行 ffprobe', detail: e.message);
+      throw ActionableException('无法运行 ffprobe', detail: e.message);
     }
     if (result.exitCode != 0) {
-      throw ProviderException(
+      throw ActionableException(
         'ffprobe 读不出这个文件',
         detail: '${result.stderr}'.trim(),
         hint: '多为文件损坏或不是音视频。用播放器确认文件能正常播放。',
@@ -272,7 +272,7 @@ class Transcoder extends ChangeNotifier {
       (jsonDecode('${result.stdout}') as Map).cast<String, Object?>(),
     );
     if (probe.isEmpty) {
-      throw const ProviderException(
+      throw const ActionableException(
         '文件里没有音视频流',
         hint: '确认选中的是视频文件。',
       );
@@ -281,7 +281,7 @@ class Transcoder extends ChangeNotifier {
   }
 
   /// 跑一次转码。[onProgress] 在每个进度区块到达时调用。取消时杀掉进程并
-  /// 抛 [TaskCancelled]；失败抛 [ProviderException]，detail 是 stderr 末尾。
+  /// 抛 [TaskCancelled]；失败抛 [ActionableException]，detail 是 stderr 末尾。
   Future<void> run({
     required List<String> args,
     required String encoderId,
@@ -321,7 +321,7 @@ class Transcoder extends ChangeNotifier {
           }
         });
     final outDone = outSub.asFuture<void>();
-    final watchdog = Media.killOnCancel(process, token);
+    final watchdog = Ffmpeg.killOnCancel(process, token);
     final exitCode = await process.exitCode;
     await watchdog.cancel();
     if (token.isCancelled) {
@@ -335,7 +335,7 @@ class Transcoder extends ChangeNotifier {
   }
   /// ffmpeg 退出码非零时的报错。
   @visibleForTesting
-  static ProviderException describeFailure(String stderr, String encoderId) {
+  static ActionableException describeFailure(String stderr, String encoderId) {
     final tail = stderr.trimRight();
     final detail = tail.length > 800
         ? '…${tail.substring(tail.length - 800)}'
@@ -344,7 +344,7 @@ class Transcoder extends ChangeNotifier {
     if (s.contains('could not find tag for codec') ||
         s.contains('only supported in mp4') ||
         s.contains('not currently supported in container')) {
-      return ProviderException(
+      return ActionableException(
         '容器装不下其中一路流',
         detail: detail,
         hint: '换一个容器，或把那一路改为重新编码而不是复制。',
@@ -355,27 +355,27 @@ class Transcoder extends ChangeNotifier {
         s.contains('initializing output stream') ||
         s.contains('no capable devices') ||
         s.contains('unknown encoder')) {
-      return ProviderException(
+      return ActionableException(
         '$encoderId 初始化失败',
         detail: detail,
         hint: '这个编码器在当前设备或参数下用不了。换一个编码器（例如 CPU 编码）后从转码阶段继续。',
       );
     }
     if (s.contains('unrecognized option') || s.contains('option not found')) {
-      return ProviderException(
+      return ActionableException(
         'FFmpeg 不认识其中一个参数',
         detail: detail,
         hint: '检查「额外参数」的写法，或者这份 FFmpeg 版本过旧。',
       );
     }
     if (s.contains('no space left')) {
-      return ProviderException(
+      return ActionableException(
         '磁盘空间不足',
         detail: detail,
         hint: '清理输出目录所在磁盘，或在高级里换一个输出目录。',
       );
     }
-    return ProviderException(
+    return ActionableException(
       'FFmpeg 转码失败',
       detail: detail.isEmpty ? '退出码非零，没有输出报错' : detail,
       hint: '查看报错原文；多为源文件损坏或参数组合不受支持。',

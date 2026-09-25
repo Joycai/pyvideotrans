@@ -319,10 +319,10 @@ class _Pill extends StatelessWidget {
   }
 }
 
-/// 单行文本输入：36px 控件皮 + 无边框 TextField。
+/// 设置页的单行输入：[SingleLineField] 加一个等宽开关。
 ///
-/// 值由外部持有；换服务时用 key 重建，控制器才会拿到新值。
-class SettingsTextField extends StatefulWidget {
+/// 换服务时用 key 重建，控制器才会拿到另一个服务的值。
+class SettingsTextField extends StatelessWidget {
   const SettingsTextField({
     super.key,
     required this.value,
@@ -341,43 +341,13 @@ class SettingsTextField extends StatefulWidget {
   final bool error;
 
   @override
-  State<SettingsTextField> createState() => _SettingsTextFieldState();
-}
-
-class _SettingsTextFieldState extends State<SettingsTextField> {
-  late final _controller = TextEditingController(text: widget.value);
-  final _focus = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = context.colors;
-    final style = widget.mono
-        ? AppTextStyles.timecode.copyWith(color: cs.onSurface)
-        : context.texts.bodyMedium;
-    return ControlSurface(
-      focused: _focus.hasFocus,
-      error: widget.error,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
-      child: TextField(
-        controller: _controller,
-        focusNode: _focus,
-        style: style,
-        decoration: bareInputDecoration(context, hint: widget.hint),
-        onChanged: widget.onChanged,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => SingleLineField(
+    value: value,
+    hint: hint,
+    style: mono
+        ? AppTextStyles.timecode.copyWith(color: context.colors.onSurface)
+        : null,
+    error: error,
+    onChanged: onChanged,
+  );
 }

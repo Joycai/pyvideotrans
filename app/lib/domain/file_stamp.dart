@@ -15,7 +15,7 @@ class FileStamp {
 
   Map<String, Object?> toJson() => {'size': size, 'modifiedMs': modifiedMs};
 
-  static FileStamp? fromJson(Object? raw) {
+  static FileStamp? tryFromJson(Object? raw) {
     if (raw is! Map) return null;
     final size = raw['size'];
     final modified = raw['modifiedMs'];

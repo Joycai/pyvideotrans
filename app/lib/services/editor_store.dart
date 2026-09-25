@@ -101,7 +101,7 @@ class EditorStore {
       final stamps = <String, FileStamp>{};
       var changed = false;
       for (final path in [sourcePath, ?translationPath]) {
-        final saved = FileStamp.fromJson(files[path]);
+        final saved = FileStamp.tryFromJson(files[path]);
         if (saved == null) return null;
         if (saved != await stampOf(path)) changed = true;
         stamps[path] = saved;
@@ -157,7 +157,7 @@ class EditorStore {
     try {
       final json = jsonDecode(await _recentFile.readAsString());
       if (json is! List) return const [];
-      return [for (final raw in json) ?RecentSession.fromJson(raw)];
+      return [for (final raw in json) ?RecentSession.tryFromJson(raw)];
     } on Object {
       return const [];
     }
@@ -264,7 +264,7 @@ class RecentSession {
   };
 
   /// 缺关键字段的记录返回 null，由调用方跳过。
-  static RecentSession? fromJson(Object? raw) {
+  static RecentSession? tryFromJson(Object? raw) {
     if (raw is! Map) return null;
     final title = raw['title'];
     final openedAt = DateTime.tryParse(raw['openedAt'] as String? ?? '');

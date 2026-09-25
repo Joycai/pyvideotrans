@@ -7,7 +7,7 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
-import '../../services/media.dart';
+import '../../services/ffmpeg.dart';
 import '../../services/reveal.dart';
 import 'section_outline.dart';
 import 'settings_section.dart';
@@ -25,7 +25,7 @@ class EnvironmentSection extends StatefulWidget {
     required this.stacked,
   });
 
-  final Media media;
+  final Ffmpeg media;
   final bool stacked;
 
   @override
@@ -42,7 +42,7 @@ class _EnvironmentSectionState extends State<EnvironmentSection> {
   }
 
   Future<void> _openDropIn() async {
-    final dir = await Media.ensureDropInDir();
+    final dir = await Ffmpeg.ensureDropInDir();
     if (dir == null) return;
     await Reveal.openDir(dir);
   }
@@ -55,7 +55,7 @@ class _EnvironmentSectionState extends State<EnvironmentSection> {
       section: SettingsSectionKey.environment,
       note:
           '抽音与转码都要用 FFmpeg。没有的话，点「打开目录」把 '
-          '${Media.dropInNames.join(' 和 ')} 放进去即可，不用配环境变量。',
+          '${Ffmpeg.dropInNames.join(' 和 ')} 放进去即可，不用配环境变量。',
       children: [
         SettingsRow(
           label: 'FFmpeg',

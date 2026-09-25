@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 import '../domain/cue.dart';
 import '../domain/recognition_checkpoint.dart';
 import 'dashscope_asr.dart';
-import 'media.dart';
+import 'ffmpeg.dart';
 import 'provider_api.dart';
 
 /// 阿里百炼的**录音文件转写**（模型名以 `-filetrans` 结尾）。
@@ -44,7 +44,7 @@ class DashScopeFileTransProvider implements AsrProvider {
   final ProviderInfo info;
 
   final Endpoint endpoint;
-  final Media media;
+  final Ffmpeg media;
   final bool diarize;
 
   final http.Client _client;
@@ -83,7 +83,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     token.throwIfCancelled();
     final file = File(audioPath);
     if (!file.existsSync()) {
-      throw ProviderException(
+      throw ActionableException(
         '音频文件不存在',
         detail: audioPath,
         hint: '准备阶段没有产出音频，请从准备阶段继续。',
@@ -91,7 +91,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     }
     final duration = await media.probeDuration(audioPath);
     if (duration != null && duration > maxDuration) {
-      throw ProviderException(
+      throw ActionableException(
         '音频超过录音文件转写的时长上限',
         detail: '${duration.inMinutes} 分钟，上限 ${maxDuration.inHours} 小时',
         hint: '把文件切短，或改用逐段识别的模型（不带 -filetrans）。',
@@ -127,7 +127,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     final json = await _fetchResult(resultUrl, cp);
     final cues = parseTranscript(json);
     if (cues.isEmpty) {
-      throw const ProviderException(
+      throw const ActionableException(
         '未识别到语音',
         hint: '确认音视频中确有人声，且所选语言与实际语言一致。',
       );
@@ -163,7 +163,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     final policy = _json(policyResponse, what: '上传凭证');
     final data = policy['data'];
     if (data is! Map) {
-      throw ProviderException(
+      throw ActionableException(
         '${info.vendor} 没有返回上传凭证',
         detail: _clip(policyResponse.body),
         hint: '该服务地址可能不支持临时文件上传；核对是否为百炼的 API 地址。',
@@ -172,7 +172,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     final maxMb = int.tryParse('${data['max_file_size_mb'] ?? ''}');
     final sizeMb = file.lengthSync() / (1024 * 1024);
     if (maxMb != null && sizeMb > maxMb) {
-      throw ProviderException(
+      throw ActionableException(
         '音频超过 ${info.vendor} 的上传大小限制',
         detail: '${sizeMb.toStringAsFixed(1)} MB，上限 $maxMb MB',
         hint: '把文件切短，或改用逐段识别的模型（不带 -filetrans）。',
@@ -214,7 +214,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     );
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw ProviderException(
+      throw ActionableException(
         '上传音频失败',
         detail: 'HTTP ${response.statusCode} · ${_clip(_bodyText(response))}',
         hint: response.statusCode == 403
@@ -286,7 +286,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     final output = json['output'];
     final id = output is Map ? output['task_id'] : null;
     if (id is! String || id.isEmpty) {
-      throw ProviderException(
+      throw ActionableException(
         '${info.vendor} 没有返回任务号',
         detail: _clip(response.body),
         hint: '核对服务地址与模型名。',
@@ -338,7 +338,7 @@ class DashScopeFileTransProvider implements AsrProvider {
       if (response.statusCode == 404) {
         // 任务号作废，但上传的音频还在：续跑只需重新提交。
         cp.asyncTaskId = null;
-        throw ProviderException(
+        throw ActionableException(
           '${info.vendor} 上找不到该任务',
           detail: 'task $taskId · ${_clip(_bodyText(response))}',
           hint: '任务可能已过期。从识别阶段继续会用已上传的音频重新提交。',
@@ -357,7 +357,7 @@ class DashScopeFileTransProvider implements AsrProvider {
           // 失败的任务不能再查；文件取不到时连地址也一起作废。
           cp.asyncTaskId = null;
           if (_fileProblem(reason)) cp.asyncFileUrl = null;
-          throw ProviderException(
+          throw ActionableException(
             '${info.vendor} 转写任务失败',
             detail: '${out['code'] ?? ''} ${out['message'] ?? ''}'.trim(),
             hint: _failureHint(reason),
@@ -390,7 +390,7 @@ class DashScopeFileTransProvider implements AsrProvider {
         final reason = '${r['code'] ?? ''}${r['message'] ?? ''}';
         cp.asyncTaskId = null;
         if (_fileProblem(reason)) cp.asyncFileUrl = null;
-        throw ProviderException(
+        throw ActionableException(
           '${info.vendor} 转写子任务失败',
           detail: '${r['code'] ?? ''} ${r['message'] ?? ''}'.trim(),
           hint: _failureHint(reason),
@@ -399,7 +399,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     }
     final direct = output['transcription_url'];
     if (direct is String && direct.isNotEmpty) return direct;
-    throw ProviderException(
+    throw ActionableException(
       '${info.vendor} 没有返回结果地址',
       detail: 'task $taskId · ${_clip(jsonEncode(output))}',
     );
@@ -419,7 +419,7 @@ class DashScopeFileTransProvider implements AsrProvider {
       if (response.statusCode == 403 || response.statusCode == 404) {
         cp.asyncTaskId = null;
       }
-      throw ProviderException(
+      throw ActionableException(
         '下载识别结果失败',
         detail: 'HTTP ${response.statusCode} · ${_clip(_bodyText(response))}',
         hint: '结果地址有时效，从识别阶段继续会用已上传的音频重新提交。',
@@ -490,13 +490,13 @@ class DashScopeFileTransProvider implements AsrProvider {
     try {
       return await send();
     } on SocketException catch (e) {
-      throw ProviderException(
+      throw ActionableException(
         '无法连接到 ${info.vendor}（$what）',
         detail: '${endpoint.baseUrl} · $e',
         hint: '检查网络与服务地址；从识别阶段继续会接着上次的任务。',
       );
     } on TimeoutException {
-      throw ProviderException(
+      throw ActionableException(
         '${info.vendor} 响应超时（$what）',
         detail: '超过 ${endpoint.timeout.inSeconds} 秒没有返回',
         hint: '检查网络；从识别阶段继续会接着上次的任务。',
@@ -507,7 +507,7 @@ class DashScopeFileTransProvider implements AsrProvider {
   void _throwIfRejected(http.Response response, {required String what}) {
     final status = response.statusCode;
     if (status == 200) return;
-    throw ProviderException(
+    throw ActionableException(
       switch (status) {
         401 || 403 => '${info.vendor} 拒绝了密钥',
         404 => '${info.vendor} 上找不到该接口',
@@ -553,7 +553,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     try {
       return jsonDecode(_bodyText(response)) as Map<String, Object?>;
     } catch (_) {
-      throw ProviderException(
+      throw ActionableException(
         '${info.vendor} 返回了无法解析的$what',
         detail: _clip(_bodyText(response)),
         hint: '核对服务地址是否为百炼的 API 地址（以 /api/v1 结尾）。',

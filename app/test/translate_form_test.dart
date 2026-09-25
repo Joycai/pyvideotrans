@@ -5,11 +5,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/language.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/features/translate/translate_form.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 /// 可控的解析：每个路径一个 Completer，测试决定什么时候「解析完」。
-class GatedMedia extends Media {
+class GatedFfmpeg extends Ffmpeg {
   final gates = <String, Completer<MediaFileInfo>>{};
 
   @override
@@ -38,10 +38,10 @@ Future<AppSettings> _settings({bool withKey = true}) async {
   return settings;
 }
 
-Future<(TranslateFormController, GatedMedia)> _form({
+Future<(TranslateFormController, GatedFfmpeg)> _form({
   bool withKey = true,
 }) async {
-  final media = GatedMedia();
+  final media = GatedFfmpeg();
   final form = TranslateFormController(
     settings: await _settings(withKey: withKey),
     media: media,
@@ -257,7 +257,7 @@ void main() {
 
     test('提交时记下参数，下次可整份填回；与转写的存档互不影响', () async {
       final settings = await _settings();
-      final media = GatedMedia();
+      final media = GatedFfmpeg();
       final form = TranslateFormController(settings: settings, media: media);
       expect(form.hasLastUsed, isFalse);
       expect(form.applyLastUsed(), isFalse);

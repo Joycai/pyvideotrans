@@ -6,7 +6,7 @@ import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/features/shell/status_bar.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
@@ -37,7 +37,7 @@ void main() {
   late _BlockingRunner runner;
   late TaskQueue queue;
   // 显式给路径：不依赖这台机器装没装 ffmpeg。
-  final media = Media(ffmpegPath: '/x/ffmpeg', ffprobePath: '/x/ffprobe');
+  final media = Ffmpeg(ffmpegPath: '/x/ffmpeg', ffprobePath: '/x/ffprobe');
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});

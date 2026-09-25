@@ -9,10 +9,10 @@ import 'package:subtitle_studio/features/transcribe/new_transcribe_page.dart';
 import 'package:subtitle_studio/features/transcribe/transcribe_form.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
-class FakeMedia extends Media {
+class FakeFfmpeg extends Ffmpeg {
   @override
   bool get available => false;
 
@@ -39,7 +39,7 @@ void main() {
     settings = await AppSettings.load()
       ..setConfig('openai', const ProviderConfig(apiKey: 'sk-test'))
       ..setConfig('deepseek', const ProviderConfig(apiKey: 'sk-test'));
-    final media = FakeMedia();
+    final media = FakeFfmpeg();
     queue = TaskQueue(
       runner: TaskRunner(settings: settings, workDir: work.path, media: media),
       settings: settings,

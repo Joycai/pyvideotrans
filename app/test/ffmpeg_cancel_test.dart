@@ -1,13 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:subtitle_studio/services/media.dart';
-import 'package:subtitle_studio/services/provider_api.dart';
+import 'package:subtitle_studio/domain/task_control.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 
 /// Scoop / Chocolatey 的 ffmpeg.exe 是 shim，真 ffmpeg 是它的子进程。
 /// 这里用不 exec 的 shell 包装器模拟同样的进程树，确认取消时连子进程一起停。
 void main() {
-  final media = Media();
+  final media = Ffmpeg();
   final Object skip = !media.available
       ? '本机没有 ffmpeg'
       : Platform.isWindows
@@ -29,7 +29,7 @@ void main() {
     ]);
     expect(gen.exitCode, 0, reason: '${gen.stderr}');
 
-    final shimmed = Media(ffmpegPath: wrapper.path, ffprobePath: media.ffprobe);
+    final shimmed = Ffmpeg(ffmpegPath: wrapper.path, ffprobePath: media.ffprobe);
     final token = CancellationToken();
     final out = '${dir.path}/out.wav';
     final started = DateTime.now();

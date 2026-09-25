@@ -44,7 +44,7 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
 
     final file = File(audioPath);
     if (!file.existsSync()) {
-      throw ProviderException(
+      throw ActionableException(
         '音频文件不存在',
         detail: audioPath,
         hint: '准备阶段没有产出音频，请从准备阶段继续。',
@@ -73,13 +73,13 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
       final streamed = await _client.send(request).timeout(endpoint.timeout);
       response = await http.Response.fromStream(streamed);
     } on SocketException catch (e) {
-      throw ProviderException(
+      throw ActionableException(
         '无法连接到 ${info.vendor}',
         detail: '${endpoint.baseUrl} · $e',
         hint: '检查网络与服务地址；已完成的阶段已保留，可从识别阶段继续。',
       );
     } on TimeoutException {
-      throw ProviderException(
+      throw ActionableException(
         '${info.vendor} 响应超时',
         detail: '超过 ${endpoint.timeout.inSeconds} 秒没有返回',
         hint: '检查网络；已完成的阶段已保留，可从识别阶段继续。',
@@ -97,7 +97,7 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
       // 没有分段时退回整段文本：至少不丢内容，时间码按音频时长兜底。
       final text = (body['text'] as String?)?.trim() ?? '';
       if (text.isEmpty) {
-        throw const ProviderException(
+        throw const ActionableException(
           '未识别到语音',
           hint: '确认音视频中确有人声，且所选语言与实际语言一致。',
         );
@@ -129,7 +129,7 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
     }
 
     if (cues.isEmpty) {
-      throw const ProviderException('未识别到语音', hint: '确认音视频中确有人声，且所选语言与实际语言一致。');
+      throw const ActionableException('未识别到语音', hint: '确认音视频中确有人声，且所选语言与实际语言一致。');
     }
     return cues;
   }
@@ -164,7 +164,7 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
   void _throwForStatus(http.Response r) {
     if (r.statusCode == 200) return;
     final body = r.body.length > 600 ? '${r.body.substring(0, 600)}…' : r.body;
-    throw ProviderException(
+    throw ActionableException(
       _statusTitle(r.statusCode, info.vendor),
       detail: 'HTTP ${r.statusCode} · $body',
       hint: _statusHint(r.statusCode),
@@ -175,7 +175,7 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
     try {
       return jsonDecode(_bodyText(r)) as Map<String, Object?>;
     } catch (_) {
-      throw ProviderException(
+      throw ActionableException(
         '${info.vendor} 返回了无法解析的内容',
         detail: r.body.length > 600 ? '${r.body.substring(0, 600)}…' : r.body,
         hint: '通常是服务地址填成了网页地址或中转站返回了错误页。核对服务地址。',
@@ -249,7 +249,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
           )
           .timeout(endpoint.timeout);
     } on SocketException catch (e) {
-      throw ProviderException(
+      throw ActionableException(
         '无法连接到 ${info.vendor}',
         detail: '${endpoint.baseUrl} · $e',
         hint: info.runsLocally
@@ -257,7 +257,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
             : '检查网络与服务地址；已翻译的条目已保留，可从翻译阶段继续。',
       );
     } on TimeoutException {
-      throw ProviderException(
+      throw ActionableException(
         '${info.vendor} 响应超时',
         detail: '超过 ${endpoint.timeout.inSeconds} 秒没有返回',
         hint: '检查网络；已翻译的条目已保留，可从翻译阶段继续。',
@@ -270,7 +270,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
       final body = response.body.length > 600
           ? '${response.body.substring(0, 600)}…'
           : response.body;
-      throw ProviderException(
+      throw ActionableException(
         _statusTitle(response.statusCode, info.vendor),
         detail: 'HTTP ${response.statusCode} · $body',
         hint: _statusHint(response.statusCode),
@@ -281,7 +281,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
     try {
       body = jsonDecode(_bodyText(response)) as Map<String, Object?>;
     } catch (_) {
-      throw ProviderException(
+      throw ActionableException(
         '${info.vendor} 返回了无法解析的内容',
         detail: response.body,
         hint: '核对服务地址是否为 OpenAI 兼容接口的根地址。',
@@ -310,7 +310,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
     }
 
     if (content == null || content.trim().isEmpty) {
-      throw const ProviderException(
+      throw const ActionableException(
         '模型返回了空内容',
         hint: '多为内容审核拦截或上下文超长。减小每批条数后重试。',
         batchTooLarge: true,
@@ -319,7 +319,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
 
     final decoded = TranslationProtocol.decode(content, lines.length);
     if (decoded == null) {
-      throw ProviderException(
+      throw ActionableException(
         '译文与原文条数对不上',
         detail:
             '期望 ${lines.length} 条，模型返回：\n'

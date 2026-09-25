@@ -102,4 +102,26 @@ void main() {
     expect(task.stages[TaskStage.prepare]!.state, StageState.pending);
     expect(task.log, isEmpty);
   });
+
+  // 阶段记录里一个字段坏了，不该连累整份任务读不回来。
+  test('阶段记录里未知的状态名与类型不对的字段按默认处理', () {
+    final task = SubtitleTask.fromJson({
+      'id': 'j3',
+      'sourcePath': '/a.mp4',
+      'stages': {
+        'queued': {'state': 'done', 'durationMs': 1200, 'note': '好'},
+        'prepare': {'state': 'melted', 'durationMs': 'slow', 'note': 7},
+        'recognize': {'durationMs': 1.5},
+      },
+    }, fallbackOptions: testOptions());
+    final queued = task.stages[TaskStage.queued]!;
+    expect(queued.state, StageState.done);
+    expect(queued.duration, const Duration(milliseconds: 1200));
+    expect(queued.note, '好');
+    final prepare = task.stages[TaskStage.prepare]!;
+    expect(prepare.state, StageState.pending);
+    expect(prepare.duration, isNull);
+    expect(prepare.note, isNull);
+    expect(task.stages[TaskStage.recognize]!.state, StageState.pending);
+  });
 }

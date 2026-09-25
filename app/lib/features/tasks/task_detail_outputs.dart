@@ -6,7 +6,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../domain/paths.dart';
 import '../../domain/task.dart';
-import '../../services/media.dart';
+import '../../services/ffmpeg.dart';
 import '../../services/reveal.dart';
 
 class TaskOutputs extends StatelessWidget {

@@ -7,12 +7,12 @@ import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/features/settings/section_outline.dart';
 import 'package:subtitle_studio/features/settings/settings_page.dart';
 import 'package:subtitle_studio/features/settings/settings_section.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 /// 「环境」分区要显示 ffmpeg 路径。给一份写死的，测试就不去碰真实磁盘，
 /// 结果也不随测试机装没装 ffmpeg 变。
-Media _fixedMedia() => Media(
+Ffmpeg _fixedFfmpeg() => Ffmpeg(
   ffmpegPath: '/usr/local/bin/ffmpeg',
   ffprobePath: '/usr/local/bin/ffprobe',
 );
@@ -40,7 +40,7 @@ void main() {
           // 左边留出 72px Rail + 12px 间隙，面板宽度才与真实外壳一致。
           body: Padding(
             padding: const EdgeInsets.fromLTRB(96, 12, 12, 12),
-            child: SettingsPage(settings: settings, media: _fixedMedia()),
+            child: SettingsPage(settings: settings, media: _fixedFfmpeg()),
           ),
         ),
       ),

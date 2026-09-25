@@ -83,7 +83,7 @@ Python 后端都说 OpenAI 兼容协议，于是共用 `OpenAiCompatibleAsrProvi
 `services/translation_protocol.dart`。大模型翻译字幕最常见的故障不是翻错，而是**条数对不上**
 （合并两行、丢语气词、把成分挪到下一行），一旦发生后面所有字幕的时间轴全错位。
 协议给每行打 `§N§` 行号，返回后逐行核对：条数不符、行号越界或重复就判这批不可信，
-**减半批量重试**（`ProviderException.batchTooLarge`），绝不把错位的译文写进字幕。
+**减半批量重试**（`ActionableException.batchTooLarge`），绝不把错位的译文写进字幕。
 
 ### 折行只发生在导出时
 

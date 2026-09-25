@@ -5,9 +5,9 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dashed_border.dart';
+import '../../core/widgets/indicators.dart';
 import '../../domain/transcode/probe.dart';
 import 'transcode_form.dart';
-import 'transcode_widgets.dart';
 
 class TranscodeFileList extends StatelessWidget {
   const TranscodeFileList({
@@ -370,6 +370,6 @@ class _StateChip extends StatelessWidget {
         cs.onErrorContainer,
       ),
     };
-    return TranscodeChip(label: label, icon: icon, bg: bg, fg: fg);
+    return StateChip(label: label, icon: icon, bg: bg, fg: fg);
   }
 }

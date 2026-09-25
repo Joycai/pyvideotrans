@@ -36,14 +36,14 @@ class LocalBackend {
 
   /// GET {baseUrl}/local/health
   Future<LocalBackendHealth> checkHealth() async =>
-      throw const ProviderException(
+      throw const ActionableException(
         '本地模型服务尚未实施',
         hint: '第一期只对接在线 API。方案见 docs/local-backend.md。',
       );
 
   /// GET {baseUrl}/local/models
   Future<List<LocalModel>> listModels() async =>
-      throw const ProviderException(
+      throw const ActionableException(
         '本地模型服务尚未实施',
         hint: '第一期只对接在线 API。方案见 docs/local-backend.md。',
       );
@@ -51,7 +51,7 @@ class LocalBackend {
   /// POST {baseUrl}/local/models/{id}/download —— 流式返回下载进度。
   Stream<double> downloadModel(String modelId) =>
       Stream.error(
-        const ProviderException(
+        const ActionableException(
           '本地模型服务尚未实施',
           hint: '第一期只对接在线 API。方案见 docs/local-backend.md。',
         ),

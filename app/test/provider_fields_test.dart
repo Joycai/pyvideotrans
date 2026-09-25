@@ -119,7 +119,7 @@ void main() {
       ),
     );
     expect(find.byType(AppDropdown<String>), findsNothing);
-    expect(find.byType(ModelTextField), findsOneWidget);
+    expect(find.byType(SingleLineField), findsOneWidget);
 
     settings.setConfig(info.id, const ProviderConfig(model: 'whisper-x'));
     await pump(
@@ -131,7 +131,7 @@ void main() {
         onChanged: (_) {},
       ),
     );
-    expect(find.byType(ModelTextField), findsNothing);
+    expect(find.byType(SingleLineField), findsNothing);
     expect(dropdown(tester).value, 'whisper-x');
     expect(entries(tester), ['whisper-x']);
   });

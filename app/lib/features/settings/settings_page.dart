@@ -6,7 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/glass_panel.dart';
-import '../../services/media.dart';
+import '../../services/ffmpeg.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
 import '../shared/page_chrome.dart';
@@ -47,7 +47,7 @@ class SettingsPage extends StatefulWidget {
 
   /// 「环境」分区要显示 ffmpeg 找没找到。由外面传进来而不是自己 new 一个：
   /// 截图测试得能塞一份固定的，否则截图会随测试机装没装 ffmpeg 而变。
-  final Media media;
+  final Ffmpeg media;
 
   @override
   State<SettingsPage> createState() => SettingsPageState();

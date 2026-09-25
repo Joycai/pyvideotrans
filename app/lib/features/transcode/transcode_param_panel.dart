@@ -10,6 +10,7 @@ import '../../domain/task_options.dart';
 import '../../domain/transcode/codecs.dart';
 import '../../domain/transcode/options.dart';
 import '../shared/command_block.dart';
+import '../shared/new_task_panels.dart';
 import 'transcode_form.dart';
 import 'transcode_video_section.dart';
 import 'transcode_widgets.dart';
@@ -26,104 +27,31 @@ class TranscodeParamPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = context.colors;
     final o = form.options;
-    final footer = form.footer;
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: 60,
-            child: Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.s4,
-                right: AppSpacing.s2,
+    return NewTaskParamPanel(
+      onReset: form.reset,
+      sections: [
+        _OutputSection(form: form),
+        if (o.remux)
+          const TranscodeSection(
+            title: '音视频',
+            children: [
+              TranscodeHint(
+                '不重新编码，原样复制音视频流到新容器，速度快、画质无损；字幕轨不带入',
               ),
-              child: Row(
-                children: [
-                  Text('参数', style: context.texts.titleMedium),
-                  const Spacer(),
-                  QuietButton(label: '重置为默认', onPressed: form.reset),
-                ],
-              ),
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _OutputSection(form: form),
-                  if (o.remux)
-                    const TranscodeSection(
-                      title: '音视频',
-                      children: [
-                        TranscodeHint(
-                          '不重新编码，原样复制音视频流到新容器，速度快、画质无损；字幕轨不带入',
-                        ),
-                      ],
-                    )
-                  else ...[
-                    TranscodeVideoSection(form: form),
-                    _AudioSection(form: form),
-                  ],
-                  _AdvancedSection(form: form),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.s4,
-              vertical: AppSpacing.s3,
-            ),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerLowest,
-              border: Border(top: BorderSide(color: cs.outlineVariant)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        footer.icon,
-                        size: 16,
-                        weight: 400,
-                        color: footer.error ? cs.error : cs.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          footer.text,
-                          style: context.texts.bodySmall?.copyWith(
-                            color: footer.error
-                                ? cs.error
-                                : cs.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.s3),
-                PrimaryButton(
-                  label: '开始转码 · ${form.enqueueable.length}',
-                  icon: Symbols.video_settings,
-                  onPressed: form.canStart ? onStart : null,
-                ),
-              ],
-            ),
-          ),
+            ],
+          )
+        else ...[
+          TranscodeVideoSection(form: form),
+          _AudioSection(form: form),
         ],
+        _AdvancedSection(form: form),
+      ],
+      footer: form.footer,
+      action: PrimaryButton(
+        label: '开始转码 · ${form.enqueueable.length}',
+        icon: Symbols.video_settings,
+        onPressed: form.canStart ? onStart : null,
       ),
     );
   }
@@ -327,7 +255,7 @@ class _AdvancedSection extends StatelessWidget {
                 ),
               LabeledField(
                 label: '文件名后缀',
-                child: _TextInput(
+                child: SingleLineField(
                   key: const ValueKey('suffix'),
                   value: o.suffix ?? '',
                   hint: o.remux ? 'remux' : o.effectiveVideo.suffix,
@@ -357,11 +285,15 @@ class _AdvancedSection extends StatelessWidget {
               ),
               LabeledField(
                 label: '额外参数',
-                child: _TextInput(
+                child: SingleLineField(
                   key: const ValueKey('extra'),
                   value: o.extraArgs,
                   hint: '-x265-params aq-mode=3',
-                  mono: true,
+                  style: AppTextStyles.timecode.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    color: cs.onSurface,
+                  ),
                   onChanged: (v) => form.update((o) => o.copyWith(extraArgs: v)),
                 ),
               ),
@@ -382,69 +314,4 @@ class _AdvancedSection extends StatelessWidget {
             ],
     );
   }
-}
-
-/// 单行输入。外观同 [ControlSurface]。
-class _TextInput extends StatefulWidget {
-  const _TextInput({
-    super.key,
-    required this.value,
-    required this.hint,
-    required this.onChanged,
-    this.mono = false,
-  });
-
-  final String value;
-  final String hint;
-  final ValueChanged<String> onChanged;
-  final bool mono;
-
-  @override
-  State<_TextInput> createState() => _TextInputState();
-}
-
-class _TextInputState extends State<_TextInput> {
-  late final _controller = TextEditingController(text: widget.value);
-  final _focus = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() => setState(() {}));
-  }
-
-  @override
-  void didUpdateWidget(_TextInput oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 「重置为默认」「上次参数」从外面改了值，没在输入时同步进来。
-    if (!_focus.hasFocus && widget.value != _controller.text) {
-      _controller.text = widget.value;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => ControlSurface(
-    padding: const EdgeInsets.symmetric(horizontal: 12),
-    focused: _focus.hasFocus,
-    child: TextField(
-      controller: _controller,
-      focusNode: _focus,
-      style: widget.mono
-          ? AppTextStyles.timecode.copyWith(
-              fontSize: 13,
-              fontWeight: FontWeight.w400,
-              color: context.colors.onSurface,
-            )
-          : context.texts.bodyMedium,
-      decoration: bareInputDecoration(context, hint: widget.hint),
-      onChanged: widget.onChanged,
-    ),
-  );
 }

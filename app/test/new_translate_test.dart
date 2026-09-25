@@ -5,12 +5,12 @@ import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/core/widgets/buttons.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/features/translate/new_translate_dialog.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 /// 不碰文件系统的探测。名字里带 broken 的当作解析不出内容的字幕，
 /// 用来构造「拖进来一个不是字幕的 .srt」那种场景。
-class FakeMedia extends Media {
+class FakeFfmpeg extends Ffmpeg {
   @override
   Future<MediaFileInfo> probeFile(String path) async {
     final broken = path.contains('broken');
@@ -61,7 +61,7 @@ void main() {
                 context,
                 settings: settings,
                 initialPaths: paths,
-                media: FakeMedia(),
+                media: FakeFfmpeg(),
                 onOpenSettings: () => openedSettings = true,
                 onSwitchToTranscribe: (m) => switchedToTranscribe = m,
               );

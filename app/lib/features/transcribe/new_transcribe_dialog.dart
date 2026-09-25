@@ -9,9 +9,10 @@ import '../../core/widgets/buttons.dart';
 import '../../core/widgets/glass_panel.dart';
 import '../../core/widgets/text_focus.dart';
 import '../../domain/srt.dart';
-import '../../services/media.dart';
+import '../../services/ffmpeg.dart';
 import '../../services/settings.dart';
 import '../shared/enqueue_request.dart';
+import '../shared/new_task_panels.dart';
 import 'transcribe_advanced_section.dart';
 import 'transcribe_footer.dart';
 import 'transcribe_form.dart';
@@ -32,7 +33,7 @@ Future<EnqueueRequest?> showNewTranscribeDialog(
   BuildContext context, {
   required AppSettings settings,
   List<String> initialPaths = const [],
-  Media? media,
+  Ffmpeg? media,
   VoidCallback? onOpenSettings,
 }) => showDialog<EnqueueRequest>(
   context: context,
@@ -56,7 +57,7 @@ class NewTranscribeDialog extends StatefulWidget {
 
   final AppSettings settings;
   final List<String> initialPaths;
-  final Media? media;
+  final Ffmpeg? media;
 
   /// 缺密钥时那个「去设置」。为 null 就只显示文字 —— 宁可不给链接，
   /// 也不要给一个点了没反应的链接。
@@ -320,7 +321,7 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
     ),
     child: Row(
       children: [
-        Expanded(child: TranscribeFooterLine(form: _form)),
+        Expanded(child: TaskFooterLine(_form.footer)),
         const SizedBox(width: AppSpacing.s4),
         ControlButton(
           label: '取消',

@@ -90,7 +90,7 @@ class DashScopeAsrProvider implements AsrProvider {
   }) async {
     token.throwIfCancelled();
     if (!File(audioPath).existsSync()) {
-      throw ProviderException(
+      throw ActionableException(
         '音频文件不存在',
         detail: audioPath,
         hint: '准备阶段没有产出音频，请从准备阶段继续。',
@@ -100,7 +100,7 @@ class DashScopeAsrProvider implements AsrProvider {
     onProgress(0, 1, note: '按静音切分音频');
     final clips = await splitter.split(audioPath, token: token);
     if (clips.isEmpty) {
-      throw const ProviderException('未识别到语音', hint: '整段音频都是静音。确认音视频中确有人声。');
+      throw const ActionableException('未识别到语音', hint: '整段音频都是静音。确认音视频中确有人声。');
     }
 
     final code = language.split('-').first.toLowerCase();
@@ -146,7 +146,7 @@ class DashScopeAsrProvider implements AsrProvider {
               // 限流与断网不是这一段的错，不计失败：非自动模式停下来
               // 让用户稍后继续；自动模式等一等再试同一段。
               if (!cp.autoRetry) {
-                throw ProviderException(
+                throw ActionableException(
                   reason.title,
                   detail: reason.detail,
                   hint: reason.hint,
@@ -163,7 +163,7 @@ class DashScopeAsrProvider implements AsrProvider {
               // 鉴权、地址这类错误换一段也不会好；非自动模式下任何请求
               // 错误都停下来。已识别的段留在检查点里，续跑从这段接着来。
               if (fatal || !cp.autoRetry) {
-                throw ProviderException(
+                throw ActionableException(
                   error.title,
                   detail: error.detail,
                   hint: error.hint,
@@ -205,7 +205,7 @@ class DashScopeAsrProvider implements AsrProvider {
 
     final failed = cp.pending.length;
     if (failed > 0) {
-      throw ProviderException(
+      throw ActionableException(
         '有 $failed 段识别失败',
         detail: lastError,
         hint:
@@ -260,7 +260,7 @@ class DashScopeAsrProvider implements AsrProvider {
     }
 
     if (cues.isEmpty) {
-      throw const ProviderException('未识别到语音', hint: '确认音视频中确有人声，且所选语言与实际语言一致。');
+      throw const ActionableException('未识别到语音', hint: '确认音视频中确有人声，且所选语言与实际语言一致。');
     }
     if (diarize && cues.every((c) => c.speaker == null)) {
       onProgress(

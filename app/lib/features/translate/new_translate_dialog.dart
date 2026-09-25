@@ -10,10 +10,12 @@ import '../../core/widgets/glass_panel.dart';
 import '../../core/widgets/text_focus.dart';
 import '../../domain/numbers.dart';
 import '../../domain/srt.dart';
-import '../../services/media.dart';
+import '../../services/ffmpeg.dart';
 import '../../services/settings.dart';
 import '../shared/enqueue_request.dart';
+import '../shared/new_task_panels.dart';
 import 'translate_advanced_section.dart';
+import 'translate_file_notes.dart';
 import 'translate_footer.dart';
 import 'translate_form.dart';
 import 'translate_language_section.dart';
@@ -32,7 +34,7 @@ Future<EnqueueRequest?> showNewTranslateDialog(
   BuildContext context, {
   required AppSettings settings,
   List<String> initialPaths = const [],
-  Media? media,
+  Ffmpeg? media,
   VoidCallback? onOpenSettings,
   ValueChanged<List<String>>? onSwitchToTranscribe,
 }) => showDialog<EnqueueRequest>(
@@ -59,7 +61,7 @@ class NewTranslateDialog extends StatefulWidget {
 
   final AppSettings settings;
   final List<String> initialPaths;
-  final Media? media;
+  final Ffmpeg? media;
 
   /// 缺密钥时那个「去设置」。为 null 就只显示文字。
   final VoidCallback? onOpenSettings;
@@ -367,9 +369,7 @@ class NewTranslateDialogState extends State<NewTranslateDialog> {
     ),
     child: Row(
       children: [
-        Expanded(
-          child: TranslateFooterLine(form: _form, line: _form.compactFooter),
-        ),
+        Expanded(child: TaskFooterLine(_form.compactFooter)),
         const SizedBox(width: AppSpacing.s4),
         ControlButton(
           label: '取消',

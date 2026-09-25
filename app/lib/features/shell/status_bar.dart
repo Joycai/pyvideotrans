@@ -7,7 +7,7 @@ import '../../core/widgets/glass_panel.dart';
 import '../../core/widgets/indicators.dart';
 import '../../domain/task.dart';
 import '../../pipeline/task_queue.dart';
-import '../../services/media.dart';
+import '../../services/ffmpeg.dart';
 import '../../services/provider_api.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
@@ -27,7 +27,7 @@ class StatusSnapshot {
   /// 按当前设置、ffmpeg 与队列拼出一份快照。[note] 由当前页面决定。
   factory StatusSnapshot.from({
     required AppSettings settings,
-    required Media media,
+    required Ffmpeg media,
     required TaskQueue queue,
     String? note,
   }) {

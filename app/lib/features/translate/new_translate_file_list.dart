@@ -5,9 +5,9 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dashed_border.dart';
+import '../../core/widgets/indicators.dart';
 import '../../domain/numbers.dart';
 import '../../domain/srt.dart';
-import 'translate_file_notes.dart';
 import 'translate_form.dart';
 
 class NewTranslateFileList extends StatelessWidget {
@@ -15,94 +15,78 @@ class NewTranslateFileList extends StatelessWidget {
     super.key,
     required this.form,
     required this.dragging,
-    this.onSwitchToTranscribe,
   });
 
   final TranslateFormController form;
   final bool dragging;
-  final VoidCallback? onSwitchToTranscribe;
 
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
     final files = form.files;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.s4,
-        0,
-        AppSpacing.s4,
-        AppSpacing.s4,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TranslateFileNotes(form: form, onSwitchToTranscribe: onSwitchToTranscribe),
-          Flexible(
-            child: Container(
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                border: Border.all(color: cs.outlineVariant),
-                borderRadius: BorderRadius.circular(AppRadius.md + 2),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const _HeaderRow(),
-                  Flexible(
-                    child: ListView(
-                      shrinkWrap: true,
-                      padding: EdgeInsets.zero,
-                      children: [
-                        for (final file in files)
-                          _FileRow(
-                            file: file,
-                            onRemove: () => form.remove(file),
-                          ),
-                      ],
-                    ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Flexible(
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              border: Border.all(color: cs.outlineVariant),
+              borderRadius: BorderRadius.circular(AppRadius.md + 2),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const _HeaderRow(),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    children: [
+                      for (final file in files)
+                        _FileRow(file: file, onRemove: () => form.remove(file)),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: AppSpacing.s3),
-          Text(
-            form.applyNote,
-            style: context.texts.bodySmall?.copyWith(
-              color: cs.onSurfaceVariant,
+        ),
+        const SizedBox(height: AppSpacing.s3),
+        Text(
+          form.applyNote,
+          style: context.texts.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+        ),
+        const Spacer(),
+        const SizedBox(height: AppSpacing.s3),
+        SizedBox(
+          height: 44,
+          child: CustomPaint(
+            painter: DashedBorder(
+              color: dragging ? cs.primary : cs.outline,
+              radius: AppRadius.md,
             ),
-          ),
-          const Spacer(),
-          const SizedBox(height: AppSpacing.s3),
-          SizedBox(
-            height: 44,
-            child: CustomPaint(
-              painter: DashedBorder(
-                color: dragging ? cs.primary : cs.outline,
-                radius: AppRadius.md,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Symbols.subtitles,
-                    size: 20,
-                    weight: 400,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Symbols.subtitles,
+                  size: 20,
+                  weight: 400,
+                  color: cs.onSurfaceVariant,
+                ),
+                const SizedBox(width: AppSpacing.s2),
+                Text(
+                  dragging ? '松开以添加文件' : '继续拖入可追加文件',
+                  style: context.texts.bodyMedium?.copyWith(
                     color: cs.onSurfaceVariant,
                   ),
-                  const SizedBox(width: AppSpacing.s2),
-                  Text(
-                    dragging ? '松开以添加文件' : '继续拖入可追加文件',
-                    style: context.texts.bodyMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -334,24 +318,6 @@ class _StateChip extends StatelessWidget {
         cs.onErrorContainer,
       ),
     };
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        height: 24,
-        padding: const EdgeInsets.only(left: 6, right: AppSpacing.s2),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(AppRadius.xs),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, weight: 400, color: fg),
-            const SizedBox(width: AppSpacing.s1),
-            Text(label, style: context.texts.labelMedium?.copyWith(color: fg)),
-          ],
-        ),
-      ),
-    );
+    return StateChip(label: label, icon: icon, bg: bg, fg: fg);
   }
 }

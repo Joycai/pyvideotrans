@@ -9,14 +9,14 @@ import 'package:subtitle_studio/domain/transcode/encoder_catalog.dart';
 import 'package:subtitle_studio/domain/transcode/options.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 import 'package:subtitle_studio/services/transcoder.dart';
 
 /// 真的跑 ffmpeg 的端到端测试：入队 → 准备 → 转码 → 完成，核对产物的编码。
 /// 本机没有 ffmpeg 时整组跳过。
 void main() {
-  final media = Media();
+  final media = Ffmpeg();
   final Object skip = media.available ? false : '本机没有 ffmpeg';
   final Object macSkip = skip != false
       ? skip
@@ -273,7 +273,7 @@ void main() {
     final wrapper = File('${dir.path}/ffmpeg-shim');
     await wrapper.writeAsString('#!/bin/sh\n"${media.ffmpeg}" "\$@"\n');
     await Process.run('chmod', ['+x', wrapper.path]);
-    final shimmed = Media(ffmpegPath: wrapper.path, ffprobePath: media.ffprobe);
+    final shimmed = Ffmpeg(ffmpegPath: wrapper.path, ffprobePath: media.ffprobe);
     final settings = await AppSettings.load();
     final shimQueue = TaskQueue(
       runner: TaskRunner(

@@ -7,7 +7,7 @@ import '../../domain/numbers.dart';
 import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
 import '../../domain/task_options.dart';
-import '../../services/media.dart';
+import '../../services/ffmpeg.dart';
 import '../../services/readiness.dart';
 import '../../services/settings.dart';
 import '../shared/enqueue_request.dart';
@@ -57,13 +57,13 @@ class StagedSubtitle {
 class TranslateFormController extends ChangeNotifier {
   TranslateFormController({
     required this.settings,
-    Media? media,
+    Ffmpeg? media,
     TaskOptions? initial,
-  }) : media = media ?? Media(),
+  }) : media = media ?? Ffmpeg(),
        _options = initial ?? settings.defaultTaskOptions();
 
   final AppSettings settings;
-  final Media media;
+  final Ffmpeg media;
 
   TaskOptions _options;
   TaskOptions get options => _options;

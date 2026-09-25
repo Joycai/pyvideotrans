@@ -97,39 +97,3 @@ class TranscodeHint extends StatelessWidget {
     ),
   );
 }
-
-class TranscodeChip extends StatelessWidget {
-  const TranscodeChip({
-    super.key,
-    required this.label,
-    required this.icon,
-    required this.bg,
-    required this.fg,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color bg;
-  final Color fg;
-
-  @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.centerLeft,
-    child: Container(
-      height: 24,
-      padding: const EdgeInsets.only(left: 6, right: AppSpacing.s2),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(AppRadius.xs),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, weight: 400, color: fg),
-          const SizedBox(width: AppSpacing.s1),
-          Text(label, style: context.texts.labelMedium?.copyWith(color: fg)),
-        ],
-      ),
-    ),
-  );
-}

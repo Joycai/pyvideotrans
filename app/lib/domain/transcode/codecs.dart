@@ -64,9 +64,6 @@ enum OutputContainer {
       'wmavoice', 'cook', 'ra_144', 'ra_288', 'sipr', 'atrac3', 'truehd',
     },
   }.contains(codecName);
-
-  static OutputContainer byName(Object? name) =>
-      values.where((c) => c.name == name).firstOrNull ?? mp4;
 }
 
 /// 视频编码。
@@ -88,9 +85,6 @@ enum VideoCodec {
     VideoCodec.copy => 'copy',
     _ => name,
   };
-
-  static VideoCodec byName(Object? name) =>
-      values.where((c) => c.name == name).firstOrNull ?? h264;
 }
 
 /// 音频编码。
@@ -115,7 +109,4 @@ enum AudioCodec {
     AudioCodec.opus => ('opus', ['-strict', '-2']),
     _ => null,
   };
-
-  static AudioCodec byName(Object? name) =>
-      values.where((c) => c.name == name).firstOrNull ?? aac;
 }

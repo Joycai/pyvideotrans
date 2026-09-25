@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import '../domain/speech_segments.dart';
-import 'media.dart';
-import 'provider_api.dart';
+import '../domain/task_control.dart';
+import 'ffmpeg.dart';
 
 /// 切出来的一段音频：落盘的文件，以及它在原音频里的位置。
 class AudioClip {
@@ -47,7 +47,7 @@ class FfmpegAudioSplitter implements AudioSplitter {
     this.padMs = 200,
   });
 
-  final Media media;
+  final Ffmpeg media;
   final int maxMs;
   final int minMs;
 
@@ -62,7 +62,7 @@ class FfmpegAudioSplitter implements AudioSplitter {
   }) async {
     final total = await media.probeDuration(audioPath);
     if (total == null) {
-      throw ProviderException(
+      throw ActionableException(
         '读不到音频时长',
         detail: audioPath,
         hint: '准备阶段产出的音频可能已损坏，请从准备阶段继续。',
@@ -77,7 +77,7 @@ class FfmpegAudioSplitter implements AudioSplitter {
       minMs: minMs,
     );
     if (segments.isEmpty) {
-      throw const ProviderException(
+      throw const ActionableException(
         '未识别到语音',
         hint: '整段音频都是静音。确认音视频中确有人声。',
       );

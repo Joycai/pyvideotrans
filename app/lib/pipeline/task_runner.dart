@@ -7,7 +7,7 @@ import '../domain/segmenter.dart';
 import '../domain/srt.dart';
 import '../domain/task.dart';
 import '../domain/task_options.dart';
-import '../services/media.dart';
+import '../services/ffmpeg.dart';
 import '../services/provider_api.dart';
 import '../services/registry.dart';
 import '../services/settings.dart';
@@ -36,14 +36,14 @@ class TaskRunner {
   TaskRunner({
     required AppSettings settings,
     required String workDir,
-    Media? media,
+    Ffmpeg? media,
     Transcoder? transcoder,
     AsrFactory? asrFactory,
     TranslationFactory? translationFactory,
   }) : this._(
          settings: settings,
          workDir: workDir,
-         media: media ?? Media(),
+         media: media ?? Ffmpeg(),
          transcoder: transcoder,
          asrFactory: asrFactory,
          translationFactory: translationFactory,
@@ -66,7 +66,7 @@ class TaskRunner {
   /// 每个任务的中间产物目录（抽出的音频、阶段快照）。
   final String workDir;
 
-  final Media media;
+  final Ffmpeg media;
 
   /// 转码任务用它探测源文件与跑 ffmpeg。
   final Transcoder transcoder;
@@ -139,7 +139,7 @@ class TaskRunner {
       task.status = TaskStatus.cancelled;
       _markCurrent(task, StageState.cancelled, '${task.percentLabel} 时手动停止');
       task.note('用户取消；已完成阶段的结果已保留', LogLevel.warn);
-    } on ProviderException catch (e) {
+    } on ActionableException catch (e) {
       task.status = TaskStatus.failed;
       _markCurrent(task, StageState.failed, e.message);
       task.error = TaskError(
@@ -194,7 +194,7 @@ class TaskRunner {
       }
       final cues = Srt.parse(text);
       if (cues.isEmpty) {
-        throw const ProviderException(
+        throw const ActionableException(
           '字幕文件里没有可用的条目',
           hint: '确认文件是 SRT / VTT 且时间码格式正确。',
         );
@@ -362,14 +362,14 @@ class TaskRunner {
             token: token,
           );
           if (result.length != lines.length) {
-            throw ProviderException(
+            throw ActionableException(
               '译文与原文条数对不上',
               detail: '期望 ${lines.length} 条，实际收到 ${result.length} 条',
               hint: '模型合并或丢弃了字幕行。流水线会自动减半批量重试。',
               batchTooLarge: true,
             );
           }
-        } on ProviderException catch (e) {
+        } on ActionableException catch (e) {
           // 只有「一批给太多了」才值得减半重试；网络和鉴权错误减半没有意义，
           // 直接失败让用户去修，已翻译的条目留在 document 里供续跑。
           if (!e.batchTooLarge || lines.length == 1) rethrow;

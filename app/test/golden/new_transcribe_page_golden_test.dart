@@ -16,7 +16,7 @@ import 'package:subtitle_studio/features/transcribe/new_transcribe_page.dart';
 import 'package:subtitle_studio/features/transcribe/transcribe_form.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 /// 与 render_test.dart 同样的字体处理：测试默认字体不含汉字。
@@ -42,7 +42,7 @@ ThemeData _readable(ThemeData theme) => theme.copyWith(
 );
 
 /// 设计稿里的三个文件：两个探完，`product_demo` 永远停在「探测中」。
-class _FakeMedia extends Media {
+class _FakeFfmpeg extends Ffmpeg {
   static const _known = {
     'interview_ep12.mp4': (Duration(minutes: 48, seconds: 12), 1288490188),
     'lecture_week3.m4a': (Duration(hours: 1, minutes: 32, seconds: 5), 92274688),
@@ -83,7 +83,7 @@ void main() {
       ..asrProviderId = variant == 'C' ? 'groq' : 'dashscope_qwen_asr'
       ..setConfig('dashscope_qwen_asr', const ProviderConfig(apiKey: 'sk-test'))
       ..setConfig('deepseek', const ProviderConfig(apiKey: 'sk-test'));
-    final media = _FakeMedia();
+    final media = _FakeFfmpeg();
     final form = TranscribeFormController(settings: settings, media: media);
     addTearDown(form.dispose);
     final queue = TaskQueue(

@@ -9,7 +9,7 @@ import '../domain/media_kinds.dart';
 import '../domain/paths.dart';
 import '../domain/speech_segments.dart';
 import '../domain/srt.dart';
-import 'provider_api.dart';
+import '../domain/task_control.dart';
 
 /// 文件列表里一行要显示的东西。
 class MediaFileInfo {
@@ -62,8 +62,8 @@ class MediaFileInfo {
 /// 这样识别阶段失败重试时不需要重新抽。
 /// 可监听：投放目录里换了东西之后状态栏那行「ffmpeg · 就绪 / 未找到」要跟着变，
 /// 否则设置页已经显示「已找到」、底部还写着「未找到」，看着像没生效。
-class Media extends ChangeNotifier {
-  Media({String? ffmpegPath, String? ffprobePath})
+class Ffmpeg extends ChangeNotifier {
+  Ffmpeg({String? ffmpegPath, String? ffprobePath})
     : _injectedFfmpeg = ffmpegPath,
       _injectedFfprobe = ffprobePath,
       _ffmpeg = ffmpegPath,
@@ -80,7 +80,7 @@ class Media extends ChangeNotifier {
   /// 丢进来即可。由 main 在拿到应用支持目录后设置一次。
   ///
   /// 做成进程级静态量是因为它和 [Platform.resolvedExecutable] 一样属于环境常量，
-  /// 而 `Media` 在几个表单里有 `media ?? Media()` 的兜底构造 —— 挂在实例上，
+  /// 而 `Ffmpeg` 在几个表单里有 `media ?? Ffmpeg()` 的兜底构造 —— 挂在实例上，
   /// 那些兜底出来的实例就看不见它了。
   ///
   /// 不用应用安装目录：Windows 上它在 Program Files 下，用户往里拖文件会撞 UAC；
@@ -119,7 +119,7 @@ class Media extends ChangeNotifier {
     try {
       ffmpeg;
       return true;
-    } on ProviderException {
+    } on ActionableException {
       return false;
     }
   }
@@ -129,7 +129,7 @@ class Media extends ChangeNotifier {
   String? get ffmpegOrNull {
     try {
       return ffmpeg;
-    } on ProviderException {
+    } on ActionableException {
       return null;
     }
   }
@@ -195,7 +195,7 @@ class Media extends ChangeNotifier {
       // 落到下面统一报错。
     }
 
-    throw ProviderException(
+    throw ActionableException(
       '找不到 $name',
       detail: '已查找：'
           '${dropIn == null ? '' : '$dropIn、'}'
@@ -234,7 +234,7 @@ class Media extends ChangeNotifier {
       return seconds == null
           ? null
           : Duration(milliseconds: (seconds * 1000).round());
-    } on ProviderException {
+    } on ActionableException {
       return null;
     } on ProcessException {
       return null;
@@ -404,7 +404,7 @@ class Media extends ChangeNotifier {
     token.throwIfCancelled();
     if (exitCode != 0) {
       final tail = stderr.toString().trimRight();
-      throw ProviderException(
+      throw ActionableException(
         '$what失败',
         detail: tail.length > 600 ? '…${tail.substring(tail.length - 600)}' : tail,
         hint: '准备阶段产出的音频可能已损坏，请从准备阶段继续。',
@@ -422,7 +422,7 @@ class Media extends ChangeNotifier {
     token.throwIfCancelled();
 
     if (!File(sourcePath).existsSync()) {
-      throw ProviderException(
+      throw ActionableException(
         '源文件不存在',
         detail: sourcePath,
         hint: '文件可能已被移动或删除。重新选择文件。',
@@ -458,7 +458,7 @@ class Media extends ChangeNotifier {
 
     if (exitCode != 0) {
       final tail = stderr.toString().trimRight();
-      throw ProviderException(
+      throw ActionableException(
         '抽取音频失败',
         detail: tail.length > 600
             ? '…${tail.substring(tail.length - 600)}'
@@ -469,7 +469,7 @@ class Media extends ChangeNotifier {
 
     final out = File(outputPath);
     if (!out.existsSync() || out.lengthSync() == 0) {
-      throw const ProviderException(
+      throw const ActionableException(
         '抽取出的音频为空',
         hint: '源文件可能没有音轨。',
       );
