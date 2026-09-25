@@ -155,7 +155,6 @@ class TasksPageState extends State<TasksPage> {
   }
 }
 
-/// 顶栏右侧的两个操作。属于 PageChrome，所以放在页面外面。
 /// 任务页交给顶栏的内容。两个「新建」按钮落在 [TasksPageState] 上，
 /// 由装配层经 GlobalKey 转交。
 PageChrome tasksChrome(
@@ -177,6 +176,7 @@ PageChrome tasksChrome(
   );
 }
 
+/// 顶栏右侧的两个操作。属于 PageChrome，所以放在页面外面。
 class TasksPageActions extends StatelessWidget {
   const TasksPageActions({
     super.key,

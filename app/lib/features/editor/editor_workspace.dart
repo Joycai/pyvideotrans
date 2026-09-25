@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/widgets.dart';
 
 import '../../domain/paths.dart';
@@ -97,10 +99,21 @@ class EditorWorkspace extends ChangeNotifier {
     previous?.dispose();
   }
 
+  /// 「最近打开」的写盘排成一队：连着换两次会话时，两次写入会争同一个
+  /// 临时文件，后改名的那次就失败了。记不下来也不影响这次打开，失败就算了。
+  Future<void> _recentsWrite = Future.value();
+
+  @visibleForTesting
+  Future<void> get recentsSettled => _recentsWrite;
+
   void _remember(RecentSession entry) {
-    store.touchRecent(entry).then((recents) {
-      _recents = recents;
-      _notify();
+    _recentsWrite = _recentsWrite.then((_) async {
+      try {
+        _recents = await store.touchRecent(entry);
+        _notify();
+      } on FileSystemException {
+        // 见上。
+      }
     });
   }
 

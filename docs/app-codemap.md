@@ -78,6 +78,7 @@ core/       domain/ ←──── services/
 - `dropdown.dart`：`AppDropdown`、分组 / 条目模型、菜单定位与条目渲染。
 - `form_fields.dart`：标签、输入表面、数字 / 多行输入、开关、表单分区。
 - `form_layout.dart`：整行可点、链接文字、单选行、两列与平铺段。
+- `text_focus.dart`：`isEditingText`，焦点在输入框里时页面快捷键让路（编辑器任何输入框，建任务页只在多行框里让回车）。
 - `glass_panel.dart`：玻璃卡片与内容面板。
 - `indicators.dart`：状态标签、时间码、渐变进度条、状态点。
 - `dashed_border.dart`：转写、翻译、转码三页共用的虚线圆角框。
@@ -328,5 +329,7 @@ flutter test --tags golden --run-skipped
 
 - 常规测试覆盖 domain、provider、队列、续跑、表单、编辑器与转码。
 - `test/paths_test.dart` 钉死 POSIX / Windows 路径、盘符根目录与产物语言标签。
+- `test/editor_workspace_test.dart` 覆盖换会话、入口页开合与「最近打开」的串行写盘；
+  `test/text_focus_test.dart` 钉死「焦点在输入框里」的判断（单行 / 多行）。
 - golden 测试共 44 张场景图；拆 UI 文件后必须保持逐像素一致。
 - `live` 测试需要真实密钥，默认跳过；ffmpeg / 平台硬件编码用例会按本机能力跳过。
