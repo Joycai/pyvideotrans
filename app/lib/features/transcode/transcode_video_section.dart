@@ -410,7 +410,7 @@ class EncoderParamField extends StatelessWidget {
             min: p.min,
             max: p.max,
             width: 120,
-            onChanged: (v) => onChanged(v),
+            onChanged: onChanged,
           ),
           const SizedBox(width: AppSpacing.s2),
           Text(

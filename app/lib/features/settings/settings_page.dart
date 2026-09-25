@@ -9,7 +9,7 @@ import '../../core/widgets/glass_panel.dart';
 import '../../services/media.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
-import '../shell/page_chrome.dart';
+import '../shared/page_chrome.dart';
 import 'appearance_section.dart';
 import 'defaults_section.dart';
 import 'environment_section.dart';

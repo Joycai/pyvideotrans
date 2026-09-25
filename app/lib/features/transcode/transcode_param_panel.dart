@@ -62,7 +62,7 @@ class TranscodeParamPanel extends StatelessWidget {
                 children: [
                   _OutputSection(form: form),
                   if (o.remux)
-                    TranscodeSection(
+                    const TranscodeSection(
                       title: '音视频',
                       children: [
                         TranscodeHint(

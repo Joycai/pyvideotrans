@@ -18,9 +18,9 @@ import 'features/editor/editor_page_actions.dart';
 import 'features/editor/editor_session.dart';
 import 'features/editor/editor_title.dart';
 import 'features/settings/settings_page.dart';
+import 'features/shared/page_chrome.dart';
 import 'features/shell/app_shell.dart';
 import 'features/shell/nav_rail.dart';
-import 'features/shell/page_chrome.dart';
 import 'features/shell/status_bar.dart';
 import 'features/tasks/new_transcribe_page.dart';
 import 'features/tasks/new_translate_page.dart';
@@ -496,7 +496,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
           subtitle: editorSubtitle(editor),
           titleTrailing: EditorTitleTrailing(
             controller: editor,
-            onReplace: (slot) => _stageReplacement(slot),
+            onReplace: _stageReplacement,
             onRepair: _repair,
             onOpenOther: _openOther,
             onSave: () => _editorKey.currentState?.save(),

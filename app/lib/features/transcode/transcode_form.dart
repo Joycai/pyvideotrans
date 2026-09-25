@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
@@ -257,7 +258,7 @@ class TranscodeFormController extends ChangeNotifier {
     _files.addAll([for (final p in fresh) StagedVideo(path: p)]);
     _notify();
     // 首次加文件时顺带检测编码器，结果出来之前卡片显示检测中。
-    transcoder.ensureProbed();
+    unawaited(transcoder.ensureProbed());
     await Future.wait(fresh.map(_probe));
   }
 

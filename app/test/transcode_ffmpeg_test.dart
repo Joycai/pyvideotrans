@@ -102,7 +102,7 @@ void main() {
     }
     final streams = (await probe(out))['streams']! as List;
     expect(streams.map((s) => (s as Map)['codec_name']), containsAll(['h264', 'mp3']));
-    expect(streams.firstWhere((s) => (s as Map)['codec_type'] == 'video')['height'], 360);
+    expect((streams.firstWhere((s) => (s as Map)['codec_type'] == 'video') as Map)['height'], 360);
   }, skip: skip);
 
   test('重混流进 MOV；再跑一次不覆盖，自动加序号', () async {

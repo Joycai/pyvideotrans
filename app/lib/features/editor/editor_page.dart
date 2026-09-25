@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -126,9 +128,11 @@ class EditorPageState extends State<EditorPage> {
     session.mediaPath = picked.path;
     _openPlayback(picked.path);
     // 记下来，下次打开同一份字幕不用再选。写不进去也不影响这次预览。
-    controller.store
-        ?.saveMediaLink(session.subtitlePath, picked.path)
-        .catchError((Object _) {});
+    unawaited(
+      controller.store
+          ?.saveMediaLink(session.subtitlePath, picked.path)
+          .catchError((Object _) {}),
+    );
   }
 
   void _refresh() {

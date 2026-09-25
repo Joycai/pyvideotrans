@@ -151,7 +151,7 @@ void main() {
 
       final body = requests.first;
       expect(body['model'], 'qwen3-asr-flash');
-      final messages = ((body['input'] as Map)['messages'] as List);
+      final messages = (body['input'] as Map)['messages'] as List;
       expect((messages[0] as Map)['role'], 'system');
       expect(((messages[0] as Map)['content'] as List).first, {'text': '术语：字幕工具'});
       final audioPart = ((messages[1] as Map)['content'] as List).first as Map;
@@ -180,7 +180,7 @@ void main() {
         token: CancellationToken(),
         onProgress: _noProgress,
       );
-      final messages = ((body['input'] as Map)['messages'] as List);
+      final messages = (body['input'] as Map)['messages'] as List;
       expect(messages, hasLength(1));
       final options = (body['parameters'] as Map)['asr_options'] as Map;
       expect(options.containsKey('language'), isFalse);

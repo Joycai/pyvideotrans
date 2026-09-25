@@ -8,7 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../pipeline/task_queue.dart';
-import '../shell/page_chrome.dart';
+import '../shared/page_chrome.dart';
 import 'new_transcribe_file_panel.dart';
 import 'new_transcribe_param_panel.dart';
 import 'transcribe_form.dart';

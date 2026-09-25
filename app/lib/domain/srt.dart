@@ -52,7 +52,7 @@ abstract final class Srt {
           .toList();
       if (lines.isEmpty) continue;
 
-      final timeIndex = lines.indexWhere((l) => _timeLine.hasMatch(l));
+      final timeIndex = lines.indexWhere(_timeLine.hasMatch);
       if (timeIndex < 0) continue;
 
       final m = _timeLine.firstMatch(lines[timeIndex])!;

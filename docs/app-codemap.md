@@ -33,7 +33,7 @@ core/       domain/ ←──── services/
 
 - `domain/` 不 import Flutter、`services/`、`pipeline/` 或 `features/`。
 - feature 之间不互相拿实现组件；跨 feature 复用放 `features/shared/`。
-- 各页只允许依赖 `features/shell/page_chrome.dart` 这个顶栏契约，不依赖完整 Shell 实现。
+- 各页交给顶栏的内容走 `features/shared/page_chrome.dart` 这个契约，不 import `shell/` 的任何实现。
 - 页面文件负责装配、生命周期和键盘 / 拖放入口；大块内容拆成同目录的 `*_panel.dart`、
   `*_section.dart`、`*_list.dart`。
 - 对外需要稳定入口时可保留很薄的门面文件，例如 `core/widgets/fields.dart`。
@@ -56,7 +56,6 @@ core/       domain/ ←──── services/
 | 文件 | 内容 |
 |---|---|
 | `nav_rail.dart` | `AppSection` 六个导航项和 72px 导航栏 |
-| `page_chrome.dart` | 页面交给顶栏的稳定契约：标题、副标题、尾随标签、操作区 |
 | `app_shell.dart` | Rail + 顶栏 + 内容区 + 状态栏的总体栅格 |
 | `status_bar.dart` | `StatusSnapshot` 与底部状态栏；状态由上层传入，不自行查服务 |
 
@@ -161,6 +160,8 @@ core/       domain/ ←──── services/
 - `command_block.dart`：转码页与任务详情共用的可复制命令块。
 - `enqueued_banner.dart`：三个建任务页面共用的入队成功横幅。
 - `step_dots.dart`：三个建任务页面共用的三步说明。
+- `page_chrome.dart`：页面交给顶栏的稳定契约：标题、副标题、尾随标签、操作区。Shell 与各页都依赖它，
+  放在这里而不是 `shell/`，各页就不必 import 另一个 feature。
 
 共享组件放这里后，`settings`、`tasks`、`transcode` 不再互相 import 实现文件。
 
@@ -294,7 +295,7 @@ core/       domain/ ←──── services/
 | 任务 JSON | `domain/task.dart` + `services/task_store.dart` |
 | 设置键与默认值 | `services/settings.dart` |
 | 导航项 | `features/shell/nav_rail.dart` + `main.dart` 的页面 switch |
-| 顶栏内容 | 各页的 `xxxChrome()` + `features/shell/page_chrome.dart` |
+| 顶栏内容 | 各页的 `xxxChrome()` + `features/shared/page_chrome.dart` |
 | 字幕表格 | `features/editor/cue_table*.dart` |
 | 编辑动作与撤销 | `features/editor/editor_controller.dart` + `domain/cue.dart` |
 | 预览播放 | `features/editor/preview_playback.dart` + `inspector_preview.dart` |

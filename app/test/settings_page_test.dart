@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -167,14 +169,14 @@ void main() {
 
     page.jumpTo(SettingsSectionKey.lang);
     await tester.pumpAndSettle();
-    page.confirmReset();
+    unawaited(page.confirmReset());
     await tester.pumpAndSettle();
     await tester.tap(find.text('仅「语言」'));
     await tester.pumpAndSettle();
     expect(settings.targetLanguage, '英文');
     expect(settings.themeMode, 'dark');
 
-    page.confirmReset();
+    unawaited(page.confirmReset());
     await tester.pumpAndSettle();
     await tester.tap(find.text('全部恢复'));
     await tester.pumpAndSettle();

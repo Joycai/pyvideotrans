@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-
-import 'helpers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/services/settings.dart';
+
+import 'helpers.dart';
 
 Future<EditorController> _controller() async {
   SharedPreferences.setMockInitialValues({});
@@ -24,9 +24,9 @@ Future<EditorController> _controller() async {
       target: 'en',
     ),
   );
-  task.document = SubtitleDocument(
+  task.document = const SubtitleDocument(
     cues: [
-      const Cue(
+      Cue(
         index: 1,
         startMs: 0,
         endMs: 2000,
@@ -34,7 +34,7 @@ Future<EditorController> _controller() async {
         translation: 'First',
         confidence: 0.95,
       ),
-      const Cue(
+      Cue(
         index: 2,
         startMs: 2000,
         endMs: 4000,
@@ -42,7 +42,7 @@ Future<EditorController> _controller() async {
         translation: 'Second',
         confidence: 0.50,
       ),
-      const Cue(index: 3, startMs: 4000, endMs: 6000, source: '第三句'),
+      Cue(index: 3, startMs: 4000, endMs: 6000, source: '第三句'),
     ],
   );
   return EditorController(session: TaskSession(task), settings: settings);

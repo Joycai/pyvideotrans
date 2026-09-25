@@ -4,8 +4,8 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/glass_panel.dart';
 import '../../core/widgets/wallpaper.dart';
+import '../shared/page_chrome.dart';
 import 'nav_rail.dart';
-import 'page_chrome.dart';
 import 'status_bar.dart';
 
 /// 应用框架：72px 玻璃 Rail + 52px 顶栏 + 内容区 + 32px 状态栏，

@@ -38,7 +38,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     http.Client? client,
     Future<void> Function(Duration)? delay,
   }) : _client = client ?? http.Client(),
-       _delay = delay ?? ((d) => Future<void>.delayed(d));
+       _delay = delay ?? Future<void>.delayed;
 
   @override
   final ProviderInfo info;
