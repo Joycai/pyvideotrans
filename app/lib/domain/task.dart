@@ -43,12 +43,18 @@ class StageRecord {
     if (note != null) 'note': note,
   };
 
+  /// 认不出的状态名、类型不对的字段都按默认处理。这里一抛，`TaskStore` 会把
+  /// 整个任务跳过 —— 为一个阶段的记录丢掉整份任务与已完成的结果不值当。
   factory StageRecord.fromJson(Map<String, Object?> json) => StageRecord(
-    state: StageState.values.byName(json['state']! as String),
-    duration: json['durationMs'] == null
-        ? null
-        : Duration(milliseconds: json['durationMs']! as int),
-    note: json['note'] as String?,
+    state: StageState.values.tryByName(json['state']) ?? StageState.pending,
+    duration: switch (json['durationMs']) {
+      final int ms => Duration(milliseconds: ms),
+      _ => null,
+    },
+    note: switch (json['note']) {
+      final String note => note,
+      _ => null,
+    },
   );
 }
 
