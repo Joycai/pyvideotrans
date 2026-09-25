@@ -152,9 +152,6 @@ Future<String?> findSiblingMedia(String subtitlePath, String stem) async {
   return candidates.first.$3;
 }
 
-/// 一份在外部被改过的字幕文件：[before] 是我们上次读 / 写时的样子。
-typedef FileChange = ({String path, FileStamp before, FileStamp now});
-
 /// 从任务打开。文档就是任务的文档，参数是任务入队时定下的那份。
 /// 字幕文件是任务的产物，与完成阶段同名同路径。
 final class TaskSession extends EditorSession {

@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
-import 'package:subtitle_studio/features/editor/preview_playback.dart';
 import 'package:subtitle_studio/services/editor_store.dart';
 
 import 'helpers.dart';

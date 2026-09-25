@@ -6,7 +6,6 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/task_options.dart';
-import '../shared/provider_fields.dart';
 import 'translate_form.dart';
 
 /// 「高级」段：可折叠；输出格式、字幕排版（带预览）、每行字数、输出位置。

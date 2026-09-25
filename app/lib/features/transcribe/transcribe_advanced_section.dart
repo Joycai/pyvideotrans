@@ -6,7 +6,6 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/task_options.dart';
-import '../shared/provider_fields.dart';
 import 'transcribe_form.dart';
 
 /// 「高级」段：可折叠；识别提示词、每行字数、输出格式与位置。

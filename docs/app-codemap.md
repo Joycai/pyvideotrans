@@ -77,6 +77,7 @@ core/       domain/ ←──── services/
 - `fields.dart`：表单控件公共入口，只 export 下面两个实现文件。
 - `dropdown.dart`：`AppDropdown`、分组 / 条目模型、菜单定位与条目渲染。
 - `form_fields.dart`：标签、输入表面、数字 / 多行输入、开关、表单分区。
+- `form_layout.dart`：整行可点、链接文字、单选行、两列与平铺段。
 - `glass_panel.dart`：玻璃卡片与内容面板。
 - `indicators.dart`：状态标签、时间码、渐变进度条、状态点。
 - `dashed_border.dart`：转写、翻译、转码三页共用的虚线圆角框。
@@ -88,10 +89,11 @@ core/       domain/ ←──── services/
 
 | 文件 | 内容 |
 |---|---|
-| `cue.dart` | `Cue`、校对状态和不可变 `SubtitleDocument`；拆分、合并、说话人操作都返回新文档 |
+| `cue.dart` | `Cue`、校对状态和不可变 `SubtitleDocument`；拆分、合并、说话人操作都返回新文档；界面显示状态 `displayStateOf`、按时间定位 `cueIndexAt` |
 | `language.dart` | 统一语言表、CJK 判定、文件名语言推断 |
 | `paths.dart` | 跨平台纯字符串路径规则：basename、dirname、stem、extension |
 | `output_naming.dart` | 产物语言标签（自动检测写 `src`） |
+| `numbers.dart` | 千位分隔 `grouped` |
 | `srt.dart` | SRT / VTT 解析与序列化、说话人标签检测、导出字段 |
 | `line_wrap.dart` | 导出时折行；CJK 与拉丁文字使用不同上限 |
 | `segmenter.dart` | 识别结果的重叠修正、短句合并、长句拆分 |
@@ -103,7 +105,7 @@ core/       domain/ ←──── services/
 | `task.dart` | `SubtitleTask`、阶段记录、日志、错误、产物和 JSON；export `task_kind.dart` |
 | `media_kinds.dart` | 按扩展名判断媒体 / 音频 / 字幕 |
 | `app_branding.dart` | 应用名的中英两份；另有五份在各平台的清单与 runner 里，见 `packaging/README.md` |
-| `file_stamp.dart` | 文件大小 + 修改时间，判断字幕文件是否在外部被改过 |
+| `file_stamp.dart` | 文件大小 + 修改时间，判断字幕文件是否在外部被改过；`FileChange` |
 
 ### `domain/transcode/`
 
@@ -159,7 +161,7 @@ core/       domain/ ←──── services/
 
 ## 七、跨 feature 公共件 `lib/features/shared/`
 
-- `provider_fields.dart`：服务分组、模型字段、readiness 行、链接文字、单选行、服务 / 模型摘要。
+- `provider_fields.dart`：服务分组、模型字段、readiness 行、服务 / 模型摘要。
 - `command_block.dart`：转码页与任务详情共用的可复制命令块。
 - `enqueued_banner.dart`：三个建任务页面共用的入队成功横幅。
 - `step_dots.dart`：三个建任务页面共用的三步说明。
@@ -227,7 +229,7 @@ core/       domain/ ←──── services/
 - `editor_session.dart`：sealed `EditorSession`；两种会话同一套保存规则 —— 编辑进度自动存，字幕文件（任务产物 / 挂载的本地文件）只在保存时写；写前比对时间戳；任务排队 / 运行中时 `busy`，编辑器只读。
 - `editor_controller.dart`：筛选、搜索、选中、撤销、改字 / 时间、拆分 / 合并、说话人、翻译与导出；保存状态 `SyncState`、连续编辑合并、本地草稿；`follow` 任务队列，流水线换了文档就刷新、清撤销栈，`locked` 时一切修改不生效。
 - `editor_open_form.dart`：本地原文 / 译文槽位、解析与配对预检。
-- `preview_playback.dart`：media_kit 播放器封装和按时间定位字幕。
+- `preview_playback.dart`：media_kit 播放器封装。
 - `editor_workspace.dart`：`EditorWorkspace`，当前会话、入口页是否盖在上面、最近打开；换会话前询问写入、草稿恢复、替换 / 重新配对都走它。挂在根节点上，由 `main.dart` 接线。
 
 ### 编辑页

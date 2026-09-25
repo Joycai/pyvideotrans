@@ -4,8 +4,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
+import '../../core/widgets/fields.dart';
 import '../../core/widgets/indicators.dart';
-import 'provider_fields.dart';
 
 /// 入队成功的横幅：三个建任务页共用一份。
 ///

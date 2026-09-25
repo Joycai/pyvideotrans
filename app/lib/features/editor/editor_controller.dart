@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../../domain/cue.dart';
+import '../../domain/file_stamp.dart';
 import '../../domain/language.dart';
 import '../../domain/line_wrap.dart';
 import '../../domain/output_naming.dart';
@@ -78,15 +79,6 @@ class TargetRejected implements Exception {
 
   @override
   String toString() => reason;
-}
-
-/// 界面上显示的状态。整份文档都没有译文时（只挂了原文），「未翻译」没有
-/// 意义，按置信度与校对标记显示成「待校对」或「已校对」。
-CueState displayStateOf(Cue cue, {required bool translated}) {
-  final state = cue.state;
-  if (translated || state != CueState.untranslated) return state;
-  final low = cue.confidence != null && cue.confidence! < Cue.lowConfidence;
-  return low && !cue.reviewed ? CueState.review : CueState.ok;
 }
 
 /// 名单上的一位说话人，带上界面要显示的统计。

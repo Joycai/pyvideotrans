@@ -4,7 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
-import '../shared/provider_fields.dart';
+import '../../core/widgets/fields.dart';
 import 'translate_form.dart';
 
 /// 文件区顶部那条中性提示：忽略了几个音视频，右侧「改用新建转写」把它们带走。
