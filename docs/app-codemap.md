@@ -99,7 +99,7 @@ core/       domain/ ←──── services/
 | `paths.dart` | 跨平台纯字符串路径规则：basename、dirname、stem、extension；比较用的 `sameSeparators` |
 | `output_naming.dart` | 产物命名唯一来源 `OutputNaming`：任务写哪几路、语言段、文件名；流水线、编辑器导出、任务详情、建任务页示例共用；语言标签（自动检测写 `src`） |
 | `numbers.dart` | 千位分隔 `grouped`；取值范围 `IntRange` |
-| `srt.dart` | SRT / VTT 解析与序列化、说话人标签检测、导出字段 |
+| `srt.dart` | SRT / VTT 解析与序列化、时长格式（`formatDuration`，可固定写出小时位）、说话人标签检测、导出字段 |
 | `line_wrap.dart` | 导出时折行；CJK 与拉丁文字使用不同上限 |
 | `segmenter.dart` | 识别结果的重叠修正、短句合并、长句拆分 |
 | `subtitle_pairing.dart` | 本地原文与译文字幕的配对模式、统计与合并 |
@@ -107,7 +107,7 @@ core/       domain/ ←──── services/
 | `recognition_checkpoint.dart` | 段级识别检查点，支持失败、取消和重启后的续跑 |
 | `task_kind.dart` | `TaskStage` 与 `TaskKind`；独立放置以避免 `TaskOptions ↔ SubtitleTask` 循环 |
 | `task_options.dart` | 入队时冻结的全部参数、产物目录规则、JSON；各项取值范围 `*Range`；换服务的规则 `withAsrProvider` / `withTranslationProvider` |
-| `task.dart` | `SubtitleTask`、阶段记录、日志、错误、产物和 JSON；export `task_kind.dart` |
+| `task.dart` | `SubtitleTask`、阶段记录、日志、错误、产物和 JSON；续跑点 `resumeStage` 与「续跑会不会盖掉编辑」`resumeOverwritesEdits`；export `task_kind.dart` |
 | `media_kinds.dart` | 按扩展名判断媒体 / 音频 / 字幕 |
 | `app_branding.dart` | 应用名的中英两份；另有五份在各平台的清单与 runner 里，见 `packaging/README.md` |
 | `file_stamp.dart` | 文件大小 + 修改时间，判断字幕文件是否在外部被改过；`FileChange` |
@@ -184,8 +184,13 @@ core/       domain/ ←──── services/
   （悬停底色、图标块、文件名 + 目录 / 问题说明、淡入的移除按钮）、参数说明、底部追加落区
   `FileAppendStrip`；各页只给中间几列（`FileTableColumn`，可按行宽收起）和每行的单元格。
 
+- `new_task_form.dart`：三个建任务表单的公共基类 `NewTaskFormBase<TOptions, TFile>` —— 参数与
+  `update` / `reset` / 「上次参数」、文件列表的增删与占位行替换、拖放说明、高级区开合、输出位置与
+  选目录（`pickDirectory` 可注入）、`seed` / `browse`；`TaskOptionsFormBase` 在其上接好 `TaskOptions`
+  （转写与翻译）。暂存行的基类 `StagedPath`（路径、文件名、目录）。各表单只写收什么文件、怎么探测、怎么校验。
 - `enqueue_request.dart`：`EnqueueRequest`，建任务表单交出来的「一批文件 + 一份参数」。
-- `footer_message.dart`：`FooterMessage` / `FooterTone`，表单报页脚文案的性质，图标由 `TaskFooterLine` 决定 —— 表单不 import material。
+- `footer_message.dart`：`FooterMessage` / `FooterTone`，表单报页脚文案的性质，图标由 `TaskFooterLine` 决定 —— 表单不 import material；
+  以及三个表单共用的页脚句子：`queuedFooter`（「将创建 N 个…任务」）、`blockedFooter` / `advisoryFooter`（就绪检查）。
 
 共享组件放这里后，各 feature 不再互相 import 实现文件。
 
@@ -198,7 +203,7 @@ core/       domain/ ←──── services/
 ### 任务列表 `lib/features/tasks/`
 
 - `tasks_page.dart`：筛选、选中；建任务对话框由装配层注入。
-- `task_resume_dialog.dart`：续跑会重建文档、而编辑器里改过时的提醒。
+- `task_resume_dialog.dart`：续跑会重建文档、而编辑器里改过时的提醒（判断规则是 `SubtitleTask.resumeOverwritesEdits`）。
 - `tasks_board.dart`：列表、详情和拖放区的组合。
 - `task_table.dart`：任务表格、行内操作与空态。
 - `stage_bar.dart`：阶段进度条。
@@ -212,7 +217,7 @@ core/       domain/ ←──── services/
 
 ### 新建转写 `lib/features/transcribe/`
 
-- `transcribe_form.dart`：`TranscribeFormController`、暂存文件与提交结果。
+- `transcribe_form.dart`：`TranscribeFormController`（继承 `shared/new_task_form.dart`）、暂存文件与提交结果。
 - `transcribe_recognize_section.dart`、`transcribe_translate_section.dart`、
   `transcribe_advanced_section.dart`：表单分区；`transcribe_footer.dart`：开始按钮。
 - `new_transcribe_page.dart`：顶栏内容、表单与入队（页面行为在 `shared/new_task_page.dart`）。
@@ -222,7 +227,7 @@ core/       domain/ ←──── services/
 
 ### 新建翻译 `lib/features/translate/`
 
-- `translate_form.dart`：`TranslateFormController`、暂存字幕与提交结果。
+- `translate_form.dart`：`TranslateFormController`（继承 `shared/new_task_form.dart`）、暂存字幕、忽略的音视频与提交结果。
 - `translate_language_section.dart`、`translate_advanced_section.dart`；`translate_footer.dart`：开始按钮。
 - `translate_file_notes.dart`：忽略媒体 / 拒收格式提示（页面与对话框共用）。
 - `new_translate_page.dart`：顶栏内容、表单、入队与「改用新建转写」（页面行为在 `shared/new_task_page.dart`）。
@@ -232,7 +237,7 @@ core/       domain/ ←──── services/
 
 ## 九、转码功能 `lib/features/transcode/`
 
-- `transcode_form.dart`：`TranscodeFormController`、源文件探测、参数选择和入队。
+- `transcode_form.dart`：`TranscodeFormController`（继承 `shared/new_task_form.dart`）、源文件探测、按编码器记住参数和入队。
 - `transcode_page.dart`：顶栏内容、表单、入队、进页即探测编码器（页面行为在 `shared/new_task_page.dart`）。
 - `transcode_file_panel.dart`、`transcode_file_list.dart`：文件区；表格在 `shared/new_task_file_table.dart`，
   这里只给列定义（窄窗口收起视频、音频列）与单元格。
@@ -334,6 +339,7 @@ core/       domain/ ←──── services/
 | 建任务页的拖放、横幅、快捷键、两栏断点 | `features/shared/new_task_page.dart` |
 | 建任务页的面板外框、空态、页脚文案、「上次参数」 | `features/shared/new_task_panels.dart` |
 | 建任务页的文件表、追加落区 | `features/shared/new_task_file_table.dart` |
+| 三个建任务表单共有的状态（参数、文件列表、输出位置、「上次参数」） | `features/shared/new_task_form.dart` |
 | 字幕表格 | `features/editor/cue_table*.dart` |
 | 编辑动作与撤销 | `features/editor/editor_controller.dart` + `domain/cue.dart` |
 | 预览播放 | `features/editor/preview_playback.dart` + `inspector_preview.dart` |
