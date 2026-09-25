@@ -1,6 +1,5 @@
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../domain/media_kinds.dart';
 import '../../domain/numbers.dart';
@@ -12,6 +11,7 @@ import '../../services/ffmpeg.dart';
 import '../../services/readiness.dart';
 import '../../services/settings.dart';
 import '../shared/enqueue_request.dart';
+import '../shared/footer_message.dart';
 
 /// 字幕列表里一行的解析状态。
 enum StagedSubtitleState {
@@ -336,27 +336,26 @@ class TranslateFormController extends ChangeNotifier {
   }
 
   /// 底部那一行。阻断用 error 色并禁用按钮，提示用中性色但照常可以开始。
-  ({String text, IconData icon, bool error}) get footer {
+  FooterMessage get footer {
     if (_dropError != null) {
-      return (text: _dropError!, icon: Symbols.error, error: true);
+      return (text: _dropError!, tone: FooterTone.error);
     }
     if (_files.isEmpty) {
-      return (text: '先添加字幕文件', icon: Symbols.add_circle, error: false);
+      return (text: '先添加字幕文件', tone: FooterTone.add);
     }
     final r = readiness;
     if (r.isBlocked) {
       return (
         text: [r.message, r.hint].nonNulls.join('，'),
-        icon: Symbols.error,
-        error: true,
+        tone: FooterTone.error,
       );
     }
     final n = enqueueable.length;
     if (n == 0 && parsingCount == 0) {
-      return (text: '选中的文件都解析不出字幕内容，换几个文件再试', icon: Symbols.error, error: true);
+      return (text: '选中的文件都解析不出字幕内容，换几个文件再试', tone: FooterTone.error);
     }
     if (r.level == ReadinessLevel.advisory) {
-      return (text: r.message, icon: Symbols.info, error: false);
+      return (text: r.message, tone: FooterTone.info);
     }
     final extras = [
       // 一个就绪的都没有时开头那句已经说了「仍在解析」，不再重复。
@@ -370,14 +369,13 @@ class TranslateFormController extends ChangeNotifier {
         : '将创建 $n 个翻译任务，按列表顺序排队';
     return (
       text: [lead, ...extras].join('；'),
-      icon: Symbols.info,
-      error: false,
+      tone: FooterTone.info,
     );
   }
 
   /// 对话框的页脚：文件区就在按钮上方，不必再说「将创建几个任务」，
   /// 改为汇总条数与语言方向。拦住或没文件时与 [footer] 相同。
-  ({String text, IconData icon, bool error}) get compactFooter {
+  FooterMessage get compactFooter {
     final foot = footer;
     final n = enqueueable.length;
     if (foot.error || n == 0) return foot;
@@ -390,8 +388,7 @@ class TranslateFormController extends ChangeNotifier {
         '$n 个文件 · 共 ${grouped(totalCues)} 条 · $direction',
         ...extras,
       ].join('；'),
-      icon: extras.isEmpty ? Symbols.check_circle : Symbols.warning,
-      error: false,
+      tone: extras.isEmpty ? FooterTone.ok : FooterTone.warning,
     );
   }
 

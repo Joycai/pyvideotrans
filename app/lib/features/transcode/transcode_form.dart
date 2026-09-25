@@ -1,8 +1,7 @@
 import 'dart:async';
 
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../domain/media_kinds.dart';
 import '../../domain/paths.dart';
@@ -19,6 +18,7 @@ import '../../services/ffmpeg.dart';
 import '../../services/file_io.dart';
 import '../../services/settings.dart';
 import '../../services/transcoder.dart';
+import '../shared/footer_message.dart';
 
 /// 文件列表里一行的状态。
 enum StagedVideoState {
@@ -412,18 +412,17 @@ class TranscodeFormController extends ChangeNotifier {
     return '参数统一应用到每个文件；$where，文件名加 .${_options.resolvedSuffix} 后缀，不覆盖原文件';
   }
 
-  ({String text, IconData icon, bool error}) get footer {
+  FooterMessage get footer {
     if (_files.isEmpty) {
-      return (text: '先添加视频', icon: Symbols.add_circle, error: false);
+      return (text: '先添加视频', tone: FooterTone.add);
     }
     final block = blocker;
-    if (block != null) return (text: block, icon: Symbols.error, error: true);
+    if (block != null) return (text: block, tone: FooterTone.error);
     final n = enqueueable.length;
     if (n == 0) {
       return (
         text: '选中的文件都无法按当前参数转码，换参数或换文件再试',
-        icon: Symbols.error,
-        error: true,
+        tone: FooterTone.error,
       );
     }
     final extras = [
@@ -433,7 +432,7 @@ class TranscodeFormController extends ChangeNotifier {
     final lead = n == 1
         ? '将创建 1 个转码任务，加入队列后在任务页查看进度'
         : '将创建 $n 个转码任务，按列表顺序排队';
-    return (text: [lead, ...extras].join('；'), icon: Symbols.info, error: false);
+    return (text: [lead, ...extras].join('；'), tone: FooterTone.info);
   }
 
   /// 产物名示例：`interview.hevc.mp4`。

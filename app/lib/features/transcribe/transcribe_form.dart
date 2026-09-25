@@ -1,6 +1,5 @@
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../domain/media_kinds.dart';
 import '../../domain/output_naming.dart';
@@ -11,6 +10,7 @@ import '../../services/readiness.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
 import '../shared/enqueue_request.dart';
+import '../shared/footer_message.dart';
 
 /// 文件列表里一行的探测状态。
 enum StagedFileState {
@@ -301,30 +301,28 @@ class TranscribeFormController extends ChangeNotifier {
   String get kindLabel => _options.translate ? '转写并翻译' : '转写';
 
   /// 底部那一行。阻断用 error 色并禁用按钮，提示用中性色但照常可以开始。
-  ({String text, IconData icon, bool error}) get footer {
+  FooterMessage get footer {
     if (_dropError != null) {
-      return (text: _dropError!, icon: Symbols.error, error: true);
+      return (text: _dropError!, tone: FooterTone.error);
     }
     final n = enqueueable.length;
     if (n == 0) {
       return (
         text: unreadableCount > 0 ? '列表里的文件都读不出来，移除或替换后再开始' : '先选择音视频文件',
-        icon: unreadableCount > 0 ? Symbols.error : Symbols.add_circle,
-        error: unreadableCount > 0,
+        tone: unreadableCount > 0 ? FooterTone.error : FooterTone.add,
       );
     }
     for (final r in _checks) {
       if (r.isBlocked) {
         return (
           text: [r.message, r.hint].nonNulls.join('，'),
-          icon: Symbols.error,
-          error: true,
+          tone: FooterTone.error,
         );
       }
     }
     for (final r in _checks) {
       if (r.level == ReadinessLevel.advisory) {
-        return (text: r.message, icon: Symbols.info, error: false);
+        return (text: r.message, tone: FooterTone.info);
       }
     }
     final probing = probingCount > 0 ? '；$probingCount 个文件仍在探测，可先开始' : '';
@@ -332,8 +330,7 @@ class TranscribeFormController extends ChangeNotifier {
       text: n == 1
           ? '将创建 1 个$kindLabel任务，加入队列后在任务页查看进度$probing'
           : '将创建 $n 个$kindLabel任务，按列表顺序排队$probing',
-      icon: Symbols.info,
-      error: false,
+      tone: FooterTone.info,
     );
   }
 
