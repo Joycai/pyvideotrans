@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_extensions.dart';
-import '../../core/theme/tokens.dart';
-import '../../core/widgets/buttons.dart';
+import '../shared/new_task_panels.dart';
 import 'transcribe_advanced_section.dart';
 import 'transcribe_footer.dart';
 import 'transcribe_form.dart';
@@ -19,83 +17,29 @@ class NewTranscribeParamPanel extends StatelessWidget {
   });
 
   final TranscribeFormController form;
-  final ({String text, IconData icon, bool error})? footerOverride;
+
+  /// 页面在拖放拒收时用中性色的说明顶替控制器里的 error 版本。
+  final FooterMessage? footerOverride;
   final VoidCallback onOpenSettings;
   final VoidCallback onStart;
 
   @override
-  Widget build(BuildContext context) {
-    final cs = context.colors;
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: cs.outlineVariant),
+  Widget build(BuildContext context) => NewTaskParamPanel(
+    onReset: form.reset,
+    sections: [
+      TranscribeRecognizeSection(
+        form: form,
+        flat: true,
+        onOpenSettings: onOpenSettings,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: 60,
-            child: Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.s4,
-                right: AppSpacing.s2,
-              ),
-              child: Row(
-                children: [
-                  Text('参数', style: context.texts.titleMedium),
-                  const Spacer(),
-                  QuietButton(label: '重置为默认', onPressed: form.reset),
-                ],
-              ),
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TranscribeRecognizeSection(
-                    form: form,
-                    flat: true,
-                    onOpenSettings: onOpenSettings,
-                  ),
-                  TranscribeTranslateSection(form: form, flat: true),
-                  TranscribeAdvancedSection(form: form, flat: true),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.s4,
-              vertical: AppSpacing.s3,
-            ),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerLowest,
-              border: Border(top: BorderSide(color: cs.outlineVariant)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TranscribeFooterLine(
-                    form: form,
-                    line: footerOverride,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.s3),
-                TranscribeStartButton(
-                  form: form,
-                  onStart: onStart,
-                  withCount: true,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+      TranscribeTranslateSection(form: form, flat: true),
+      TranscribeAdvancedSection(form: form, flat: true),
+    ],
+    footer: footerOverride ?? form.footer,
+    action: TranscribeStartButton(
+      form: form,
+      onStart: onStart,
+      withCount: true,
+    ),
+  );
 }
