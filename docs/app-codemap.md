@@ -33,6 +33,7 @@ core/       domain/ ←──── services/
 
 - `domain/` 不 import Flutter、`services/`、`pipeline/` 或 `features/`。
 - feature 之间不互相拿实现组件；跨 feature 复用放 `features/shared/`。
+- `features/` 与 `core/` 不 import `dart:io`：读写文件、判断存在、路径分隔符都走 `services/file_io.dart`。
 - 各页交给顶栏的内容走 `features/shared/page_chrome.dart` 这个契约，不 import `shell/` 的任何实现。
 - 页面文件负责装配、生命周期和键盘 / 拖放入口；大块内容拆成同目录的 `*_panel.dart`、
   `*_section.dart`、`*_list.dart`。
@@ -148,7 +149,7 @@ core/       domain/ ←──── services/
 - `settings.dart`：shared_preferences 设置和 provider 连接配置；不依赖 Registry，由调用方传 provider id。
 - `task_store.dart`：一个任务一份 JSON，进度更新时只重写变化的任务。
 - `editor_store.dart`：本地会话的附加状态与编辑进度草稿、媒体关联和最近打开。
-- `file_io.dart`：读文件时间戳；原子写（先写临时文件再改名），多份文件成组写，要么全成要么都不留。
+- `file_io.dart`：界面层用到的文件系统小操作（存在、读文本、大小、建目录、`findSiblingMedia` 找同名音视频）；读文件时间戳；原子写（先写临时文件再改名），多份文件成组写，要么全成要么都不留。
 - `reveal.dart`：Finder / Explorer 中定位文件或打开目录。
 - `local/local_backend.dart`：本地 Python 后端客户端占位，第一期未实施。
 
