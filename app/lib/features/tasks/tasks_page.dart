@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../domain/task.dart';
+import '../../domain/task_filter.dart';
 import '../../pipeline/task_queue.dart';
 import '../../services/reveal.dart';
 import '../shared/enqueue_request.dart';
@@ -72,8 +73,9 @@ class TasksPageState extends State<TasksPage> {
   Future<void> newTranscribe({List<String> paths = const []}) async {
     final result = await widget.showNewTranscribe(context, paths);
     if (result == null) return;
-    widget.queue.enqueueAll(result.paths, options: result.options);
-    _tasks.selectNewest();
+    _tasks.selectEnqueued(
+      widget.queue.enqueueAll(result.paths, options: result.options),
+    );
   }
 
   /// 顶栏的「新建翻译」，也是拖入字幕后的落点。
@@ -85,8 +87,9 @@ class TasksPageState extends State<TasksPage> {
       (media) => newTranscribe(paths: media),
     );
     if (result == null) return;
-    widget.queue.enqueueAll(result.paths, options: result.options);
-    _tasks.selectNewest();
+    _tasks.selectEnqueued(
+      widget.queue.enqueueAll(result.paths, options: result.options),
+    );
   }
 
   /// 续跑前：会重建文档、而编辑器里改过的，先问一句。
@@ -144,8 +147,9 @@ PageChrome tasksChrome(
   required VoidCallback onNewTranslate,
   required VoidCallback onNewTranscribe,
 }) {
-  final running = queue.countWhere((t) => t.status == TaskStatus.running);
-  final failed = queue.countWhere((t) => t.status == TaskStatus.failed);
+  // 与筛选 chip、状态栏同一口径：排队算进行中，取消算失败。
+  final running = queue.countWhere(TaskFilter.running.matches);
+  final failed = queue.countWhere(TaskFilter.failed.matches);
   return PageChrome(
     title: '任务',
     subtitle: '${queue.tasks.length} 个任务 · $running 个进行中 · $failed 个失败',

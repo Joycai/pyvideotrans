@@ -105,7 +105,7 @@ core/       domain/ ←──── services/
 | `speech_segments.dart` | 静音区间 → 可逐段识别的语音区间 |
 | `recognition_checkpoint.dart` | 段级识别检查点，支持失败、取消和重启后的续跑 |
 | `task_kind.dart` | `TaskStage` 与 `TaskKind`；独立放置以避免 `TaskOptions ↔ SubtitleTask` 循环 |
-| `task_filter.dart` | `TaskFilter` 状态分组（排队算进行中、取消算失败）；任务页筛选 chip 与状态栏计数共用 |
+| `task_filter.dart` | `TaskFilter` 状态分组（排队算进行中、取消算失败）；任务页筛选 chip、顶栏副标题与状态栏计数共用 |
 | `task_options.dart` | 入队时冻结的全部参数、产物目录规则、JSON |
 | `task.dart` | `SubtitleTask`、阶段记录、日志、错误、产物和 JSON；export `task_kind.dart` |
 | `media_kinds.dart` | 按扩展名判断媒体 / 音频 / 字幕 |
@@ -197,7 +197,7 @@ core/       domain/ ←──── services/
 ### 任务列表 `lib/features/tasks/`
 
 - `tasks_page.dart`：把队列与 `TasksController` 接到 board 上；建任务对话框由装配层注入。
-- `tasks_controller.dart`：`TasksController`，筛选与选中（挂在根节点上，离开任务页再回来还在）、建完任务选中最新一条、拖入文件按多数分流（`routeDrop`）。
+- `tasks_controller.dart`：`TasksController`，筛选与选中（挂在根节点上，离开任务页再回来还在）、建完任务选中这一批的第一个文件、拖入文件按多数分流（`routeDrop`）。
 - `task_resume_dialog.dart`：续跑会重建文档、而编辑器里改过时的提醒。
 - `tasks_board.dart`：列表、详情和拖放区的组合。
 - `task_table.dart`：任务表格、行内操作与空态。

@@ -42,11 +42,14 @@ class TasksController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 刚入队的任务在队列最前面，建完任务直接把它的详情亮出来。
-  void selectNewest() {
-    final newest = queue.tasks.firstOrNull;
-    if (newest == null || newest.id == _selectedId) return;
-    _selectedId = newest.id;
+  /// 建完任务直接把这一批第一个文件的详情亮出来。
+  ///
+  /// 不取队列最前面那条：队列新的在前，一次入队多个文件时那是这批里最后一个，
+  /// 和用户在对话框里排在第一行的对不上。
+  void selectEnqueued(List<SubtitleTask> batch) {
+    final first = batch.firstOrNull;
+    if (first == null || first.id == _selectedId) return;
+    _selectedId = first.id;
     notifyListeners();
   }
 

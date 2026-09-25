@@ -93,15 +93,19 @@ void main() {
       expect(notified, 3);
     });
 
-    test('建完任务选中队列最前面那个', () {
-      tasks.selectNewest();
-      expect(tasks.selectedId, isNull, reason: '队列空时什么也不做');
+    test('建完任务选中这一批的第一个文件，不是队列最前面那条', () {
+      tasks.selectEnqueued(const []);
+      expect(tasks.selectedId, isNull, reason: '空批什么也不做');
       expect(notified, 0);
 
       add('old', TaskStatus.done);
-      final newest = add('new', TaskStatus.queued);
-      tasks.selectNewest();
-      expect(tasks.selectedId, newest.id);
+      final batch = queue.enqueueAll(
+        ['/a/1.mp4', '/a/2.mp4', '/a/3.mp4'],
+        options: testOptions(),
+      );
+      expect(queue.tasks.first, batch.last, reason: '队列新的在前');
+      tasks.selectEnqueued(batch);
+      expect(tasks.selectedId, batch.first.id);
       expect(notified, 1);
     });
 
@@ -168,6 +172,20 @@ void main() {
     expect(find.byType(TaskDetailPanel), findsOneWidget);
     expect(find.text('other.mp4'), findsNothing);
     expect(tasks.filter, TaskFilter.failed);
+  });
+
+  test('顶栏副标题与筛选 chip 同一口径：排队算进行中，取消算失败', () {
+    add('r', TaskStatus.queued);
+    add('f', TaskStatus.failed);
+    add('c', TaskStatus.cancelled);
+    add('d', TaskStatus.done);
+    add('p', TaskStatus.paused);
+    final chrome = tasksChrome(
+      queue,
+      onNewTranslate: () {},
+      onNewTranscribe: () {},
+    );
+    expect(chrome.subtitle, '5 个任务 · 1 个进行中 · 2 个失败');
   });
 
   group('拖入分流', () {
