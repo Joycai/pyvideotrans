@@ -253,6 +253,98 @@ class _MultilineFieldState extends State<MultilineField> {
   );
 }
 
+/// 单行输入：36px 控件皮 + 无边框 TextField。
+///
+/// 值由外部持有。外部改了值（「重置为默认」「上次参数」、设置页恢复默认）且
+/// 输入框没有焦点时同步进来；有焦点时不动 —— 这时的变化多半是自己输入的回声，
+/// 覆盖回去会把光标甩到末尾。只认「外部值变了」，不认「外部值和框里不同」：
+/// 调用方常把空串换成默认值或顺手 trim，失焦时不该把用户刚清空的框又填回去。
+class SingleLineField extends StatefulWidget {
+  const SingleLineField({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    this.hint,
+    this.style,
+    this.error = false,
+    this.obscure = false,
+    this.trailing,
+    this.padding = const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+  });
+
+  final String value;
+  final ValueChanged<String> onChanged;
+  final String? hint;
+
+  /// 缺省是 bodyMedium；地址、模型名这类要逐字符核对的值传等宽样式。
+  final TextStyle? style;
+  final bool error;
+
+  /// 掩码显示（密钥）。
+  final bool obscure;
+
+  /// 框内右侧的附加控件（如密钥的显示/隐藏）。
+  final Widget? trailing;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  State<SingleLineField> createState() => _SingleLineFieldState();
+}
+
+class _SingleLineFieldState extends State<SingleLineField> {
+  late final _controller = TextEditingController(text: widget.value);
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() => setState(() {}));
+  }
+
+  @override
+  void didUpdateWidget(SingleLineField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_focus.hasFocus &&
+        widget.value != oldWidget.value &&
+        widget.value != _controller.text) {
+      _controller.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final field = TextField(
+      controller: _controller,
+      focusNode: _focus,
+      obscureText: widget.obscure,
+      obscuringCharacter: '•',
+      style: widget.style ?? context.texts.bodyMedium,
+      decoration: bareInputDecoration(context, hint: widget.hint),
+      onChanged: widget.onChanged,
+    );
+    return ControlSurface(
+      focused: _focus.hasFocus,
+      error: widget.error,
+      padding: widget.padding,
+      child: widget.trailing == null
+          ? field
+          : Row(
+              children: [
+                Expanded(child: field),
+                widget.trailing!,
+              ],
+            ),
+    );
+  }
+}
+
 /// 开关。44×24 轨道，关时是 2px 描边 + 16px 灰球，开时是实心 primary + 20px 白球。
 class AppSwitch extends StatelessWidget {
   const AppSwitch({super.key, required this.value, required this.onChanged});

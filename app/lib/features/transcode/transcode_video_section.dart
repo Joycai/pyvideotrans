@@ -5,6 +5,7 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
+import '../../core/widgets/indicators.dart';
 import '../../domain/transcode/codecs.dart';
 import '../../domain/transcode/encoder_params.dart';
 import '../../domain/transcode/options.dart';
@@ -250,7 +251,7 @@ class _EncoderCard extends StatelessWidget {
           const SizedBox(width: AppSpacing.s2),
           Tooltip(
             message: status.reason ?? '',
-            child: TranscodeChip(
+            child: StateChip(
               label: status.state.label,
               icon: chipIcon,
               bg: chipBg,

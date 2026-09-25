@@ -10,8 +10,10 @@ import '../../core/widgets/glass_panel.dart';
 import '../../domain/srt.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/settings.dart';
+import '../shared/new_task_panels.dart';
 import '../shared/provider_fields.dart';
 import 'translate_advanced_section.dart';
+import 'translate_file_notes.dart';
 import 'translate_footer.dart';
 import 'translate_form.dart';
 import 'translate_language_section.dart';
@@ -366,9 +368,7 @@ class NewTranslateDialogState extends State<NewTranslateDialog> {
     ),
     child: Row(
       children: [
-        Expanded(
-          child: TranslateFooterLine(form: _form, line: _form.compactFooter),
-        ),
+        Expanded(child: TaskFooterLine(_form.compactFooter)),
         const SizedBox(width: AppSpacing.s4),
         ControlButton(
           label: '取消',

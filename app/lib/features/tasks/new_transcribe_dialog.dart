@@ -10,6 +10,7 @@ import '../../core/widgets/glass_panel.dart';
 import '../../domain/srt.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/settings.dart';
+import '../shared/new_task_panels.dart';
 import 'transcribe_advanced_section.dart';
 import 'transcribe_footer.dart';
 import 'transcribe_form.dart';
@@ -319,7 +320,7 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
     ),
     child: Row(
       children: [
-        Expanded(child: TranscribeFooterLine(form: _form)),
+        Expanded(child: TaskFooterLine(_form.footer)),
         const SizedBox(width: AppSpacing.s4),
         ControlButton(
           label: '取消',

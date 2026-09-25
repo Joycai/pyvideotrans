@@ -96,6 +96,46 @@ class StatusTag extends StatelessWidget {
   }
 }
 
+/// 状态胶囊：24px 高、实底无边、图标 + 短词，贴左对齐。
+///
+/// 与 [StatusTag] 的区别：颜色由调用方按状态直接给，左边距收窄到 6 让图标贴边 ——
+/// 文件表格的「状态」列和编码器卡片都用它，列宽固定，胶囊不该撑满单元格。
+class StateChip extends StatelessWidget {
+  const StateChip({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.bg,
+    required this.fg,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color bg;
+  final Color fg;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: Container(
+      height: 24,
+      padding: const EdgeInsets.only(left: 6, right: AppSpacing.s2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(AppRadius.xs),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, weight: 400, color: fg),
+          const SizedBox(width: AppSpacing.s1),
+          Text(label, style: context.texts.labelMedium?.copyWith(color: fg)),
+        ],
+      ),
+    ),
+  );
+}
+
 /// 时间码文本：等宽 + tnum，列不会随数字宽度跳动。
 class Timecode extends StatelessWidget {
   const Timecode(this.text, {super.key, this.color, this.fontSize});
