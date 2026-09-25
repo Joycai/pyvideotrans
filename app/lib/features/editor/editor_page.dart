@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/text_focus.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/paths.dart';
 import '../../domain/srt.dart';
@@ -204,13 +205,7 @@ class EditorPageState extends State<EditorPage> {
     }
 
     // 输入框获得焦点时不抢 J/K 与数字，否则打不了字。
-    final primary = FocusManager.instance.primaryFocus;
-    if (primary != null && primary != _focus && primary.context != null) {
-      final isTextField = primary.context!.widget.runtimeType
-          .toString()
-          .contains('EditableText');
-      if (isTextField) return KeyEventResult.ignored;
-    }
+    if (isEditingText()) return KeyEventResult.ignored;
 
     final digit = _digits[event.logicalKey];
     if (digit != null && !command) {

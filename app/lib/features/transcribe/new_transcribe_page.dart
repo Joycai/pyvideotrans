@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
+import '../../core/widgets/text_focus.dart';
 import '../../pipeline/task_queue.dart';
 import '../shared/page_chrome.dart';
 import 'new_transcribe_file_panel.dart';
@@ -132,8 +133,7 @@ class NewTranscribePageState extends State<NewTranscribePage> {
   }
 
   /// 多行输入框里的回车是换行，不该把任务提交出去。
-  bool get _editingText =>
-      FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+  bool get _editingText => isEditingText(multiline: true);
 
   /// 拖放拒收在页面上是中性说明（文件区里已经有一条行内提示），
   /// 不像对话框那样用 error 色。「新建翻译」在这里叫「翻译」—— 导航栏上就是这个名字。

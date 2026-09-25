@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
+import '../../core/widgets/text_focus.dart';
 import '../../pipeline/task_queue.dart';
 import '../shared/page_chrome.dart';
 import 'transcode_file_panel.dart';
@@ -108,8 +109,8 @@ class TranscodePageState extends State<TranscodePage> {
     if (mounted) setState(() => _enqueued = null);
   }
 
-  bool get _editingText =>
-      FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+  /// 多行输入框里的回车是换行，不该把任务提交出去。
+  bool get _editingText => isEditingText(multiline: true);
 
   @override
   Widget build(BuildContext context) {

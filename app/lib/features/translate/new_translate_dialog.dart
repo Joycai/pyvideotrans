@@ -7,6 +7,7 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/glass_panel.dart';
+import '../../core/widgets/text_focus.dart';
 import '../../domain/numbers.dart';
 import '../../domain/srt.dart';
 import '../../services/media.dart';
@@ -116,8 +117,7 @@ class NewTranslateDialogState extends State<NewTranslateDialog> {
   }
 
   /// 多行输入框里的回车是换行，不该把任务提交出去。
-  bool get _editingText =>
-      FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+  bool get _editingText => isEditingText(multiline: true);
 
   @override
   Widget build(BuildContext context) {

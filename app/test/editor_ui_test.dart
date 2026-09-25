@@ -88,6 +88,17 @@ void main() {
       expect(c.document.cues.first.speaker, third.id);
     });
 
+    testWidgets('焦点在输入框里时数字键是打字，不改说话人', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      c.select(0);
+      final before = c.document.cues.first.speaker;
+      await tester.tap(find.byType(EditableText).first);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit3);
+      expect(c.document.cues.first.speaker, before);
+    });
+
     testWidgets('只挂原文：译文表头给出挂载入口，检视面板是空态', (tester) async {
       final c = await _controller(withTranslation: false);
       await _pump(tester, c);
