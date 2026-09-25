@@ -11,7 +11,7 @@ import '../../domain/subtitle_pairing.dart';
 import '../../domain/task.dart';
 import '../../domain/task_options.dart';
 import '../../pipeline/subtitle_output_writer.dart';
-import '../../services/file_stamps.dart';
+import '../../services/file_io.dart';
 
 /// 编辑器打开的是什么：一个任务，或者本地的一两份字幕文件。
 ///

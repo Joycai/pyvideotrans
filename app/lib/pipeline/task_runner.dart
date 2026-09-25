@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../domain/cue.dart';
+import '../domain/recognition_checkpoint.dart';
 import '../domain/segmenter.dart';
 import '../domain/srt.dart';
 import '../domain/task.dart';

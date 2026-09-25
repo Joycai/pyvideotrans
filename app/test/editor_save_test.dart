@@ -18,7 +18,7 @@ import 'package:subtitle_studio/features/editor/editor_title.dart';
 import 'package:subtitle_studio/features/tasks/task_resume_dialog.dart';
 import 'package:subtitle_studio/pipeline/subtitle_output_writer.dart';
 import 'package:subtitle_studio/services/editor_store.dart';
-import 'package:subtitle_studio/services/file_stamps.dart';
+import 'package:subtitle_studio/services/file_io.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
 

@@ -5,8 +5,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../domain/cue.dart';
+import '../domain/recognition_checkpoint.dart';
 import 'audio_splitter.dart';
-import 'openai_compatible.dart';
 import 'provider_api.dart';
 
 /// 阿里百炼的语音识别：`POST {baseUrl}/services/aigc/multimodal-generation/generation`。

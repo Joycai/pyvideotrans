@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/language.dart';
 import '../domain/task_options.dart';
 import '../domain/transcode/options.dart';
-import 'openai_compatible.dart';
 import 'provider_api.dart';
 
 /// 单个服务的连接配置。

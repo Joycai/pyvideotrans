@@ -3,7 +3,7 @@ import 'dart:io';
 
 import '../domain/cue.dart';
 import '../domain/file_stamp.dart';
-import 'file_stamps.dart';
+import 'file_io.dart';
 
 /// 编辑器自己的存档，放在应用支持目录的 `editor/` 下：
 ///
@@ -174,12 +174,10 @@ class EditorStore {
     return next;
   }
 
-  /// 先写临时文件再改名，与 TaskStore 一样。
+  /// 原子写，与 TaskStore 一样：写到一半出错，旧的那份还完整。
   Future<void> _writeJson(File target, Object json) async {
     await Directory(dir).create(recursive: true);
-    final tmp = File('${target.path}.tmp');
-    await tmp.writeAsString(jsonEncode(json), flush: true);
-    await tmp.rename(target.path);
+    await writeFileAtomically(target.path, jsonEncode(json));
   }
 
   /// 路径做文件名用的短哈希（FNV-1a 32 位）。撞了也只是覆盖掉另一份附加

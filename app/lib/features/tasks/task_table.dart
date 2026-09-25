@@ -230,9 +230,7 @@ class _FileCell extends StatelessWidget {
     final cs = context.colors;
     final icon = MediaKinds.isSubtitle(task.sourcePath)
         ? Symbols.subtitles
-        : MediaKinds.extensionOf(task.sourcePath) == 'mp3' ||
-              MediaKinds.extensionOf(task.sourcePath) == 'm4a' ||
-              MediaKinds.extensionOf(task.sourcePath) == 'wav'
+        : MediaKinds.isAudio(task.sourcePath)
         ? Symbols.audio_file
         : Symbols.movie;
 

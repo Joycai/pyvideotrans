@@ -2,15 +2,15 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../domain/language.dart';
 import '../../domain/media_kinds.dart';
+import '../../domain/numbers.dart';
+import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
 import '../../domain/task_options.dart';
 import '../../services/media.dart';
 import '../../services/readiness.dart';
 import '../../services/settings.dart';
 import '../shared/enqueue_request.dart';
-import '../shared/provider_fields.dart';
 
 /// 字幕列表里一行的解析状态。
 enum StagedSubtitleState {
@@ -154,7 +154,7 @@ class TranslateFormController extends ChangeNotifier {
   static String? rejection(List<String> paths) {
     final unknown = paths
         .where((p) => !MediaKinds.isSubtitle(p) && !MediaKinds.isMedia(p))
-        .map(MediaKinds.extensionOf)
+        .map(extensionOf)
         .where((e) => e.isNotEmpty)
         .toSet();
     if (unknown.isEmpty) return null;
@@ -373,14 +373,11 @@ class TranslateFormController extends ChangeNotifier {
     );
   }
 
-  /// 产物名里的语言段。与 [TaskRunner] 的命名保持一致，双语带上两种语言，
-  /// 原文为自动检测时写 src。
-  String get langTag {
-    String tag(Language l) => l.isAuto ? 'src' : l.code;
-    return _options.resolvedBilingual.isBilingual
-        ? '${tag(_options.sourceLanguage)}-${tag(_options.targetLanguage)}'
-        : tag(_options.targetLanguage);
-  }
+  /// 产物名里的语言段。与流水线写产物共用 [languageTag]，双语带上两种语言。
+  String get langTag => _options.resolvedBilingual.isBilingual
+      ? '${languageTag(_options.sourceLanguage)}-'
+            '${languageTag(_options.targetLanguage)}'
+      : languageTag(_options.targetLanguage);
 
   /// 「原文件名.en.srt」这样的产物名示例。
   String get outputNameExample => '原文件名.$langTag.${_options.format.extension}';

@@ -241,7 +241,7 @@ class TranscodeFormController extends ChangeNotifier {
   static String? rejection(List<String> paths) {
     final unknown = paths
         .where((p) => !MediaKinds.isVideo(p))
-        .map(MediaKinds.extensionOf)
+        .map(extensionOf)
         .toSet();
     if (unknown.isEmpty) return null;
     final audio = paths.where(MediaKinds.isAudio).length;

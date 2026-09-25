@@ -7,7 +7,7 @@ import '../domain/paths.dart';
 import '../domain/srt.dart';
 import '../domain/task.dart';
 import '../domain/task_options.dart';
-import '../services/file_stamps.dart';
+import '../services/file_io.dart';
 import '../services/provider_api.dart';
 
 /// 把内存中的字幕文档写成用户选择的产物格式。

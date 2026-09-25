@@ -9,7 +9,6 @@ import 'package:subtitle_studio/services/audio_splitter.dart';
 import 'package:subtitle_studio/services/dashscope_asr.dart';
 import 'package:subtitle_studio/services/dashscope_filetrans.dart';
 import 'package:subtitle_studio/services/media.dart';
-import 'package:subtitle_studio/services/openai_compatible.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';

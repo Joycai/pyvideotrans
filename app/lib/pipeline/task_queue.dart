@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../domain/media_kinds.dart';
+import '../domain/recognition_checkpoint.dart';
 import '../domain/task.dart';
 import '../domain/task_options.dart';
 import '../domain/transcode/command.dart';

@@ -1,7 +1,30 @@
 import '../domain/cue.dart';
 import '../domain/recognition_checkpoint.dart';
 
-export '../domain/recognition_checkpoint.dart';
+/// 连接参数。本地后端与在线服务用的是同一个结构 —— 这正是本地模型方案的前提：
+/// 客户端只认 baseUrl + model，不关心对面跑在哪台机器上。
+class Endpoint {
+  const Endpoint({
+    required this.baseUrl,
+    required this.model,
+    this.apiKey = '',
+    this.timeout = const Duration(minutes: 10),
+  });
+
+  final String baseUrl;
+  final String model;
+  final String apiKey;
+  final Duration timeout;
+
+  /// 拼接路径，容忍 baseUrl 带不带结尾斜杠。
+  Uri resolve(String path) {
+    final base = baseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    return Uri.parse('$base$path');
+  }
+
+  Map<String, String> get authHeaders =>
+      apiKey.isEmpty ? const {} : {'Authorization': 'Bearer $apiKey'};
+}
 
 /// 协作式取消。所有 provider 在每个可中断点检查 [throwIfCancelled]。
 class CancellationToken {

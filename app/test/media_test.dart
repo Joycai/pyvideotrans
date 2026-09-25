@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/media_kinds.dart';
+import 'package:subtitle_studio/domain/paths.dart';
 import 'package:subtitle_studio/services/media.dart';
 
 void main() {
@@ -15,7 +16,7 @@ void main() {
 
     // 目录名里带点、或者文件根本没有扩展名时，不能误判成支持的类型。
     test('目录里的点不算扩展名', () {
-      expect(MediaKinds.extensionOf('/a.mp4/b/c'), '');
+      expect(extensionOf('/a.mp4/b/c'), '');
       expect(MediaKinds.isSupported('/a.mp4/b/c'), isFalse);
     });
   });

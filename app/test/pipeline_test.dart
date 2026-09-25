@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/task_options.dart';

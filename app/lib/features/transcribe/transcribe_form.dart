@@ -36,15 +36,7 @@ class StagedFile {
     return cut <= 0 ? '' : path.substring(0, cut);
   }
 
-  bool get isVideo => const {
-    'mp4',
-    'mov',
-    'mkv',
-    'avi',
-    'webm',
-    'flv',
-    'wmv',
-  }.contains(MediaKinds.extensionOf(path));
+  bool get isVideo => MediaKinds.isMedia(path) && !MediaKinds.isAudio(path);
 
   bool get willEnqueue => state != StagedFileState.unreadable;
 }
@@ -141,7 +133,7 @@ class TranscribeFormController extends ChangeNotifier {
       return '已忽略 $subtitles 个字幕文件，字幕请用「新建翻译」';
     }
     return '不认识的格式：'
-        '${rejected.map(MediaKinds.extensionOf).where((e) => e.isNotEmpty).toSet().join('、')}';
+        '${rejected.map(extensionOf).where((e) => e.isNotEmpty).toSet().join('、')}';
   }
 
   /// 加一批路径。非音视频与已在列表里的跳过；先以「探测中」入列，探完再更新，

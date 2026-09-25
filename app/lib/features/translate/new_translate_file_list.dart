@@ -5,8 +5,8 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/dashed_border.dart';
+import '../../domain/numbers.dart';
 import '../../domain/srt.dart';
-import '../shared/provider_fields.dart';
 import 'translate_file_notes.dart';
 import 'translate_form.dart';
 
