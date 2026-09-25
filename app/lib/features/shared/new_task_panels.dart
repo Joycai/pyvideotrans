@@ -50,7 +50,7 @@ class NewTaskFilePanel extends StatelessWidget {
     final cs = context.colors;
     return AnimatedContainer(
       duration: AppDuration.medium,
-      curve: kEasingStandard,
+      curve: AppEasing.standard,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: dragging
@@ -94,7 +94,7 @@ class NewTaskFilePanel extends StatelessWidget {
           ),
           AnimatedSize(
             duration: AppDuration.medium,
-            curve: kEasingStandard,
+            curve: AppEasing.standard,
             alignment: Alignment.topCenter,
             child: enqueued == null
                 ? const SizedBox(width: double.infinity)

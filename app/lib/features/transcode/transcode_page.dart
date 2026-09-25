@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../pipeline/task_queue.dart';
 import '../shared/new_task_page.dart';
 import '../shared/new_task_panels.dart';
-import '../shell/page_chrome.dart';
+import '../shared/page_chrome.dart';
 import 'transcode_file_panel.dart';
 import 'transcode_form.dart';
 import 'transcode_param_panel.dart';

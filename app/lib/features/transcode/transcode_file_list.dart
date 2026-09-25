@@ -54,7 +54,7 @@ class TranscodeFileList extends StatelessWidget {
           top ?? '—',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: kTimecodeStyle.copyWith(
+          style: AppTextStyles.timecode.copyWith(
             fontSize: 12,
             height: 16 / 12,
             fontWeight: FontWeight.w500,
@@ -66,7 +66,7 @@ class TranscodeFileList extends StatelessWidget {
             bottom,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: kTimecodeStyle.copyWith(
+            style: AppTextStyles.timecode.copyWith(
               fontSize: 12,
               height: 16 / 12,
               fontWeight: FontWeight.w400,
@@ -85,7 +85,7 @@ class TranscodeFileList extends StatelessWidget {
         Text(
           file.durationLabel,
           textAlign: TextAlign.right,
-          style: kTimecodeStyle.copyWith(color: numberColor),
+          style: AppTextStyles.timecode.copyWith(color: numberColor),
         ),
         twoLines(
           video == null ? null : MediaProbe.codecLabel(video.codec),
@@ -98,7 +98,7 @@ class TranscodeFileList extends StatelessWidget {
         Text(
           file.sizeBytes > 0 ? file.sizeLabel : '',
           textAlign: TextAlign.right,
-          style: kTimecodeStyle.copyWith(color: cs.onSurfaceVariant),
+          style: AppTextStyles.timecode.copyWith(color: cs.onSurfaceVariant),
         ),
         _StateChip(state: state),
       ],

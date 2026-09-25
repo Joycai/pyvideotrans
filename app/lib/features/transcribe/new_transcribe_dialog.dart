@@ -7,9 +7,11 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/glass_panel.dart';
+import '../../core/widgets/text_focus.dart';
 import '../../domain/srt.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/settings.dart';
+import '../shared/enqueue_request.dart';
 import '../shared/new_task_panels.dart';
 import 'transcribe_advanced_section.dart';
 import 'transcribe_footer.dart';
@@ -17,7 +19,7 @@ import 'transcribe_form.dart';
 import 'transcribe_recognize_section.dart';
 import 'transcribe_translate_section.dart';
 
-export 'transcribe_form.dart' show NewTranscribeResult;
+export '../shared/enqueue_request.dart';
 
 /// 「新建转写」对话框。
 ///
@@ -27,13 +29,13 @@ export 'transcribe_form.dart' show NewTranscribeResult;
 ///
 /// 表单状态与三段字段在 [TranscribeFormController] 及配套的 Section 里，
 /// 与导航栏的「新建转写」页共用；这里只负责对话框的壳、文件区与底栏。
-Future<NewTranscribeResult?> showNewTranscribeDialog(
+Future<EnqueueRequest?> showNewTranscribeDialog(
   BuildContext context, {
   required AppSettings settings,
   List<String> initialPaths = const [],
   Ffmpeg? media,
   VoidCallback? onOpenSettings,
-}) => showDialog<NewTranscribeResult>(
+}) => showDialog<EnqueueRequest>(
   context: context,
   barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.32),
   builder: (_) => NewTranscribeDialog(
@@ -103,8 +105,7 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
   }
 
   /// 多行输入框里的回车是换行，不该把任务提交出去。
-  bool get _editingText =>
-      FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+  bool get _editingText => isEditingText(multiline: true);
 
   @override
   Widget build(BuildContext context) {
@@ -227,7 +228,7 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
       padding: const EdgeInsets.all(AppSpacing.s4),
       child: AnimatedContainer(
         duration: AppDuration.medium,
-        curve: kEasingStandard,
+        curve: AppEasing.standard,
         height: 136,
         decoration: BoxDecoration(
           color: _dragging ? cs.primary.withValues(alpha: 0.06) : null,
@@ -379,7 +380,7 @@ class _FileRow extends StatelessWidget {
                   : info?.duration == null
                   ? '—'
                   : Srt.formatDuration(info!.duration!),
-              style: kTimecodeStyle.copyWith(
+              style: AppTextStyles.timecode.copyWith(
                 color: unreadable ? cs.error : cs.onSurfaceVariant,
               ),
             ),

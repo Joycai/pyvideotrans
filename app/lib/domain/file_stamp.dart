@@ -32,3 +32,6 @@ class FileStamp {
   @override
   int get hashCode => Object.hash(size, modifiedMs);
 }
+
+/// 一份在外部被改过的字幕文件：[before] 是我们上次读 / 写时的样子。
+typedef FileChange = ({String path, FileStamp before, FileStamp now});

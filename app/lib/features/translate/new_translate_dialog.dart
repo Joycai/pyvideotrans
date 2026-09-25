@@ -7,18 +7,20 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/glass_panel.dart';
+import '../../core/widgets/text_focus.dart';
+import '../../domain/numbers.dart';
 import '../../domain/srt.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/settings.dart';
+import '../shared/enqueue_request.dart';
 import '../shared/new_task_panels.dart';
-import '../shared/provider_fields.dart';
 import 'translate_advanced_section.dart';
 import 'translate_file_notes.dart';
 import 'translate_footer.dart';
 import 'translate_form.dart';
 import 'translate_language_section.dart';
 
-export 'translate_form.dart' show NewTranslateResult;
+export '../shared/enqueue_request.dart';
 
 /// 「新建翻译」对话框。
 ///
@@ -28,14 +30,14 @@ export 'translate_form.dart' show NewTranslateResult;
 ///
 /// 表单状态、校验与文案都在 [TranslateFormController] 里，与导航栏的
 /// 「翻译」页共用；这里只负责对话框的外形与关闭时机。
-Future<NewTranslateResult?> showNewTranslateDialog(
+Future<EnqueueRequest?> showNewTranslateDialog(
   BuildContext context, {
   required AppSettings settings,
   List<String> initialPaths = const [],
   Ffmpeg? media,
   VoidCallback? onOpenSettings,
   ValueChanged<List<String>>? onSwitchToTranscribe,
-}) => showDialog<NewTranslateResult>(
+}) => showDialog<EnqueueRequest>(
   context: context,
   barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.32),
   builder: (_) => NewTranslateDialog(
@@ -117,8 +119,7 @@ class NewTranslateDialogState extends State<NewTranslateDialog> {
   }
 
   /// 多行输入框里的回车是换行，不该把任务提交出去。
-  bool get _editingText =>
-      FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+  bool get _editingText => isEditingText(multiline: true);
 
   @override
   Widget build(BuildContext context) {
@@ -255,7 +256,7 @@ class NewTranslateDialogState extends State<NewTranslateDialog> {
           if (note != null) ...[note, const SizedBox(height: AppSpacing.s3)],
           AnimatedContainer(
             duration: AppDuration.medium,
-            curve: kEasingStandard,
+            curve: AppEasing.standard,
             height: 136,
             decoration: BoxDecoration(
               color: _dragging ? cs.primary.withValues(alpha: 0.08) : null,

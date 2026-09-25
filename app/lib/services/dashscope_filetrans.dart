@@ -6,9 +6,9 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../domain/cue.dart';
+import '../domain/recognition_checkpoint.dart';
 import 'dashscope_asr.dart';
 import 'ffmpeg.dart';
-import 'openai_compatible.dart';
 import 'provider_api.dart';
 
 /// 阿里百炼的**录音文件转写**（模型名以 `-filetrans` 结尾）。
@@ -38,7 +38,7 @@ class DashScopeFileTransProvider implements AsrProvider {
     http.Client? client,
     Future<void> Function(Duration)? delay,
   }) : _client = client ?? http.Client(),
-       _delay = delay ?? ((d) => Future<void>.delayed(d));
+       _delay = delay ?? Future<void>.delayed;
 
   @override
   final ProviderInfo info;

@@ -33,7 +33,7 @@ class TranscodeParamPanel extends StatelessWidget {
       sections: [
         _OutputSection(form: form),
         if (o.remux)
-          TranscodeSection(
+          const TranscodeSection(
             title: '音视频',
             children: [
               TranscodeHint(
@@ -247,7 +247,7 @@ class _AdvancedSection extends StatelessWidget {
                   o.outputDir != null)
                 Text(
                   o.outputDir!,
-                  style: kTimecodeStyle.copyWith(
+                  style: AppTextStyles.timecode.copyWith(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
                     color: cs.onSurfaceVariant,
@@ -289,7 +289,7 @@ class _AdvancedSection extends StatelessWidget {
                   key: const ValueKey('extra'),
                   value: o.extraArgs,
                   hint: '-x265-params aq-mode=3',
-                  style: kTimecodeStyle.copyWith(
+                  style: AppTextStyles.timecode.copyWith(
                     fontSize: 13,
                     fontWeight: FontWeight.w400,
                     color: cs.onSurface,

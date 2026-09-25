@@ -284,7 +284,7 @@ void main() {
       final path = await file('a.srt', _zh);
       await store.saveFileState(
         sourcePath: path,
-        document: const SubtitleDocument(cues: []),
+        document: SubtitleDocument.empty,
       );
       expect(await store.loadFileState(path, null), isNotNull);
       expect(await store.loadFileState(path, '/other.srt'), isNull);

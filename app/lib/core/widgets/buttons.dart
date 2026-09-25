@@ -471,7 +471,7 @@ class FilterChipBar extends StatelessWidget {
                           const SizedBox(width: AppSpacing.s1 + 2),
                           Text(
                             '${it.count}',
-                            style: kTimecodeStyle.copyWith(
+                            style: AppTextStyles.timecode.copyWith(
                               fontSize: 12,
                               color: active
                                   ? cs.onSecondaryContainer

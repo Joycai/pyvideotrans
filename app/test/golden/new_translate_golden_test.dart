@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
-import 'package:subtitle_studio/features/tasks/new_translate_dialog.dart';
+import 'package:subtitle_studio/features/translate/new_translate_dialog.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 

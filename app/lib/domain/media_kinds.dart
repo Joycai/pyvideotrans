@@ -21,12 +21,6 @@ abstract final class MediaKinds {
     'mts', 'mpg', 'mpeg', 'vob', '3gp', 'ogv', 'asf', 'mxf',
   };
 
-  static String extensionOf(String path) {
-    final name = baseName(path);
-    final dot = name.lastIndexOf('.');
-    return dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
-  }
-
   static bool isMedia(String path) => media.contains(extensionOf(path));
   static bool isAudio(String path) => audio.contains(extensionOf(path));
   static bool isVideo(String path) => video.contains(extensionOf(path));

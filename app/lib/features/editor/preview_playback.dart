@@ -150,17 +150,3 @@ class PreviewPlayback extends ChangeNotifier {
     super.dispose();
   }
 }
-
-/// [ms] 落在哪一条字幕里（含开始、不含结束）。几条重叠时优先 [preferred]，
-/// 这样播放头在重叠段里不会来回跳；都不含时返回 null。
-int? cueIndexAt(List<Cue> cues, int ms, {int? preferred}) {
-  bool contains(Cue c) => ms >= c.startMs && ms < c.endMs;
-  if (preferred != null &&
-      preferred >= 0 &&
-      preferred < cues.length &&
-      contains(cues[preferred])) {
-    return preferred;
-  }
-  final index = cues.indexWhere(contains);
-  return index < 0 ? null : index;
-}

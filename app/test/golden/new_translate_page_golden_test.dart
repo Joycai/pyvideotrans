@@ -14,8 +14,8 @@ import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/features/shell/app_shell.dart';
 import 'package:subtitle_studio/features/shell/nav_rail.dart';
 import 'package:subtitle_studio/features/shell/status_bar.dart';
-import 'package:subtitle_studio/features/tasks/new_translate_page.dart';
-import 'package:subtitle_studio/features/tasks/translate_form.dart';
+import 'package:subtitle_studio/features/translate/new_translate_page.dart';
+import 'package:subtitle_studio/features/translate/translate_form.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
@@ -137,9 +137,9 @@ void main() {
           onSectionChanged: (_) {},
           chrome: () => newTranslateChrome(form),
           status: () => StatusSnapshot(
-            localEngine: 'ffmpeg · 就绪',
-            cloud: (connected: true, label: '阿里百炼 · 已配置'),
-            localBackend: variant == 'C'
+            ffmpeg: 'ffmpeg · 就绪',
+            asr: (connected: true, label: '阿里百炼 · 已配置'),
+            translation: variant == 'C'
                 ? (connected: false, label: 'DeepSeek · 未配置')
                 : (connected: true, label: 'DeepSeek · 已配置'),
           ),

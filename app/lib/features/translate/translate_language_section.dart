@@ -59,7 +59,7 @@ class TranslateLanguageSection extends StatelessWidget {
           ),
         ),
         const SizedBox(width: AppSpacing.s2 + 2),
-        SwapLanguagesButton(form: form),
+        _SwapLanguagesButton(form: form),
         const SizedBox(width: AppSpacing.s2 + 2),
         Expanded(
           child: LabeledField(
@@ -207,8 +207,8 @@ class TranslateLanguageSection extends StatelessWidget {
 }
 
 /// 原文 ⇄ 目标的对换按钮。原文为「自动检测」时禁用并说明原因。
-class SwapLanguagesButton extends StatelessWidget {
-  const SwapLanguagesButton({super.key, required this.form});
+class _SwapLanguagesButton extends StatelessWidget {
+  const _SwapLanguagesButton({required this.form});
 
   final TranslateFormController form;
 

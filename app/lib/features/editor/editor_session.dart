@@ -11,7 +11,7 @@ import '../../domain/subtitle_pairing.dart';
 import '../../domain/task.dart';
 import '../../domain/task_options.dart';
 import '../../pipeline/subtitle_output_writer.dart';
-import '../../services/file_stamps.dart';
+import '../../services/file_io.dart';
 
 /// 编辑器打开的是什么：一个任务，或者本地的一两份字幕文件。
 ///
@@ -152,12 +152,9 @@ Future<String?> findSiblingMedia(String subtitlePath, String stem) async {
   return candidates.first.$3;
 }
 
-/// 一份在外部被改过的字幕文件：[before] 是我们上次读 / 写时的样子。
-typedef FileChange = ({String path, FileStamp before, FileStamp now});
-
 /// 从任务打开。文档就是任务的文档，参数是任务入队时定下的那份。
 /// 字幕文件是任务的产物，与完成阶段同名同路径。
-class TaskSession extends EditorSession {
+final class TaskSession extends EditorSession {
   TaskSession(this.task);
 
   final SubtitleTask task;
@@ -287,7 +284,7 @@ class LocalSubtitleFile {
 }
 
 /// 从本地字幕文件打开。
-class FileSession extends EditorSession {
+final class FileSession extends EditorSession {
   FileSession({
     required this.sourcePath,
     this.translationPath,

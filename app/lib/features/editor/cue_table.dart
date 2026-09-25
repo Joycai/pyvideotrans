@@ -159,7 +159,7 @@ class _CueListState extends State<_CueList> {
     _scroll.animateTo(
       target.clamp(0, position.maxScrollExtent).toDouble(),
       duration: AppDuration.short,
-      curve: kEasingStandard,
+      curve: AppEasing.standard,
     );
   }
 

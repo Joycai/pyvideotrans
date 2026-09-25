@@ -23,7 +23,7 @@ core/       domain/ ←──── services/
 | 层 | 目录 | 责任 |
 |---|---|---|
 | 装配 | `lib/main.dart` | 初始化服务、持有根级表单控制器、页面切换、顶栏与状态栏快照 |
-| 界面 | `lib/features/` | 按功能分 `shell / tasks / transcode / editor / settings`；跨功能 UI 放 `shared/` |
+| 界面 | `lib/features/` | 按功能分 `shell / tasks / transcribe / translate / transcode / editor / settings`；跨功能 UI 放 `shared/` |
 | 流水线 | `lib/pipeline/` | 串行队列、任务编排、阶段壳、字幕写出与转码任务执行 |
 | 服务 | `lib/services/` | 网络、ffmpeg / ffprobe、文件持久化、shared_preferences、provider 构造 |
 | 领域 | `lib/domain/` | 数据模型与纯规则；不依赖 Flutter，不执行网络或外部进程 |
@@ -33,7 +33,7 @@ core/       domain/ ←──── services/
 
 - `domain/` 不 import Flutter、`services/`、`pipeline/` 或 `features/`。
 - feature 之间不互相拿实现组件；跨 feature 复用放 `features/shared/`。
-- 各页只允许依赖 `features/shell/page_chrome.dart` 这个顶栏契约，不依赖完整 Shell 实现。
+- 各页交给顶栏的内容走 `features/shared/page_chrome.dart` 这个契约，不 import `shell/` 的任何实现。
 - 页面文件负责装配、生命周期和键盘 / 拖放入口；大块内容拆成同目录的 `*_panel.dart`、
   `*_section.dart`、`*_list.dart`。
 - 对外需要稳定入口时可保留很薄的门面文件，例如 `core/widgets/fields.dart`。
@@ -48,17 +48,19 @@ core/       domain/ ←──── services/
 2. 载入 `AppSettings`，创建应用支持目录。
 3. 构造 `Ffmpeg`、`Transcoder`、`TaskRunner`、`TaskQueue`、`TaskStore`、`EditorStore`。
 4. 恢复任务后启动 `SubtitleStudioApp`。
-5. 持有转写、翻译、转码和编辑器入口的表单控制器，保证切页不丢状态。
+5. 持有转写、翻译、转码的表单控制器和编辑器的 `EditorWorkspace`，保证切页不丢状态。
 6. 用 `Listenable.merge` 只驱动顶栏、状态栏和需要实时更新的页面，避免进度回调重建整棵应用树。
+
+只做接线：各页的顶栏内容由各自的 `xxxChrome()` 给出，状态栏快照由
+`StatusSnapshot.from` 拼，编辑器换会话、草稿恢复、最近打开的规则在 `EditorWorkspace`。
 
 ### `lib/features/shell/`
 
 | 文件 | 内容 |
 |---|---|
 | `nav_rail.dart` | `AppSection` 六个导航项和 72px 导航栏 |
-| `page_chrome.dart` | 页面交给顶栏的稳定契约：标题、副标题、尾随标签、操作区 |
 | `app_shell.dart` | Rail + 顶栏 + 内容区 + 状态栏的总体栅格 |
-| `status_bar.dart` | `StatusSnapshot` 与底部状态栏；状态由上层传入，不自行查服务 |
+| `status_bar.dart` | `StatusSnapshot`（`from` 按设置、ffmpeg 与队列拼出快照）与底部状态栏；控件只画快照 |
 
 ## 三、视觉基座 `lib/core/`
 
@@ -72,11 +74,13 @@ core/       domain/ ←──── services/
 
 - `buttons.dart`：主按钮、控制按钮、静默按钮、图标按钮、分段选择、筛选条。
 - `glass_dialog.dart`：询问对话框外壳（标题、正文、说明条、左侧文字操作 + 右侧按钮）。
-- `fields.dart`：表单控件公共入口，只 export 下面两个实现文件。
+- `fields.dart`：表单控件公共入口，只 export 下面三个实现文件。
 - `dropdown.dart`：`AppDropdown`、分组 / 条目模型、菜单定位与条目渲染。
 - `form_fields.dart`：标签、输入表面、单行 / 数字 / 多行输入、开关、表单分区。
   `SingleLineField` 是所有单行输入（设置页、密钥、模型名、转码后缀 / 额外参数）的唯一实现，
   外部值变化且无焦点时同步进框。
+- `form_layout.dart`：整行可点、链接文字、单选行、两列与平铺段。
+- `text_focus.dart`：`isEditingText`，焦点在输入框里时页面快捷键让路（编辑器任何输入框，建任务页只在多行框里让回车）。
 - `glass_panel.dart`：玻璃卡片与内容面板。
 - `indicators.dart`：状态标签、状态胶囊（`StateChip`，文件表状态列与编码器卡片）、时间码、渐变进度条、状态点。
 - `note_bar.dart`：36px 中性提示条（拖放拒收、忽略了音视频），右侧可带动作或关闭。
@@ -89,10 +93,11 @@ core/       domain/ ←──── services/
 
 | 文件 | 内容 |
 |---|---|
-| `cue.dart` | `Cue`、校对状态和不可变 `SubtitleDocument`；拆分、合并、说话人操作都返回新文档 |
+| `cue.dart` | `Cue`、校对状态和不可变 `SubtitleDocument`；拆分、合并、说话人操作都返回新文档；界面显示状态 `displayStateOf`、按时间定位 `cueIndexAt` |
 | `language.dart` | 统一语言表、CJK 判定、文件名语言推断 |
 | `paths.dart` | 跨平台纯字符串路径规则：basename、dirname、stem、extension |
 | `output_naming.dart` | 产物语言标签（自动检测写 `src`） |
+| `numbers.dart` | 千位分隔 `grouped` |
 | `srt.dart` | SRT / VTT 解析与序列化、说话人标签检测、导出字段 |
 | `line_wrap.dart` | 导出时折行；CJK 与拉丁文字使用不同上限 |
 | `segmenter.dart` | 识别结果的重叠修正、短句合并、长句拆分 |
@@ -104,7 +109,7 @@ core/       domain/ ←──── services/
 | `task.dart` | `SubtitleTask`、阶段记录、日志、错误、产物和 JSON；export `task_kind.dart` |
 | `media_kinds.dart` | 按扩展名判断媒体 / 音频 / 字幕 |
 | `app_branding.dart` | 应用名的中英两份；另有五份在各平台的清单与 runner 里，见 `packaging/README.md` |
-| `file_stamp.dart` | 文件大小 + 修改时间，判断字幕文件是否在外部被改过 |
+| `file_stamp.dart` | 文件大小 + 修改时间，判断字幕文件是否在外部被改过；`FileChange` |
 | `task_control.dart` | 跨层共用的 `CancellationToken`、`TaskCancelled`、`ActionableException`（带建议的失败）、`ProgressSink`；provider、ffmpeg、转码、字幕写出、编辑器都用 |
 | `enum_by_name.dart` | `values.tryByName(x)`：认不出的枚举名返回 null，读存档与偏好时用 `??` 写明回落值 |
 
@@ -125,7 +130,7 @@ core/       domain/ ←──── services/
 
 ### Provider
 
-- `provider_api.dart`：`ProviderInfo`、ASR / 翻译接口；re-export `domain/task_control.dart`。
+- `provider_api.dart`：`ProviderInfo`、`Endpoint`、ASR / 翻译接口；re-export `domain/task_control.dart`。
 - `registry.dart`：可选服务登记表和 provider 工厂。
 - `openai_compatible.dart`：OpenAI 兼容 ASR 与翻译实现；在线服务、Ollama、LM Studio、
   将来的本地 Python 后端共用。
@@ -143,7 +148,7 @@ core/       domain/ ←──── services/
 - `settings.dart`：shared_preferences 设置和 provider 连接配置；不依赖 Registry，由调用方传 provider id。
 - `task_store.dart`：一个任务一份 JSON，进度更新时只重写变化的任务。
 - `editor_store.dart`：本地会话的附加状态与编辑进度草稿、媒体关联和最近打开。
-- `file_stamps.dart`：读文件时间戳；原子写（先写临时文件再改名），多份文件成组写，要么全成要么都不留。
+- `file_io.dart`：读文件时间戳；原子写（先写临时文件再改名），多份文件成组写，要么全成要么都不留。
 - `reveal.dart`：Finder / Explorer 中定位文件或打开目录。
 - `local/local_backend.dart`：本地 Python 后端客户端占位，第一期未实施。
 
@@ -163,10 +168,12 @@ core/       domain/ ←──── services/
 
 ## 七、跨 feature 公共件 `lib/features/shared/`
 
-- `provider_fields.dart`：服务分组、模型字段、readiness 行、链接文字、单选行、服务 / 模型摘要。
+- `provider_fields.dart`：服务分组、模型字段、readiness 行、服务 / 模型摘要。
 - `command_block.dart`：转码页与任务详情共用的可复制命令块。
 - `enqueued_banner.dart`：三个建任务页面共用的入队成功横幅。
 - `step_dots.dart`：三个建任务页面共用的三步说明。
+- `page_chrome.dart`：页面交给顶栏的稳定契约：标题、副标题、尾随标签、操作区。Shell 与各页都依赖它，
+  放在这里而不是 `shell/`，各页就不必 import 另一个 feature。
 - `new_task_page.dart`：`NewTaskPageState`，三个建任务页的页面状态基类 —— 拖放、入队横幅、
   快捷键、960 / 1100 两栏布局；各页只说明表单、怎么入队、两栏各放什么。
 - `new_task_panels.dart`：建任务页的面板外框 —— 文件面板（标题行、横幅、提示条槽位）、
@@ -176,13 +183,19 @@ core/       domain/ ←──── services/
   （悬停底色、图标块、文件名 + 目录 / 问题说明、淡入的移除按钮）、参数说明、底部追加落区
   `FileAppendStrip`；各页只给中间几列（`FileTableColumn`，可按行宽收起）和每行的单元格。
 
-共享组件放这里后，`settings`、`tasks`、`transcode` 不再互相 import 实现文件。
+- `enqueue_request.dart`：`EnqueueRequest`，建任务表单交出来的「一批文件 + 一份参数」。
 
-## 八、任务功能 `lib/features/tasks/`
+共享组件放这里后，各 feature 不再互相 import 实现文件。
 
-### 任务列表
+## 八、任务与建任务
 
-- `tasks_page.dart`：筛选、选中、对话框入口。
+新建转写、新建翻译与转码一样是导航栏上的同级入口，所以各自是一个 feature，
+不放在 `tasks/` 下面。任务页的「新建转写 / 新建翻译」对话框由 `main.dart` 注入，
+`tasks/` 不 import 另外两个 feature。
+
+### 任务列表 `lib/features/tasks/`
+
+- `tasks_page.dart`：筛选、选中；建任务对话框由装配层注入。
 - `task_resume_dialog.dart`：续跑会重建文档、而编辑器里改过时的提醒。
 - `tasks_board.dart`：列表、详情和拖放区的组合。
 - `task_table.dart`：任务表格、行内操作与空态。
@@ -195,7 +208,7 @@ core/       domain/ ←──── services/
 - `task_detail_header.dart`、`task_detail_error.dart`、`task_detail_stages.dart`。
 - `task_detail_outputs.dart`、`task_detail_log.dart`、`task_detail_section.dart`。
 
-### 转写
+### 新建转写 `lib/features/transcribe/`
 
 - `transcribe_form.dart`：`TranscribeFormController`、暂存文件与提交结果。
 - `transcribe_recognize_section.dart`、`transcribe_translate_section.dart`、
@@ -205,7 +218,7 @@ core/       domain/ ←──── services/
   `shared/new_task_file_table.dart`）、`new_transcribe_param_panel.dart`：往共享面板外框里填的内容。
 - `new_transcribe_dialog.dart`：任务页使用的紧凑对话框入口。
 
-### 翻译
+### 新建翻译 `lib/features/translate/`
 
 - `translate_form.dart`：`TranslateFormController`、暂存字幕与提交结果。
 - `translate_language_section.dart`、`translate_advanced_section.dart`；`translate_footer.dart`：开始按钮。
@@ -232,13 +245,19 @@ core/       domain/ ←──── services/
 - `editor_session.dart`：sealed `EditorSession`；两种会话同一套保存规则 —— 编辑进度自动存，字幕文件（任务产物 / 挂载的本地文件）只在保存时写；写前比对时间戳；任务排队 / 运行中时 `busy`，编辑器只读。
 - `editor_controller.dart`：筛选、搜索、选中、撤销、改字 / 时间、拆分 / 合并、说话人、翻译与导出；保存状态 `SyncState`、连续编辑合并、本地草稿；`follow` 任务队列，流水线换了文档就刷新、清撤销栈，`locked` 时一切修改不生效。
 - `editor_open_form.dart`：本地原文 / 译文槽位、解析与配对预检。
-- `preview_playback.dart`：media_kit 播放器封装和按时间定位字幕。
+- `preview_playback.dart`：media_kit 播放器封装。
+- `editor_workspace.dart`：`EditorWorkspace`，当前会话、入口页是否盖在上面、最近打开；换会话前询问写入、草稿恢复、替换 / 重新配对都走它。挂在根节点上，由 `main.dart` 接线。
 
 ### 编辑页
 
-- `editor_page.dart`：快捷键、拖放、页面组合、恢复横幅、编辑器状态文案。
+- `editor_page.dart`：快捷键、生命周期、页面组合。
+- `editor_drop_zone.dart`：拖文件到编辑页的左右两块落区。
+- `editor_banners.dart`：只读横幅与恢复横幅。
+- `editor_chrome.dart`：编辑器分区的顶栏内容、副标题与状态栏文案。
 - `editor_page_actions.dart`：视图菜单、保存 / 导出 / 翻译操作。
-- `editor_title.dart`：来源浮层、保存状态 chip 与弹层、待校对徽标。
+- `editor_title.dart`：顶栏标题右侧的组合与待校对徽标。
+- `editor_source_chip.dart`：本地会话的来源 chip 与来源浮层。
+- `editor_sync_chip.dart`：任务会话的保存状态 chip 与弹层。
 - `editor_leave_dialog.dart`：离开 / 退出前「先写入字幕文件？」、写入流程与外部修改冲突询问。
 
 字幕表格拆成：
@@ -309,7 +328,7 @@ core/       domain/ ←──── services/
 | 任务 JSON | `domain/task.dart` + `services/task_store.dart` |
 | 设置键与默认值 | `services/settings.dart` |
 | 导航项 | `features/shell/nav_rail.dart` + `main.dart` 的页面 switch |
-| 顶栏内容 | 各页的 `xxxChrome()` + `features/shell/page_chrome.dart` |
+| 顶栏内容 | 各页的 `xxxChrome()` + `features/shared/page_chrome.dart` |
 | 建任务页的拖放、横幅、快捷键、两栏断点 | `features/shared/new_task_page.dart` |
 | 建任务页的面板外框、空态、页脚文案、「上次参数」 | `features/shared/new_task_panels.dart` |
 | 建任务页的文件表、追加落区 | `features/shared/new_task_file_table.dart` |
@@ -328,5 +347,8 @@ flutter test --tags golden --run-skipped
 
 - 常规测试覆盖 domain、provider、队列、续跑、表单、编辑器与转码。
 - `test/paths_test.dart` 钉死 POSIX / Windows 路径、盘符根目录与产物语言标签。
-- golden 测试共 44 张场景图；拆 UI 文件后必须保持逐像素一致。
+- `test/editor_workspace_test.dart` 覆盖换会话、入口页开合与「最近打开」的串行写盘；
+  `test/text_focus_test.dart` 钉死「焦点在输入框里」的判断（单行 / 多行）。
+- `test/status_snapshot_test.dart` 钉死状态栏快照的服务文案（未选择 / 未配置 / 已配置）与任务计数。
+- golden 测试共 45 张场景图；拆 UI 文件后必须保持逐像素一致。
 - `live` 测试需要真实密钥，默认跳过；ffmpeg / 平台硬件编码用例会按本机能力跳过。

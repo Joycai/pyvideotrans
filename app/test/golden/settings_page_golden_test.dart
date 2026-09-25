@@ -103,11 +103,11 @@ void main() {
           onSectionChanged: (_) {},
           chrome: () => settingsChrome(onReset: () {}),
           status: () => StatusSnapshot(
-            localEngine: 'ffmpeg · 就绪',
-            cloud: asrOk
+            ffmpeg: 'ffmpeg · 就绪',
+            asr: asrOk
                 ? (connected: true, label: '阿里百炼 · Qwen3-ASR · 已配置')
                 : (connected: false, label: 'Groq · 未配置'),
-            localBackend: asrOk
+            translation: asrOk
                 ? (connected: true, label: 'DeepSeek · 已配置')
                 : (connected: true, label: 'Ollama · 已配置'),
             runningTasks: asrOk ? 2 : 0,

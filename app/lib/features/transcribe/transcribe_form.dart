@@ -8,14 +8,7 @@ import '../../domain/task_options.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/readiness.dart';
 import '../../services/settings.dart';
-
-/// 表单确认后交出来的东西：一批文件 + 一份参数。
-class NewTranscribeResult {
-  const NewTranscribeResult({required this.paths, required this.options});
-
-  final List<String> paths;
-  final TaskOptions options;
-}
+import '../shared/enqueue_request.dart';
 
 /// 文件列表里一行的探测状态。
 enum StagedFileState {
@@ -43,15 +36,7 @@ class StagedFile {
     return cut <= 0 ? '' : path.substring(0, cut);
   }
 
-  bool get isVideo => const {
-    'mp4',
-    'mov',
-    'mkv',
-    'avi',
-    'webm',
-    'flv',
-    'wmv',
-  }.contains(MediaKinds.extensionOf(path));
+  bool get isVideo => MediaKinds.isMedia(path) && !MediaKinds.isAudio(path);
 
   bool get willEnqueue => state != StagedFileState.unreadable;
 }
@@ -148,7 +133,7 @@ class TranscribeFormController extends ChangeNotifier {
       return '已忽略 $subtitles 个字幕文件，字幕请用「新建翻译」';
     }
     return '不认识的格式：'
-        '${rejected.map(MediaKinds.extensionOf).where((e) => e.isNotEmpty).toSet().join('、')}';
+        '${rejected.map(extensionOf).where((e) => e.isNotEmpty).toSet().join('、')}';
   }
 
   /// 加一批路径。非音视频与已在列表里的跳过；先以「探测中」入列，探完再更新，
@@ -327,19 +312,12 @@ class TranscribeFormController extends ChangeNotifier {
 
   /// 打包交出去，并把这份参数记为「上次参数」。不能开始时返回 null。
   /// 不清空列表 —— 对话框随即关闭，页面则自己决定清空的时机。
-  NewTranscribeResult? submit() {
+  EnqueueRequest? submit() {
     if (!canStart) return null;
     settings.lastTranscribeOptions = _options;
-    return NewTranscribeResult(
+    return EnqueueRequest(
       paths: enqueueable.map((f) => f.path).toList(),
       options: _options,
     );
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-// 三段表单。对话框与页面各自决定怎么摆，段内长什么样在这里定。
-//
-// 两种外形：对话框里每段是一张卡片（FormSection），页面的参数面板里三段
-// 平铺、用 1px 分隔线隔开（flat）。字段、文案、校验完全相同。
-// ═══════════════════════════════════════════════════════════════════════

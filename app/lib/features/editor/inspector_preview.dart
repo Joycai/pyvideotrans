@@ -95,7 +95,7 @@ class InspectorPreview extends StatelessWidget {
       text,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: kTimecodeStyle.copyWith(
+      style: AppTextStyles.timecode.copyWith(
         fontSize: 11,
         color: const Color(0xFF8A9099),
       ),
@@ -256,7 +256,10 @@ class _Transport extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Timecode(Srt.formatTimecode(positionMs)),
-                Text(' / ', style: kTimecodeStyle.copyWith(color: cs.outline)),
+                Text(
+                  ' / ',
+                  style: AppTextStyles.timecode.copyWith(color: cs.outline),
+                ),
                 Timecode(Srt.formatTimecode(durationMs), color: timecodeColor),
               ],
             ),
@@ -287,7 +290,7 @@ class _ScreenAction extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: Text(
           label,
-          style: kTimecodeStyle.copyWith(
+          style: AppTextStyles.timecode.copyWith(
             fontSize: 11,
             color: const Color(0xFFB8C0CC),
           ),

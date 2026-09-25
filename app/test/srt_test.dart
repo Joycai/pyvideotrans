@@ -259,9 +259,9 @@ hello
     });
 
     test('拆分会清掉无法对应的旧译文', () {
-      final translated = SubtitleDocument(
+      const translated = SubtitleDocument(
         cues: [
-          const Cue(
+          Cue(
             index: 1,
             startMs: 0,
             endMs: 1000,
@@ -277,10 +277,10 @@ hello
     });
 
     test('文档时长取最晚结束时间而非列表最后一条', () {
-      final document = SubtitleDocument(
+      const document = SubtitleDocument(
         cues: [
-          const Cue(index: 1, startMs: 0, endMs: 5000, source: 'late'),
-          const Cue(index: 2, startMs: 0, endMs: 1000, source: 'early'),
+          Cue(index: 1, startMs: 0, endMs: 5000, source: 'late'),
+          Cue(index: 2, startMs: 0, endMs: 1000, source: 'early'),
         ],
       );
       expect(document.duration, const Duration(seconds: 5));

@@ -46,7 +46,7 @@ class CommandBlock extends StatelessWidget {
           child: SingleChildScrollView(
             child: SelectableText(
               command,
-              style: kTimecodeStyle.copyWith(
+              style: AppTextStyles.timecode.copyWith(
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
                 height: 1.5,

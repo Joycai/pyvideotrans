@@ -5,12 +5,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/cue.dart';
-import 'package:subtitle_studio/domain/task_control.dart';
 import 'package:subtitle_studio/services/audio_splitter.dart';
 import 'package:subtitle_studio/services/dashscope_asr.dart';
 import 'package:subtitle_studio/services/dashscope_filetrans.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
-import 'package:subtitle_studio/services/openai_compatible.dart';
+import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';
 

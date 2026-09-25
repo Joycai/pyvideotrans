@@ -31,10 +31,10 @@ class AnchoredPopover extends StatefulWidget {
   final bool matchAnchorWidth;
 
   @override
-  State<AnchoredPopover> createState() => AnchoredPopoverState();
+  State<AnchoredPopover> createState() => _AnchoredPopoverState();
 }
 
-class AnchoredPopoverState extends State<AnchoredPopover> {
+class _AnchoredPopoverState extends State<AnchoredPopover> {
   final _portal = OverlayPortalController();
   final _anchorKey = GlobalKey();
 
@@ -306,6 +306,9 @@ String friendlyTime(DateTime time, {DateTime? now}) {
   if (time.year != today.year) return '${time.year}年${time.month}月${time.day}日';
   return '${time.month}月${time.day}日';
 }
+
+/// 今天的只写钟点，其他日子带上日期。
+String shortFriendlyTime(DateTime t) => friendlyTime(t).replaceFirst('今天 ', '');
 
 class EditorTextAction extends StatelessWidget {
   const EditorTextAction({

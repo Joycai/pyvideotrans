@@ -91,7 +91,7 @@ class SavedIndicator extends StatelessWidget {
     return AnimatedOpacity(
       opacity: visible ? 1 : 0,
       duration: AppDuration.long,
-      curve: kEasingStandard,
+      curve: AppEasing.standard,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -284,7 +284,7 @@ class _Pill extends StatelessWidget {
     final radius = BorderRadius.circular(AppRadius.md - 2);
     return AnimatedContainer(
       duration: AppDuration.medium,
-      curve: kEasingStandard,
+      curve: AppEasing.standard,
       height: 30,
       decoration: BoxDecoration(
         color: selected ? cs.surfaceContainerLowest : Colors.transparent,
@@ -345,7 +345,7 @@ class SettingsTextField extends StatelessWidget {
     value: value,
     hint: hint,
     style: mono
-        ? kTimecodeStyle.copyWith(color: context.colors.onSurface)
+        ? AppTextStyles.timecode.copyWith(color: context.colors.onSurface)
         : null,
     error: error,
     onChanged: onChanged,

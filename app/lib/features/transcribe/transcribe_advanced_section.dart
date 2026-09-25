@@ -6,7 +6,6 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/task_options.dart';
-import '../shared/provider_fields.dart';
 import 'transcribe_form.dart';
 
 /// 「高级」段：可折叠；识别提示词、每行字数、输出格式与位置。
@@ -172,7 +171,7 @@ class TranscribeAdvancedSection extends StatelessWidget {
                       o.outputLocation == OutputLocation.custom
                           ? (o.outputDir ?? '点此选择目录…')
                           : '与源文件同一个文件夹',
-                      style: kTimecodeStyle.copyWith(
+                      style: AppTextStyles.timecode.copyWith(
                         color: cs.onSurfaceVariant,
                         fontWeight: FontWeight.w400,
                       ),
@@ -207,7 +206,7 @@ class _OutputLocationRadios extends StatelessWidget {
     final stem = sample.contains('.')
         ? sample.substring(0, sample.lastIndexOf('.'))
         : sample;
-    final mono = kTimecodeStyle.copyWith(
+    final mono = AppTextStyles.timecode.copyWith(
       fontSize: 12,
       fontWeight: FontWeight.w400,
       color: cs.onSurfaceVariant,

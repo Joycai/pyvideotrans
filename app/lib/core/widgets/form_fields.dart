@@ -187,7 +187,7 @@ class _NumberFieldState extends State<NumberField> {
       focusNode: _focus,
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      style: kTimecodeStyle.copyWith(color: context.colors.onSurface),
+      style: AppTextStyles.timecode.copyWith(color: context.colors.onSurface),
       decoration: bareInputDecoration(context),
       onChanged: (raw) {
         final parsed = int.tryParse(raw);
@@ -362,7 +362,7 @@ class AppSwitch extends StatelessWidget {
         onTap: () => onChanged(!value),
         child: AnimatedContainer(
           duration: AppDuration.medium,
-          curve: kEasingStandard,
+          curve: AppEasing.standard,
           width: 44,
           height: 24,
           decoration: BoxDecoration(
@@ -374,7 +374,7 @@ class AppSwitch extends StatelessWidget {
             children: [
               AnimatedPositioned(
                 duration: AppDuration.medium,
-                curve: kEasingStandard,
+                curve: AppEasing.standard,
                 top: 2,
                 left: value ? 22 : 2,
                 child: Container(

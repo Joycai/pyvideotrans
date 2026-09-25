@@ -233,7 +233,7 @@ class _EncoderCard extends StatelessWidget {
                   sub,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: kTimecodeStyle.copyWith(
+                  style: AppTextStyles.timecode.copyWith(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
                     color: cs.onSurfaceVariant,
@@ -340,7 +340,7 @@ class _EncoderParams extends StatelessWidget {
               const Spacer(),
               Text(
                 encoder.id,
-                style: kTimecodeStyle.copyWith(
+                style: AppTextStyles.timecode.copyWith(
                   fontSize: 12,
                   fontWeight: FontWeight.w400,
                   color: cs.onSurfaceVariant,
@@ -350,7 +350,7 @@ class _EncoderParams extends StatelessWidget {
           ),
           for (final param in visible) ...[
             const SizedBox(height: AppSpacing.s3),
-            EncoderParamField(
+            _EncoderParamField(
               key: ValueKey('${encoder.id}.${param.key}'),
               param: param,
               value: values[param.key]!,
@@ -365,8 +365,8 @@ class _EncoderParams extends StatelessWidget {
 }
 
 /// 一项编码器参数的控件：选项少用分段、多用下拉，数值用数字框，开关用 Switch。
-class EncoderParamField extends StatelessWidget {
-  const EncoderParamField({
+class _EncoderParamField extends StatelessWidget {
+  const _EncoderParamField({
     super.key,
     required this.param,
     required this.value,
@@ -411,7 +411,7 @@ class EncoderParamField extends StatelessWidget {
             min: p.min,
             max: p.max,
             width: 120,
-            onChanged: (v) => onChanged(v),
+            onChanged: onChanged,
           ),
           const SizedBox(width: AppSpacing.s2),
           Text(

@@ -41,7 +41,7 @@ class _TaskDropZoneState extends State<TaskDropZone> {
       },
       child: AnimatedSize(
         duration: AppDuration.medium,
-        curve: kEasingEmphasized,
+        curve: AppEasing.emphasized,
         alignment: Alignment.topCenter,
         child: _dragging ? const _Expanded() : _Collapsed(onBrowse: widget.onBrowse),
       ),

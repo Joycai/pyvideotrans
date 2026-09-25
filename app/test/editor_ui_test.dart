@@ -7,10 +7,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/subtitle_pairing.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
+import 'package:subtitle_studio/features/editor/editor_leave_dialog.dart';
 import 'package:subtitle_studio/features/editor/editor_open_form.dart';
 import 'package:subtitle_studio/features/editor/editor_page.dart';
 import 'package:subtitle_studio/features/editor/editor_page_actions.dart';
-import 'package:subtitle_studio/features/editor/editor_leave_dialog.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/editor_widgets.dart';
 import 'package:subtitle_studio/services/settings.dart';
@@ -86,6 +86,17 @@ void main() {
       final third = c.speakers[2];
       await tester.sendKeyEvent(LogicalKeyboardKey.digit3);
       expect(c.document.cues.first.speaker, third.id);
+    });
+
+    testWidgets('焦点在输入框里时数字键是打字，不改说话人', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      c.select(0);
+      final before = c.document.cues.first.speaker;
+      await tester.tap(find.byType(EditableText).first);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit3);
+      expect(c.document.cues.first.speaker, before);
     });
 
     testWidgets('只挂原文：译文表头给出挂载入口，检视面板是空态', (tester) async {

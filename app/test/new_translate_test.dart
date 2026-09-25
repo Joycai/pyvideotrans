@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/core/widgets/buttons.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
-import 'package:subtitle_studio/features/tasks/new_translate_dialog.dart';
+import 'package:subtitle_studio/features/translate/new_translate_dialog.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
@@ -33,7 +33,7 @@ Future<AppSettings> _settings({bool withKey = true}) async {
 }
 
 void main() {
-  NewTranslateResult? result;
+  EnqueueRequest? result;
   var openedSettings = false;
   List<String>? switchedToTranscribe;
 

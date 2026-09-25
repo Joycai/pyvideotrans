@@ -147,7 +147,7 @@ class Timecode extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
     text,
-    style: kTimecodeStyle.copyWith(
+    style: AppTextStyles.timecode.copyWith(
       color: color ?? context.colors.onSurface,
       fontSize: fontSize,
     ),

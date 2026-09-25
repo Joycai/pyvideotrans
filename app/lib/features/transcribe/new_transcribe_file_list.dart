@@ -52,7 +52,7 @@ class NewTranscribeFileList extends StatelessWidget {
         Text(
           info?.duration == null ? '—' : Srt.formatDuration(info!.duration!),
           textAlign: TextAlign.right,
-          style: kTimecodeStyle.copyWith(
+          style: AppTextStyles.timecode.copyWith(
             color: state == StagedFileState.ready
                 ? cs.onSurface
                 : cs.onSurfaceVariant,
@@ -61,7 +61,7 @@ class NewTranscribeFileList extends StatelessWidget {
         Text(
           info?.sizeLabel ?? '',
           textAlign: TextAlign.right,
-          style: kTimecodeStyle.copyWith(color: cs.onSurfaceVariant),
+          style: AppTextStyles.timecode.copyWith(color: cs.onSurfaceVariant),
         ),
         _StateChip(state: state),
       ],

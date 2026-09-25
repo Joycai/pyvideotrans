@@ -4,9 +4,9 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/indicators.dart';
+import '../../domain/numbers.dart';
 import '../../domain/srt.dart';
 import '../shared/new_task_file_table.dart';
-import '../shared/provider_fields.dart';
 import 'translate_form.dart';
 
 class NewTranslateFileList extends StatelessWidget {
@@ -53,19 +53,19 @@ class NewTranslateFileList extends StatelessWidget {
         Text(
           file.cueCount == null ? '—' : grouped(file.cueCount!),
           textAlign: TextAlign.right,
-          style: kTimecodeStyle.copyWith(color: numberColor),
+          style: AppTextStyles.timecode.copyWith(color: numberColor),
         ),
         Text(
           ready && info?.duration != null
               ? Srt.formatDuration(info!.duration!)
               : '—',
           textAlign: TextAlign.right,
-          style: kTimecodeStyle.copyWith(color: numberColor),
+          style: AppTextStyles.timecode.copyWith(color: numberColor),
         ),
         Text(
           info?.sizeLabel ?? '',
           textAlign: TextAlign.right,
-          style: kTimecodeStyle.copyWith(color: cs.onSurfaceVariant),
+          style: AppTextStyles.timecode.copyWith(color: cs.onSurfaceVariant),
         ),
         _StateChip(state: file.state),
       ],

@@ -5,7 +5,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../domain/task.dart';
 import '../../services/editor_store.dart';
-import '../shell/page_chrome.dart';
+import '../shared/page_chrome.dart';
 import 'editor_open_form.dart';
 import 'editor_open_panels.dart';
 

@@ -142,7 +142,7 @@ class SpeakerManager extends StatelessWidget {
 }
 
 /// 「142 条 · 18:32」。
-String speakerStat(SpeakerSummary s) {
+String _speakerStat(SpeakerSummary s) {
   final total = s.durationMs ~/ 1000;
   String two(int v) => v.toString().padLeft(2, '0');
   return '${s.cueCount} 条 · ${two(total ~/ 60)}:${two(total % 60)}';
@@ -256,7 +256,7 @@ class _SpeakerRowState extends State<_SpeakerRow> {
                     child: Align(
                       alignment: Alignment.centerRight,
                       child: Timecode(
-                        speakerStat(s),
+                        _speakerStat(s),
                         fontSize: 12,
                         color: cs.onSurfaceVariant,
                       ),

@@ -10,15 +10,15 @@ import 'package:subtitle_studio/domain/file_stamp.dart';
 import 'package:subtitle_studio/domain/paths.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task.dart';
+import 'package:subtitle_studio/features/editor/editor_banners.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_leave_dialog.dart';
-import 'package:subtitle_studio/features/editor/editor_page.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/editor_title.dart';
 import 'package:subtitle_studio/features/tasks/task_resume_dialog.dart';
 import 'package:subtitle_studio/pipeline/subtitle_output_writer.dart';
 import 'package:subtitle_studio/services/editor_store.dart';
-import 'package:subtitle_studio/services/file_stamps.dart';
+import 'package:subtitle_studio/services/file_io.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
 

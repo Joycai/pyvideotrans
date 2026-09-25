@@ -124,7 +124,7 @@ class TaskTranscodeOutput extends StatelessWidget {
                   ? '视频 · ${job.options.container.label}'
                   : baseName(path),
               overflow: TextOverflow.ellipsis,
-              style: kTimecodeStyle.copyWith(
+              style: AppTextStyles.timecode.copyWith(
                 fontSize: 13,
                 fontWeight: FontWeight.w400,
                 color: fg,

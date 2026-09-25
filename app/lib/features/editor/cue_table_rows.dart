@@ -38,7 +38,7 @@ class CueTableHeader extends StatelessWidget {
         color: cs.surfaceContainerLow,
         border: Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
-      child: CueTableGrid(
+      child: _CueTableGrid(
         columns: columns,
         children: [
           Text('#', style: style),
@@ -149,10 +149,10 @@ class CueTableRow extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<CueTableRow> createState() => _CueRowState();
+  State<CueTableRow> createState() => _CueTableRowState();
 }
 
-class _CueRowState extends State<CueTableRow> {
+class _CueTableRowState extends State<CueTableRow> {
   bool _hovered = false;
 
   @override
@@ -217,7 +217,7 @@ class _CueRowState extends State<CueTableRow> {
                 ),
               ),
               Expanded(
-                child: CueTableGrid(
+                child: _CueTableGrid(
                   columns: widget.columns,
                   children: [
                     Timecode(
@@ -376,12 +376,8 @@ class CueStateTag extends StatelessWidget {
   }
 }
 
-class CueTableGrid extends StatelessWidget {
-  const CueTableGrid({
-    super.key,
-    required this.columns,
-    required this.children,
-  });
+class _CueTableGrid extends StatelessWidget {
+  const _CueTableGrid({required this.columns, required this.children});
 
   final List<double?> columns;
   final List<Widget> children;

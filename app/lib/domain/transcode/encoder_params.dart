@@ -47,7 +47,7 @@ sealed class EncoderParam {
   }
 }
 
-class ChoiceParam extends EncoderParam {
+final class ChoiceParam extends EncoderParam {
   const ChoiceParam({
     required super.key,
     required super.label,
@@ -76,7 +76,7 @@ class ChoiceParam extends EncoderParam {
       options.where((o) => o.$1 == value).firstOrNull?.$2 ?? '$value';
 }
 
-class IntParam extends EncoderParam {
+final class IntParam extends EncoderParam {
   const IntParam({
     required super.key,
     required super.label,
@@ -103,7 +103,7 @@ class IntParam extends EncoderParam {
       raw is int ? raw.clamp(min, max) : defaultInt;
 }
 
-class BoolParam extends EncoderParam {
+final class BoolParam extends EncoderParam {
   const BoolParam({
     required super.key,
     required super.label,

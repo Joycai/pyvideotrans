@@ -59,7 +59,7 @@ abstract final class ProviderReadiness {
     if (basic != null) return basic;
 
     final chosen = model ?? settings.endpointFor(info).model;
-    final unsupported = _languageNote(info.id, chosen, language);
+    final unsupported = _languageNote(chosen, language);
     if (unsupported != null) {
       return Readiness(
         ReadinessLevel.advisory,
@@ -155,11 +155,7 @@ abstract final class ProviderReadiness {
     'FunAudioLLM/SenseVoiceSmall': {'zh', 'yue', 'en', 'ja', 'ko'},
   };
 
-  static String? _languageNote(
-    String providerId,
-    String model,
-    Language? language,
-  ) {
+  static String? _languageNote(String model, Language? language) {
     if (language == null || language.isAuto) return null;
     final supported = _limited[model];
     if (supported == null || supported.contains(language.code)) return null;

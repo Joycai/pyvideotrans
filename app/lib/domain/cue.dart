@@ -363,3 +363,26 @@ class SubtitleDocument {
     for (final (i, c) in list.indexed) c.copyWith(index: i + 1),
   ];
 }
+
+/// 界面上显示的状态。整份文档都没有译文时（只挂了原文），「未翻译」没有
+/// 意义，按置信度与校对标记显示成「待校对」或「已校对」。
+CueState displayStateOf(Cue cue, {required bool translated}) {
+  final state = cue.state;
+  if (translated || state != CueState.untranslated) return state;
+  final low = cue.confidence != null && cue.confidence! < Cue.lowConfidence;
+  return low && !cue.reviewed ? CueState.review : CueState.ok;
+}
+
+/// [ms] 落在哪一条字幕里（含开始、不含结束）。几条重叠时优先 [preferred]，
+/// 这样播放头在重叠段里不会来回跳；都不含时返回 null。
+int? cueIndexAt(List<Cue> cues, int ms, {int? preferred}) {
+  bool contains(Cue c) => ms >= c.startMs && ms < c.endMs;
+  if (preferred != null &&
+      preferred >= 0 &&
+      preferred < cues.length &&
+      contains(cues[preferred])) {
+    return preferred;
+  }
+  final index = cues.indexWhere(contains);
+  return index < 0 ? null : index;
+}

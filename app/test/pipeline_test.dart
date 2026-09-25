@@ -2,10 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-
-import 'helpers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
@@ -14,6 +13,8 @@ import 'package:subtitle_studio/pipeline/task_runner.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
+
+import 'helpers.dart';
 
 const _asrInfo = ProviderInfo(id: 'fake_asr', name: '假识别', vendor: '测试');
 const _mtInfo = ProviderInfo(id: 'fake_mt', name: '假翻译', vendor: '测试');
@@ -275,7 +276,7 @@ void main() {
 
     test('取消时保留已完成阶段，状态为已取消', () async {
       final token = CancellationToken();
-      final mt = _StatefulTranslator(() => token.cancel());
+      final mt = _StatefulTranslator(token.cancel);
       final (task, runner, _) = await translateTask(
         translator: mt,
         batchSize: 2,
@@ -451,6 +452,11 @@ void main() {
 
       expect(task.resumeStage, TaskStage.recognize);
     });
+  });
+
+  test('TaskRunner 默认建的 Transcoder 与自身共用同一个 Ffmpeg', () {
+    final runner = TaskRunner(settings: settings, workDir: work.path);
+    expect(runner.transcoder.media, same(runner.media));
   });
 
   group('队列', () {

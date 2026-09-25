@@ -19,7 +19,7 @@ enum AppSection {
   final String label;
 }
 
-/// 72px 宽的玻璃导航栏。设置固定在底部，与上面四项用弹性空间隔开。
+/// 72px 宽的玻璃导航栏。设置固定在底部，与上面五项用弹性空间隔开。
 class AppNavRail extends StatelessWidget {
   const AppNavRail({super.key, required this.current, required this.onSelect});
 
@@ -120,7 +120,7 @@ class _RailItemState extends State<_RailItem> {
               // 选中指示是 56×32 的胶囊，与 M3 NavigationRail 一致。
               AnimatedContainer(
                 duration: AppDuration.short,
-                curve: kEasingStandard,
+                curve: AppEasing.standard,
                 width: 56,
                 height: 32,
                 alignment: Alignment.center,

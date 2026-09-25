@@ -214,7 +214,7 @@ class ProviderSection extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
-                child: BatchSlider(
+                child: _BatchSlider(
                   value: settings.translationBatchSize,
                   onChanged: (v) {
                     settings.translationBatchSize = v;
@@ -331,7 +331,7 @@ class _KeyField extends StatelessWidget {
     hint: '未填写',
     obscure: !visible,
     style: visible
-        ? kTimecodeStyle.copyWith(color: context.colors.onSurface)
+        ? AppTextStyles.timecode.copyWith(color: context.colors.onSurface)
         : null,
     error: missing,
     padding: const EdgeInsets.only(left: AppSpacing.s3, right: AppSpacing.s1),
@@ -348,19 +348,14 @@ class _KeyField extends StatelessWidget {
 
 /// 每批条数滑杆：4px 轨、primary 填充、20px 白色手柄；右侧当前值 + 「条 / 批」，
 /// 下方标出 1 与 50 两端。
-class BatchSlider extends StatelessWidget {
-  const BatchSlider({
-    super.key,
-    required this.value,
-    required this.onChanged,
-    this.min = 1,
-    this.max = 50,
-  });
+class _BatchSlider extends StatelessWidget {
+  const _BatchSlider({required this.value, required this.onChanged});
 
   final int value;
   final ValueChanged<int> onChanged;
-  final int min;
-  final int max;
+
+  static const min = 1;
+  static const max = 50;
 
   @override
   Widget build(BuildContext context) {

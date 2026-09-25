@@ -2,25 +2,15 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../domain/language.dart';
 import '../../domain/media_kinds.dart';
+import '../../domain/numbers.dart';
+import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
 import '../../domain/task_options.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/readiness.dart';
 import '../../services/settings.dart';
-import '../shared/provider_fields.dart';
-
-/// 表单确认后交出来的东西：一批字幕文件 + 一份参数。
-///
-/// [paths] 已经剔掉解析不出内容的文件 —— 那些留在界面上是为了让用户知道
-/// 自己拖了什么，但不该变成必然失败的任务。
-class NewTranslateResult {
-  const NewTranslateResult({required this.paths, required this.options});
-
-  final List<String> paths;
-  final TaskOptions options;
-}
+import '../shared/enqueue_request.dart';
 
 /// 字幕列表里一行的解析状态。
 enum StagedSubtitleState {
@@ -164,7 +154,7 @@ class TranslateFormController extends ChangeNotifier {
   static String? rejection(List<String> paths) {
     final unknown = paths
         .where((p) => !MediaKinds.isSubtitle(p) && !MediaKinds.isMedia(p))
-        .map(MediaKinds.extensionOf)
+        .map(extensionOf)
         .where((e) => e.isNotEmpty)
         .toSet();
     if (unknown.isEmpty) return null;
@@ -383,14 +373,11 @@ class TranslateFormController extends ChangeNotifier {
     );
   }
 
-  /// 产物名里的语言段。与 [TaskRunner] 的命名保持一致，双语带上两种语言，
-  /// 原文为自动检测时写 src。
-  String get langTag {
-    String tag(Language l) => l.isAuto ? 'src' : l.code;
-    return _options.resolvedBilingual.isBilingual
-        ? '${tag(_options.sourceLanguage)}-${tag(_options.targetLanguage)}'
-        : tag(_options.targetLanguage);
-  }
+  /// 产物名里的语言段。与流水线写产物共用 [languageTag]，双语带上两种语言。
+  String get langTag => _options.resolvedBilingual.isBilingual
+      ? '${languageTag(_options.sourceLanguage)}-'
+            '${languageTag(_options.targetLanguage)}'
+      : languageTag(_options.targetLanguage);
 
   /// 「原文件名.en.srt」这样的产物名示例。
   String get outputNameExample => '原文件名.$langTag.${_options.format.extension}';
@@ -405,19 +392,12 @@ class TranslateFormController extends ChangeNotifier {
 
   /// 打包交出去，并把这份参数记为「上次参数」。不能开始时返回 null。
   /// 不清空列表 —— 对话框随即关闭，页面则自己决定清空的时机。
-  NewTranslateResult? submit() {
+  EnqueueRequest? submit() {
     if (!canStart) return null;
     settings.lastTranslateOptions = _options;
-    return NewTranslateResult(
+    return EnqueueRequest(
       paths: enqueueable.map((f) => f.path).toList(),
       options: _options,
     );
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════
-// 两段表单。对话框与页面各自决定怎么摆，段内长什么样在这里定。
-//
-// 两种外形：对话框里每段是一张卡片（FormSection），页面的参数面板里两段
-// 平铺、用 1px 分隔线隔开（flat）。字段、文案、校验完全相同。
-// ═══════════════════════════════════════════════════════════════════════

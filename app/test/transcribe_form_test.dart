@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:subtitle_studio/features/tasks/transcribe_form.dart';
+import 'package:subtitle_studio/features/transcribe/transcribe_form.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 

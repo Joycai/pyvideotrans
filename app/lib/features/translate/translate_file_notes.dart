@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/fields.dart';
 import '../../core/widgets/note_bar.dart';
-import '../shared/provider_fields.dart';
 import 'translate_form.dart';
 
 /// 文件区顶部的提示条：忽略了音视频（带「改用新建转写」）、不认识的格式（可关）。

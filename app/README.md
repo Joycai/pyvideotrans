@@ -18,7 +18,7 @@
 - 编码器：CPU（x264 / x265 / SVT-AV1 / libaom）、VideoToolbox（Apple）、NVENC（NVIDIA）、
   QSV（Intel）、AMF（AMD）。**每个编码器用自己的一套参数**（x264 的 CRF 与 preset、
   NVENC 的 CQ 与 p1–p7、QSV 的 ICQ、AMF 的 CQP……），不做通用的「质量 / 速度」映射。
-  参数表定义在 `lib/domain/transcode.dart` 的 `VideoEncoders`。
+  参数表定义在 `lib/domain/transcode/encoder_catalog.dart` 的 `VideoEncoders`。
 - 可用性检测：先看 `ffmpeg -encoders` 有没有编入，再对硬件编码器试编码 1 帧。
   编入了但没有对应显卡的会标「设备不可用」并写明原因。
 - 产物写到 `原文件名.hevc.mp4`（后缀可改），已存在时加序号，不覆盖；先写 `.part`，
@@ -72,13 +72,13 @@ sudo apt install libmpv-dev mpv    # Debian / Ubuntu；Fedora 用 mpv-libs-devel
 lib/
   main.dart          装配点：服务对象、根级表单控制器、页面切换、顶栏与状态栏
   core/theme/        设计令牌 → ThemeData 与 ThemeExtension
-  core/widgets/      无业务语义控件；fields.dart 是 dropdown / form_fields 的公共入口
+  core/widgets/      无业务语义控件；fields.dart 是 dropdown / form_fields / form_layout 的公共入口
   domain/            纯数据与纯规则，不碰网络 / 外部进程
   domain/transcode/  编解码枚举、编码器目录、参数、探测结果、ffmpeg 命令
   services/          provider、ffmpeg / ffprobe、设置与持久化
   pipeline/          串行队列、任务编排、阶段壳、字幕写出、转码执行
   features/shared/   跨 feature 共用的服务字段、命令块、入队横幅与步骤说明
-  features/          shell / tasks / transcode / editor / settings
+  features/          shell / tasks / transcribe / translate / transcode / editor / settings
 ```
 
 逐文件的职责、按功能反查、测试对照见 [`../docs/app-codemap.md`](../docs/app-codemap.md)。

@@ -5,12 +5,14 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../../domain/cue.dart';
+import '../../domain/file_stamp.dart';
 import '../../domain/language.dart';
 import '../../domain/line_wrap.dart';
+import '../../domain/output_naming.dart';
 import '../../domain/srt.dart';
 import '../../domain/task_options.dart';
 import '../../services/editor_store.dart';
-import '../../services/file_stamps.dart';
+import '../../services/file_io.dart';
 import '../../services/provider_api.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
@@ -77,15 +79,6 @@ class TargetRejected implements Exception {
 
   @override
   String toString() => reason;
-}
-
-/// 界面上显示的状态。整份文档都没有译文时（只挂了原文），「未翻译」没有
-/// 意义，按置信度与校对标记显示成「待校对」或「已校对」。
-CueState displayStateOf(Cue cue, {required bool translated}) {
-  final state = cue.state;
-  if (translated || state != CueState.untranslated) return state;
-  final low = cue.confidence != null && cue.confidence! < Cue.lowConfidence;
-  return low && !cue.reviewed ? CueState.review : CueState.ok;
 }
 
 /// 名单上的一位说话人，带上界面要显示的统计。
@@ -904,7 +897,6 @@ class EditorController extends ChangeNotifier {
     return done;
   }
 
-
   /// 导出到 [dir]（默认源文件所在目录或设置里指定的输出目录）。返回写出
   /// 的路径。导出是另存一份，不改变同步状态。
   Future<List<String>> export(Set<SrtField> fields, {String? dir}) async {
@@ -921,11 +913,11 @@ class EditorController extends ChangeNotifier {
     final stem = session.exportStem;
     String pathOf(SrtField field) {
       final suffix = switch (field) {
-        SrtField.source => _tag(session.sourceLanguage.code),
-        SrtField.translation => _tag(session.targetLanguage.code),
+        SrtField.source => languageTag(session.sourceLanguage),
+        SrtField.translation => languageTag(session.targetLanguage),
         SrtField.bilingualTargetAbove || SrtField.bilingualTargetBelow =>
-          '${_tag(session.sourceLanguage.code)}-'
-              '${_tag(session.targetLanguage.code)}',
+          '${languageTag(session.sourceLanguage)}-'
+              '${languageTag(session.targetLanguage)}',
       };
       // 用平台分隔符：要与 targetPaths 比对，Windows 上混用 / 与 \ 会比不上。
       return '$dir${Platform.pathSeparator}$stem.$suffix.'
@@ -983,11 +975,5 @@ class EditorController extends ChangeNotifier {
     // 几份一起写，失败时不留半套。
     await writeFilesAtomically(contents);
     return contents.keys.toList();
-  }
-
-  static String _tag(String language) {
-    final trimmed = language.trim();
-    if (trimmed.isEmpty || trimmed == 'auto') return 'src';
-    return trimmed.replaceAll(RegExp(r'[\\/\s]+'), '_');
   }
 }

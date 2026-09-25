@@ -74,7 +74,7 @@ class OutputSection extends StatelessWidget {
                           dir ?? '源文件所在目录',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: kTimecodeStyle.copyWith(
+                          style: AppTextStyles.timecode.copyWith(
                             color: dir == null
                                 ? cs.onSurfaceVariant
                                 : cs.onSurface,

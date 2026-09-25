@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../domain/cue.dart';
 import '../../domain/language.dart';
-import '../../domain/media_kinds.dart';
+import '../../domain/numbers.dart';
 import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import '../../domain/subtitle_pairing.dart';
@@ -85,7 +85,7 @@ class EditorOpenForm extends ChangeNotifier {
       return (text: '时间轴基本对不上，先切到「按序号」再打开', error: true, empty: false);
     }
     return (
-      text: '将打开 ${_grouped(cueCount)} 条；⌘S 保存会写回这 $fileCount 个文件',
+      text: '将打开 ${grouped(cueCount)} 条；⌘S 保存会写回这 $fileCount 个文件',
       error: false,
       empty: false,
     );
@@ -96,7 +96,7 @@ class EditorOpenForm extends ChangeNotifier {
     final p = _pairing;
     if (p == null) return null;
     if (p.mode == PairingMode.byIndex && p.misalignedFrom == null) {
-      return '两份逐条对应，共 ${_grouped(p.paired)} 条';
+      return '两份逐条对应，共 ${grouped(p.paired)} 条';
     }
     if (p.mode == PairingMode.byTime &&
         p.misalignedFrom != null &&
@@ -160,8 +160,7 @@ class EditorOpenForm extends ChangeNotifier {
     await load(target, subs.first);
   }
 
-  static bool isOpenable(String path) =>
-      extensions.contains(MediaKinds.extensionOf(path));
+  static bool isOpenable(String path) => extensions.contains(extensionOf(path));
 
   /// 两个文件怎么分：语言段不同时，和设置里目标语言一致的那份当译文；
   /// 分不出来就只放第一个进原文。
@@ -275,15 +274,4 @@ class EditorOpenForm extends ChangeNotifier {
     _disposed = true;
     super.dispose();
   }
-
-}
-
-String _grouped(int value) {
-  final digits = value.toString();
-  final buffer = StringBuffer();
-  for (var i = 0; i < digits.length; i++) {
-    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
-    buffer.write(digits[i]);
-  }
-  return buffer.toString();
 }

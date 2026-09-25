@@ -4,7 +4,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../pipeline/task_queue.dart';
 import '../shared/new_task_page.dart';
 import '../shared/new_task_panels.dart';
-import '../shell/page_chrome.dart';
+import '../shared/page_chrome.dart';
 import 'new_translate_file_panel.dart';
 import 'new_translate_param_panel.dart';
 import 'translate_form.dart';

@@ -1,5 +1,5 @@
-import '../../domain/task_control.dart';
 import '../openai_compatible.dart';
+import '../provider_api.dart';
 import '../registry.dart';
 import '../settings.dart';
 
