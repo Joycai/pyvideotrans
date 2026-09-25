@@ -7,7 +7,20 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../../domain/cue.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/paths.dart';
-import 'editor_controller.dart';
+
+/// 播放器要跟着走的字幕表：有哪些条、选中了哪一条。`EditorController`
+/// 实现它；抽成接口是因为 controller 持有播放器（经 `EditorMedia`），
+/// 这里再反过来 import controller 就成环了。
+abstract interface class PlaybackCues implements Listenable {
+  SubtitleDocument get document;
+
+  /// 当前选中条在完整文档里的下标。
+  int get selected;
+
+  Cue? get current;
+
+  void select(int indexInDocument);
+}
 
 /// 检视面板的预览播放：把播放器与编辑器的选中条绑在一起。
 ///
@@ -18,12 +31,12 @@ import 'editor_controller.dart';
 /// 两个方向会互相触发，用 [_syncing] 挡住回声。播放器本身只在这里创建，
 /// 没有音视频的会话不会碰 media_kit。
 class PreviewPlayback extends ChangeNotifier {
-  PreviewPlayback({required this.controller, required this.mediaPath})
+  PreviewPlayback({required this.cues, required this.mediaPath})
     : player = Player(),
       isAudio = MediaKinds.isAudio(mediaPath),
-      _selected = controller.selected {
+      _selected = cues.selected {
     video = VideoController(player);
-    controller.addListener(_onEditorChanged);
+    cues.addListener(_onEditorChanged);
     _subs = [
       player.stream.position.listen(_onPosition),
       player.stream.duration.listen((d) {
@@ -51,7 +64,7 @@ class PreviewPlayback extends ChangeNotifier {
     ];
   }
 
-  final EditorController controller;
+  final PlaybackCues cues;
   final String mediaPath;
   final Player player;
   late final VideoController video;
@@ -80,20 +93,24 @@ class PreviewPlayback extends ChangeNotifier {
   /// 播放头所在的那一条；停在字幕之间的空白时为 null。
   Cue? get cueAtPlayhead {
     final index = cueIndexAt(
-      controller.document.cues,
+      cues.document.cues,
       position.inMilliseconds,
-      preferred: controller.selected,
+      preferred: cues.selected,
     );
-    return index == null ? null : controller.document.cues[index];
+    return index == null ? null : cues.document.cues[index];
   }
 
   /// 打开文件，不自动播放，播放头停在当前选中条的开始。
   Future<void> open() async {
-    _pendingSeekMs = controller.current?.startMs ?? 0;
+    _pendingSeekMs = cues.current?.startMs ?? 0;
     await player.open(Media(mediaPath), play: false);
   }
 
   Future<void> toggle() => playing ? player.pause() : player.play();
+
+  Future<void> pause() async {
+    if (playing) await player.pause();
+  }
 
   Future<void> seekTo(int ms) async {
     if (!loaded) {
@@ -111,10 +128,10 @@ class PreviewPlayback extends ChangeNotifier {
       seekTo((position + delta).inMilliseconds);
 
   void _onEditorChanged() {
-    if (_disposed || controller.selected == _selected) return;
-    _selected = controller.selected;
+    if (_disposed || cues.selected == _selected) return;
+    _selected = cues.selected;
     if (_syncing) return;
-    final cue = controller.current;
+    final cue = cues.current;
     if (cue != null) seekTo(cue.startMs);
   }
 
@@ -123,14 +140,14 @@ class PreviewPlayback extends ChangeNotifier {
     position = p;
     if (playing) {
       final index = cueIndexAt(
-        controller.document.cues,
+        cues.document.cues,
         p.inMilliseconds,
-        preferred: controller.selected,
+        preferred: cues.selected,
       );
-      if (index != null && index != controller.selected) {
+      if (index != null && index != cues.selected) {
         _syncing = true;
         try {
-          controller.select(index);
+          cues.select(index);
         } finally {
           _syncing = false;
         }
@@ -142,7 +159,7 @@ class PreviewPlayback extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    controller.removeListener(_onEditorChanged);
+    cues.removeListener(_onEditorChanged);
     for (final s in _subs) {
       s.cancel();
     }

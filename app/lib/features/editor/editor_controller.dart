@@ -16,7 +16,10 @@ import '../../services/file_io.dart';
 import '../../services/provider_api.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
+import 'editor_media.dart';
+import 'editor_prompts.dart';
 import 'editor_session.dart';
+import 'preview_playback.dart';
 
 /// 原文 / 译文 / 双语。
 enum CueView { source, translation, both }
@@ -108,7 +111,7 @@ class SpeakerSummary {
 ///
 /// 保存分两层：编辑进度每次改动都自动存（任务会话由上层随任务 JSON 写盘，
 /// 本地会话在这里攒 300ms 写草稿）；字幕文件只在 [save] 时写。
-class EditorController extends ChangeNotifier {
+class EditorController extends ChangeNotifier implements PlaybackCues {
   /// [saved] 是上次写进字幕文件的版本。不给时：没有未写入修改的会话就是
   /// 打开时的文档；有的话（任务重开）就不知道了，「撤销到上次写入」不可用。
   ///
@@ -139,6 +142,17 @@ class EditorController extends ChangeNotifier {
 
   /// 本地会话的附加状态与编辑进度写在这里；为空就不写。
   final EditorStore? store;
+
+  /// 检视面板预览的音视频与播放器，随 controller 一起释放。
+  ///
+  /// 不挂在编辑页上：页面每次切分区都重建，播放器跟着页面走的话切一次就
+  /// 关一次、播放位置丢掉、找文件的读盘也重来一遍。找文件由打开会话的一方
+  /// 调 [EditorMedia.locate]，这里不自动找 —— 没有音视频的会话不碰 media_kit。
+  late final EditorMedia media = EditorMedia(
+    session: session,
+    store: store,
+    cues: this,
+  );
 
   final DateTime Function() _clock;
 
@@ -176,6 +190,7 @@ class EditorController extends ChangeNotifier {
   Set<int?> speakerFilter = {};
 
   /// 当前选中条在**完整文档**里的下标。
+  @override
   int selected = 0;
 
   /// 正在重新翻译的条目下标，用来在界面上禁用按钮。
@@ -210,6 +225,7 @@ class EditorController extends ChangeNotifier {
   /// 编辑进度最后一次变化的时间；打开后没改过为 null。
   DateTime? progressAt;
 
+  @override
   SubtitleDocument get document => session.document;
 
   /// 任务排队或运行中：流水线随时会整份换掉文档，编辑器这时的修改要么
@@ -310,6 +326,7 @@ class EditorController extends ChangeNotifier {
     }).toList();
   }
 
+  @override
   Cue? get current => selected >= 0 && selected < document.cues.length
       ? document.cues[selected]
       : null;
@@ -384,6 +401,7 @@ class EditorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  @override
   void select(int indexInDocument) {
     selected = document.cues.isEmpty
         ? 0
@@ -637,6 +655,78 @@ class EditorController extends ChangeNotifier {
     return written;
   }
 
+  /// 换会话或退出应用前：字幕文件还没写入最新修改的先问一句（设计稿
+  /// 「编辑器保存模型」画板 4 ①）。返回 true 表示可以继续。
+  ///
+  /// 修改已经在编辑进度里了，不写入也不会丢，所以「稍后再写」照样放行。
+  Future<bool> confirmLeave(
+    EditorPrompts prompts, {
+    LeaveIntent intent = LeaveIntent.open,
+  }) async {
+    // 先把排着的编辑进度写掉：撤销回原样后 300ms 内就切走，盘上还是
+    // 撤销前的草稿，下次打开会把撤销掉的修改当成「恢复」。
+    await flushDraft();
+    // 任务还在跑：完成阶段会按最终的文档写出产物，这时不必也不能写。
+    final edits = locked ? 0 : unsavedEdits;
+    if (edits == 0) return true;
+    final choice = await prompts.askLeave(
+      title: session.title,
+      edits: edits,
+      files: [for (final p in session.targetPaths) baseName(p)],
+      intent: intent,
+    );
+    switch (choice) {
+      case LeaveChoice.write:
+        return writeFiles(prompts);
+      case LeaveChoice.later:
+        return true;
+      case LeaveChoice.cancel || null:
+        return false;
+    }
+  }
+
+  /// ⌘S、「保存」按钮、离开时「写入并…」共用的写入流程。返回是否写成了。
+  ///
+  /// 文件在外部被改过时先问（画板 4 ②）：覆盖、另存为或取消。写入失败不
+  /// 提示 —— 顶栏 chip 会变红并写明原因，修改也还在编辑进度里。
+  Future<bool> writeFiles(EditorPrompts prompts) async {
+    if (locked) return false;
+    try {
+      await save();
+      return true;
+    } on WriteConflict catch (conflict) {
+      if (_disposed) return false;
+      final choice = await prompts.askConflict(
+        conflict.changes,
+        remounts: session is FileSession,
+      );
+      try {
+        switch (choice) {
+          case ConflictChoice.overwrite:
+            await save(overwrite: true);
+            return true;
+          case ConflictChoice.saveAs:
+            final dir = await prompts.pickDir(
+              initialDirectory: dirName(conflict.changes.first.path),
+              confirmText: '写到这里',
+            );
+            if (dir == null) return false;
+            await saveAs(dir);
+            return true;
+          case ConflictChoice.cancel || null:
+            return false;
+        }
+      } on Object catch (e) {
+        // 本地会话写失败 chip 会变红；任务会话的另存为不改同步状态，
+        // 不提示的话用户只会看到「点了没反应」。
+        prompts.say(e is TargetRejected ? e.reason : '另存失败：$e');
+        return false;
+      }
+    } on Object {
+      return false;
+    }
+  }
+
   Future<List<String>> _write(Future<List<String>> Function() write) async {
     final saving = document;
     final pendingBefore = session.pendingEdits;
@@ -782,6 +872,8 @@ class EditorController extends ChangeNotifier {
     // 关掉前把编辑进度写掉；写盘是异步的，不必等。
     if (_draftDirty) unawaited(flushDraft().catchError((Object _) {}));
     _draftTimer?.cancel();
+    // 播放器在听 controller 的选中条，先于它释放。
+    media.dispose();
     super.dispose();
   }
 

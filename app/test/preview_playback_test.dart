@@ -1,9 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
+import 'package:subtitle_studio/features/editor/editor_media.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
+import 'package:subtitle_studio/features/editor/preview_playback.dart';
 import 'package:subtitle_studio/services/editor_store.dart';
 import 'package:subtitle_studio/services/file_io.dart';
 
@@ -11,6 +14,21 @@ import 'helpers.dart';
 
 Cue _cue(int index, int start, int end) =>
     Cue(index: index, startMs: start, endMs: end, source: 's$index');
+
+/// 播放器跟着走的字幕表；这里的播放器是假的，用不到它的内容。
+class _Cues extends ChangeNotifier implements PlaybackCues {
+  @override
+  SubtitleDocument get document => SubtitleDocument.empty;
+
+  @override
+  int selected = 0;
+
+  @override
+  Cue? get current => null;
+
+  @override
+  void select(int indexInDocument) {}
+}
 
 void main() {
   group('cueIndexAt', () {
@@ -99,6 +117,84 @@ void main() {
         await open().locateMedia(linked: '${dir.path}/gone.mkv'),
         sibling.path,
       );
+    });
+  });
+
+  group('EditorMedia', () {
+    late Directory dir;
+    late EditorStore store;
+    late FileSession session;
+    late List<String> opened;
+
+    setUp(() async {
+      dir = await Directory.systemTemp.createTemp('editor_media');
+      store = EditorStore('${dir.path}/editor');
+      final srt = File('${dir.path}/a.srt')..writeAsStringSync('');
+      session = FileSession.open(
+        source: LocalSubtitleFile(path: srt.path, cues: [_cue(1, 0, 1000)]),
+        defaults: _defaults(),
+      );
+      opened = [];
+    });
+
+    tearDown(() => dir.delete(recursive: true));
+
+    // 不建真播放器：测试环境没有 media_kit 的原生库。
+    EditorMedia media() => EditorMedia(
+      session: session,
+      cues: _Cues(),
+      store: store,
+      openPlayer: (path) {
+        opened.add(path);
+        return null;
+      },
+    );
+
+    test('只找一次：上次手动关联的优先', () async {
+      File('${dir.path}/a.mp4').writeAsStringSync('');
+      final linked = File('${dir.path}/other.mkv')..writeAsStringSync('');
+      await store.saveMediaLink(session.subtitlePath, linked.path);
+      final m = media();
+      var notified = 0;
+      m.addListener(() => notified++);
+      await Future.wait([m.locate(), m.locate()]);
+      await m.locate();
+      expect(m.path, linked.path);
+      expect(opened, [linked.path]);
+      expect(notified, 1);
+      m.dispose();
+    });
+
+    test('找不到时不开播放器', () async {
+      final m = media();
+      await m.locate();
+      expect(m.path, isNull);
+      expect(opened, isEmpty);
+      m.dispose();
+    });
+
+    test('手动关联：换上并记下，下次打开同一份字幕直接用', () async {
+      File('${dir.path}/a.mp4').writeAsStringSync('');
+      final picked = File('${dir.path}/picked.mov')..writeAsStringSync('');
+      final m = media();
+      // 找的期间用户已经手动关联：以手动的为准，找到的旁边文件不再换上。
+      final locating = m.locate();
+      await m.attach(picked.path);
+      await locating;
+      expect(m.path, picked.path);
+      expect(session.mediaPath, picked.path);
+      expect(opened, [picked.path]);
+      expect(await store.loadMediaLink(session.subtitlePath), picked.path);
+      m.dispose();
+    });
+
+    test('释放后找到的结果不再用', () async {
+      File('${dir.path}/a.mp4').writeAsStringSync('');
+      final m = media();
+      final locating = m.locate();
+      m.dispose();
+      await locating;
+      expect(opened, isEmpty);
     });
   });
 

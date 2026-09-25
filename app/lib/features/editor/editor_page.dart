@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/text_focus.dart';
 import '../../domain/media_kinds.dart';
-import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import '../../domain/task_control.dart';
 import '../../services/provider_api.dart';
@@ -15,11 +14,9 @@ import 'cue_table.dart';
 import 'editor_banners.dart';
 import 'editor_controller.dart';
 import 'editor_drop_zone.dart';
-import 'editor_leave_dialog.dart';
 import 'editor_open_form.dart';
 import 'editor_widgets.dart';
 import 'inspector.dart';
-import 'preview_playback.dart';
 import 'speaker_manager.dart';
 
 /// 编辑器页：字幕表 + 检视面板。
@@ -27,12 +24,16 @@ class EditorPage extends StatefulWidget {
   const EditorPage({
     super.key,
     required this.controller,
+    this.onSave,
     this.onMountTranslation,
     this.onDropFiles,
     this.onDiscardDraft,
   });
 
   final EditorController controller;
+
+  /// ⌘S 与恢复横幅「写入」：写字幕文件的流程（冲突询问、另存为）在上层。
+  final Future<void> Function()? onSave;
 
   /// 只挂了原文时「挂载译文」：由上层带去入口页配对。
   final VoidCallback? onMountTranslation;
@@ -51,65 +52,42 @@ class EditorPage extends StatefulWidget {
 class EditorPageState extends State<EditorPage> {
   final _focus = FocusNode();
 
-  /// 检视面板的播放器；会话没有音视频时为 null。
-  PreviewPlayback? _playback;
-
   EditorController get controller => widget.controller;
 
   @override
   void initState() {
     super.initState();
-    controller.addListener(_refresh);
+    _listen(controller);
     // 进页面就接管键盘，J/K 不用先点一下列表才生效。
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
-    _locateMedia();
   }
 
   @override
   void didUpdateWidget(EditorPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_refresh);
-      widget.controller.addListener(_refresh);
-      _closePlayback();
-      _locateMedia();
+      _unlisten(oldWidget.controller);
+      _listen(widget.controller);
     }
   }
 
   @override
   void dispose() {
-    controller.removeListener(_refresh);
-    _closePlayback();
+    _unlisten(controller);
+    // 播放器随 controller 留着，页面收起时只暂停，回来还在原位置。
+    unawaited(controller.media.pause());
     _focus.dispose();
     super.dispose();
   }
 
-  void _closePlayback() {
-    _playback?.dispose();
-    _playback = null;
-  }
+  // 播放器由 controller 的 media 持有，找到音视频时它通知，页面跟着换上。
+  void _listen(EditorController c) => c
+    ..addListener(_refresh)
+    ..media.addListener(_refresh);
 
-  /// 找会话配套的音视频；找到就开播放器。异步的，找的期间先显示样式预览。
-  /// 上次手动关联过的优先。
-  Future<void> _locateMedia() async {
-    final session = controller.session;
-    final linked = await controller.store?.loadMediaLink(session.subtitlePath);
-    final path = await session.locateMedia(linked: linked);
-    if (!mounted || controller.session != session || path == null) return;
-    _openPlayback(path);
-  }
-
-  void _openPlayback(String path) {
-    _closePlayback();
-    final playback = PreviewPlayback(controller: controller, mediaPath: path);
-    _playback = playback;
-    setState(() {});
-    playback.open().catchError((Object e) {
-      if (mounted && _playback == playback) {
-        _report('打不开 ${baseName(path)}：$e');
-      }
-    });
-  }
+  void _unlisten(EditorController c) => c
+    ..removeListener(_refresh)
+    ..media.removeListener(_refresh);
 
   /// 「关联视频…」：手动挑一个音视频文件给这个会话预览。
   Future<void> attachMedia() async {
@@ -119,15 +97,7 @@ class EditorPageState extends State<EditorPage> {
       ],
     );
     if (picked == null || !mounted) return;
-    final session = controller.session;
-    session.mediaPath = picked.path;
-    _openPlayback(picked.path);
-    // 记下来，下次打开同一份字幕不用再选。写不进去也不影响这次预览。
-    unawaited(
-      controller.store
-          ?.saveMediaLink(session.subtitlePath, picked.path)
-          .catchError((Object _) {}),
-    );
+    await controller.media.attach(picked.path);
   }
 
   void _refresh() {
@@ -181,12 +151,7 @@ class EditorPageState extends State<EditorPage> {
     }
   }
 
-  /// ⌘S / 「保存」：把修改写进字幕文件。写完的结果显示在状态栏与顶栏
-  /// chip 上，不再弹 SnackBar 挡住表格。
-  Future<void> save() async {
-    if (!controller.canWrite) return;
-    await writeSubtitleFiles(context, controller);
-  }
+  Future<void> _save() async => widget.onSave?.call();
 
   void manageSpeakers() {
     if (!controller.locked) showSpeakerManager(context, controller);
@@ -199,7 +164,7 @@ class EditorPageState extends State<EditorPage> {
     final keyboard = HardwareKeyboard.instance;
     final command = keyboard.isMetaPressed || keyboard.isControlPressed;
     if (command && event.logicalKey == LogicalKeyboardKey.keyS) {
-      save();
+      _save();
       return KeyEventResult.handled;
     }
 
@@ -217,6 +182,7 @@ class EditorPageState extends State<EditorPage> {
       return KeyEventResult.handled;
     }
 
+    final playback = controller.media.playback;
     switch (event.logicalKey) {
       case LogicalKeyboardKey.keyJ:
       case LogicalKeyboardKey.arrowDown:
@@ -232,14 +198,14 @@ class EditorPageState extends State<EditorPage> {
       case LogicalKeyboardKey.keyZ when command:
         controller.undo();
         return KeyEventResult.handled;
-      case LogicalKeyboardKey.space when _playback != null:
-        _playback!.toggle();
+      case LogicalKeyboardKey.space when playback != null:
+        playback.toggle();
         return KeyEventResult.handled;
-      case LogicalKeyboardKey.arrowLeft when _playback != null:
-        _playback!.nudge(const Duration(seconds: -1));
+      case LogicalKeyboardKey.arrowLeft when playback != null:
+        playback.nudge(const Duration(seconds: -1));
         return KeyEventResult.handled;
-      case LogicalKeyboardKey.arrowRight when _playback != null:
-        _playback!.nudge(const Duration(seconds: 1));
+      case LogicalKeyboardKey.arrowRight when playback != null:
+        playback.nudge(const Duration(seconds: 1));
         return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -277,7 +243,7 @@ class EditorPageState extends State<EditorPage> {
             onRetranslate: retranslate,
             onManageSpeakers: controller.locked ? null : manageSpeakers,
             onMountTranslation: widget.onMountTranslation,
-            playback: _playback,
+            playback: controller.media.playback,
             onAttachMedia: attachMedia,
           ),
         ),
@@ -290,7 +256,7 @@ class EditorPageState extends State<EditorPage> {
         ? null
         : EditorRecoveryBanner(
             controller: controller,
-            onWrite: save,
+            onWrite: _save,
             onDiscard: widget.onDiscardDraft,
           );
     final page = banner == null

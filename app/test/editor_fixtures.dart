@@ -1,3 +1,5 @@
+import 'package:subtitle_studio/domain/file_stamp.dart';
+import 'package:subtitle_studio/features/editor/editor_prompts.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 
 import 'helpers.dart';
@@ -110,3 +112,58 @@ FileSession localSession({bool withTranslation = true}) => FileSession.open(
   translation: withTranslation ? localEnFile() : null,
   defaults: testOptions(source: 'zh', target: 'en'),
 );
+
+/// 按剧本回答的 [EditorPrompts]：不弹对话框，记下问过什么、说过什么。
+class ScriptedPrompts implements EditorPrompts {
+  ScriptedPrompts({this.leave, this.conflict, this.dir});
+
+  LeaveChoice? leave;
+  ConflictChoice? conflict;
+
+  /// 「另存为」挑的目录；null 表示用户取消了选择。
+  String? dir;
+
+  /// 依次问过的：`leave` / `conflict` / `dir`。
+  final asked = <String>[];
+  final said = <String>[];
+
+  ({String title, int edits, List<String> files, LeaveIntent intent})?
+  lastLeave;
+  ({List<FileChange> changes, bool remounts})? lastConflict;
+  String? lastInitialDirectory;
+
+  @override
+  Future<LeaveChoice?> askLeave({
+    required String title,
+    required int edits,
+    required List<String> files,
+    required LeaveIntent intent,
+  }) async {
+    asked.add('leave');
+    lastLeave = (title: title, edits: edits, files: files, intent: intent);
+    return leave;
+  }
+
+  @override
+  Future<ConflictChoice?> askConflict(
+    List<FileChange> changes, {
+    required bool remounts,
+  }) async {
+    asked.add('conflict');
+    lastConflict = (changes: changes, remounts: remounts);
+    return conflict;
+  }
+
+  @override
+  Future<String?> pickDir({
+    required String initialDirectory,
+    required String confirmText,
+  }) async {
+    asked.add('dir');
+    lastInitialDirectory = initialDirectory;
+    return dir;
+  }
+
+  @override
+  void say(String message) => said.add(message);
+}

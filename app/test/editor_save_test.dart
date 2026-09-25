@@ -12,7 +12,7 @@ import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/features/editor/editor_banners.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
-import 'package:subtitle_studio/features/editor/editor_leave_dialog.dart';
+import 'package:subtitle_studio/features/editor/editor_prompts.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/editor_title.dart';
 import 'package:subtitle_studio/features/tasks/task_resume_dialog.dart';
@@ -22,6 +22,7 @@ import 'package:subtitle_studio/services/file_io.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
+import 'editor_fixtures.dart';
 import 'helpers.dart';
 
 const _zh = '''1
@@ -347,6 +348,158 @@ void main() {
     });
   });
 
+  group('写入流程：离开前询问与外部修改冲突', () {
+    Future<FileSession> open(String path) async {
+      final s = FileSession.open(
+        source: await LocalSubtitleFile.load(path),
+        defaults: testOptions(),
+      );
+      await s.captureStamps();
+      return s;
+    }
+
+    test('没有未写入的修改：不问，直接放行', () async {
+      final c = controllerFor(TaskSession(task()));
+      final prompts = ScriptedPrompts(leave: LeaveChoice.cancel);
+      expect(await c.confirmLeave(prompts), isTrue);
+      expect(prompts.asked, isEmpty);
+      c.dispose();
+    });
+
+    test('离开前先把排着的草稿写掉，再问', () async {
+      final store = EditorStore('${dir.path}${sep}editor');
+      final path = '${dir.path}${sep}ep.zh.srt';
+      await File(path).writeAsString(_zh);
+      final c = controllerFor(await open(path), store: store)..select(0);
+      c.editSource('大家好呀');
+      // 草稿要攒 300ms 才写；不等它，直接离开。
+      final prompts = ScriptedPrompts(leave: LeaveChoice.later);
+      expect(await c.confirmLeave(prompts), isTrue);
+      final state = await store.loadFileDraft(path, null);
+      expect(state!.pendingEdits, 1);
+      expect(state.draft!.cues.first.source, '大家好呀');
+      // 「稍后再写」不动字幕文件。
+      expect(await File(path).readAsString(), _zh);
+      c.dispose();
+    });
+
+    test('「写入并…」写出字幕文件；「取消」留下、「稍后再写」放行', () async {
+      final t = task();
+      final c = controllerFor(TaskSession(t))..select(0);
+      c.editSource('改过的第一句');
+
+      final prompts = ScriptedPrompts(leave: LeaveChoice.cancel);
+      expect(await c.confirmLeave(prompts, intent: LeaveIntent.exit), isFalse);
+      expect(prompts.lastLeave!.edits, 1);
+      expect(prompts.lastLeave!.files, ['demo.zh.srt', 'demo.en.srt']);
+      expect(prompts.lastLeave!.intent, LeaveIntent.exit);
+      expect(c.unsavedEdits, 1);
+
+      prompts.leave = null;
+      expect(await c.confirmLeave(prompts), isFalse, reason: '关掉对话框算取消');
+      prompts.leave = LeaveChoice.later;
+      expect(await c.confirmLeave(prompts), isTrue);
+      expect(c.unsavedEdits, 1);
+
+      prompts.leave = LeaveChoice.write;
+      expect(await c.confirmLeave(prompts), isTrue);
+      expect(c.unsavedEdits, 0);
+      expect(
+        await File('${dir.path}${sep}demo.zh.srt').readAsString(),
+        contains('改过的第一句'),
+      );
+      c.dispose();
+    });
+
+    /// 写过一次产物后被别的程序改掉，再改一处：下次写入会撞上冲突。
+    Future<(EditorController, String)> conflicted() async {
+      final c = controllerFor(TaskSession(task()))..select(0);
+      c.editSource('一');
+      final written = await c.save();
+      await File(written.first).writeAsString('别的程序写的内容，长度不一样');
+      c.editSource('二');
+      return (c, written.first);
+    }
+
+    test('冲突时「覆盖」：写回原文件', () async {
+      final (c, path) = await conflicted();
+      final prompts = ScriptedPrompts(conflict: ConflictChoice.overwrite);
+      expect(await c.writeFiles(prompts), isTrue);
+      expect(prompts.asked, ['conflict']);
+      expect(prompts.lastConflict!.changes.single.path, path);
+      expect(prompts.lastConflict!.remounts, isFalse);
+      expect(await File(path).readAsString(), contains('二'));
+      expect(c.unsavedEdits, 0);
+      c.dispose();
+    });
+
+    test('冲突时「取消」或关掉对话框：什么都不写', () async {
+      final (c, path) = await conflicted();
+      for (final choice in [ConflictChoice.cancel, null]) {
+        final prompts = ScriptedPrompts(conflict: choice);
+        expect(await c.writeFiles(prompts), isFalse);
+        expect(prompts.asked, ['conflict']);
+      }
+      expect(await File(path).readAsString(), '别的程序写的内容，长度不一样');
+      expect(c.sync, SyncState.conflict);
+      c.dispose();
+    });
+
+    test('冲突时「另存为」：从原目录开始挑，写到挑的目录', () async {
+      final (c, path) = await conflicted();
+      final other = await Directory('${dir.path}${sep}copy').create();
+      final prompts = ScriptedPrompts(
+        conflict: ConflictChoice.saveAs,
+        dir: other.path,
+      );
+      expect(await c.writeFiles(prompts), isTrue);
+      expect(prompts.asked, ['conflict', 'dir']);
+      expect(prompts.lastInitialDirectory, dirName(path));
+      expect(
+        await File('${other.path}${sep}demo.zh.srt').readAsString(),
+        contains('二'),
+      );
+      // 任务的另存为只是另存一份，产物不动。
+      expect(await File(path).readAsString(), '别的程序写的内容，长度不一样');
+      c.dispose();
+    });
+
+    test('另存为没挑目录：不写也不提示；目标不能用：说明原因', () async {
+      final (c, _) = await conflicted();
+      final prompts = ScriptedPrompts(conflict: ConflictChoice.saveAs);
+      expect(await c.writeFiles(prompts), isFalse);
+      expect(prompts.said, isEmpty);
+
+      // 冲突对话框默认打开的就是原目录，直接确认会被拒。
+      prompts.dir = dir.path;
+      expect(await c.writeFiles(prompts), isFalse);
+      expect(prompts.said, ['选的是字幕文件原来的目录，请换一个']);
+      c.dispose();
+    });
+
+    test('本地会话的冲突说明另存为之后挂到新文件上', () async {
+      final path = '${dir.path}${sep}ep.zh.srt';
+      await File(path).writeAsString(_zh);
+      final c = controllerFor(await open(path))..select(0);
+      c.editSource('大家好呀');
+      await File(path).writeAsString('$_zh\n');
+      final prompts = ScriptedPrompts(conflict: ConflictChoice.cancel);
+      expect(await c.writeFiles(prompts), isFalse);
+      expect(prompts.lastConflict!.remounts, isTrue);
+      c.dispose();
+    });
+
+    test('只读时写入什么都不做，也不问', () async {
+      final t = task(status: TaskStatus.running);
+      final c = controllerFor(TaskSession(t));
+      final prompts = ScriptedPrompts(conflict: ConflictChoice.overwrite);
+      expect(await c.writeFiles(prompts), isFalse);
+      expect(prompts.asked, isEmpty);
+      expect(t.outputs, isEmpty);
+      c.dispose();
+    });
+  });
+
   group('本次修改', () {
     test('只有内容变了的条目算改过；拆分只让被拆的那条算改过', () {
       final c = controllerFor(TaskSession(task()))..select(0);
@@ -659,25 +812,13 @@ void main() {
       c.dispose();
     });
 
-    testWidgets('运行中切走不问「先写入字幕文件？」', (tester) async {
+    test('运行中切走不问「先写入字幕文件？」', () async {
       final t = task(status: TaskStatus.paused);
       final c = follow(t)..editSource('一');
       t.status = TaskStatus.running;
-      late bool left;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Builder(
-            builder: (context) => TextButton(
-              onPressed: () async => left = await confirmLeaveEditor(context, c),
-              child: const Text('走'),
-            ),
-          ),
-        ),
-      );
-      await tester.tap(find.text('走'));
-      await tester.pumpAndSettle();
-      expect(find.text('先写入字幕文件？'), findsNothing);
-      expect(left, isTrue);
+      final prompts = ScriptedPrompts(leave: LeaveChoice.cancel);
+      expect(await c.confirmLeave(prompts), isTrue);
+      expect(prompts.asked, isEmpty);
       c.dispose();
     });
 
