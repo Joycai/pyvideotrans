@@ -239,6 +239,14 @@ class TranscodeFormController extends ChangeNotifier {
     _notify();
   }
 
+  /// 检测这台机器上哪些编码器能用；已经测过就不再测。
+  Future<void> probeEncoders() => transcoder.ensureProbed();
+
+  /// 「重新检测」：换了 ffmpeg 或装了驱动之后再测一遍。
+  Future<void> recheckEncoders() => transcoder.refresh();
+
+  bool get probingEncoders => transcoder.isProbing;
+
   /// 当前编码下的编码器卡片。
   List<(VideoEncoder, EncoderStatus)> get encoderChoices => [
     for (final e in VideoEncoders.forCodec(_options.videoCodec))
