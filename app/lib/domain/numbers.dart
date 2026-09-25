@@ -8,3 +8,13 @@ String grouped(int value) {
   }
   return buffer.toString();
 }
+
+/// 一个整数参数允许的取值范围（含两端）。
+class IntRange {
+  const IntRange(this.min, this.max);
+
+  final int min;
+  final int max;
+
+  int clamp(int value) => value.clamp(min, max);
+}

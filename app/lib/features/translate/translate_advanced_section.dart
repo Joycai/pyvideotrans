@@ -92,8 +92,8 @@ class TranslateAdvancedSection extends StatelessWidget {
         label: '每行最大字符数 · 中日韩',
         child: NumberField(
           value: o.cjkLineLength,
-          min: 4,
-          max: 60,
+          min: TaskOptions.cjkLineLengthRange.min,
+          max: TaskOptions.cjkLineLengthRange.max,
           width: flat ? double.infinity : 88,
           onChanged: (v) => form.update((o) => o.copyWith(cjkLineLength: v)),
         ),
@@ -102,8 +102,8 @@ class TranslateAdvancedSection extends StatelessWidget {
         label: '每行最大字符数 · 其他语言',
         child: NumberField(
           value: o.latinLineLength,
-          min: 8,
-          max: 120,
+          min: TaskOptions.latinLineLengthRange.min,
+          max: TaskOptions.latinLineLengthRange.max,
           width: flat ? double.infinity : 88,
           onChanged: (v) => form.update((o) => o.copyWith(latinLineLength: v)),
         ),
