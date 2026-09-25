@@ -96,9 +96,9 @@ core/       domain/ ←──── services/
 |---|---|
 | `cue.dart` | `Cue`、校对状态和不可变 `SubtitleDocument`；拆分、合并、说话人操作都返回新文档；界面显示状态 `displayStateOf`、按时间定位 `cueIndexAt` |
 | `language.dart` | 统一语言表、CJK 判定、文件名语言推断 |
-| `paths.dart` | 跨平台纯字符串路径规则：basename、dirname、stem、extension |
-| `output_naming.dart` | 产物语言标签（自动检测写 `src`） |
-| `numbers.dart` | 千位分隔 `grouped` |
+| `paths.dart` | 跨平台纯字符串路径规则：basename、dirname、stem、extension；比较用的 `sameSeparators` |
+| `output_naming.dart` | 产物命名唯一来源 `OutputNaming`：任务写哪几路、语言段、文件名；流水线、编辑器导出、任务详情、建任务页示例共用；语言标签（自动检测写 `src`） |
+| `numbers.dart` | 千位分隔 `grouped`；取值范围 `IntRange` |
 | `srt.dart` | SRT / VTT 解析与序列化、说话人标签检测、导出字段 |
 | `line_wrap.dart` | 导出时折行；CJK 与拉丁文字使用不同上限 |
 | `segmenter.dart` | 识别结果的重叠修正、短句合并、长句拆分 |
@@ -106,7 +106,7 @@ core/       domain/ ←──── services/
 | `speech_segments.dart` | 静音区间 → 可逐段识别的语音区间 |
 | `recognition_checkpoint.dart` | 段级识别检查点，支持失败、取消和重启后的续跑 |
 | `task_kind.dart` | `TaskStage` 与 `TaskKind`；独立放置以避免 `TaskOptions ↔ SubtitleTask` 循环 |
-| `task_options.dart` | 入队时冻结的全部参数、产物目录规则、JSON |
+| `task_options.dart` | 入队时冻结的全部参数、产物目录规则、JSON；各项取值范围 `*Range`；换服务的规则 `withAsrProvider` / `withTranslationProvider` |
 | `task.dart` | `SubtitleTask`、阶段记录、日志、错误、产物和 JSON；export `task_kind.dart` |
 | `media_kinds.dart` | 按扩展名判断媒体 / 音频 / 字幕 |
 | `app_branding.dart` | 应用名的中英两份；另有五份在各平台的清单与 runner 里，见 `packaging/README.md` |
@@ -185,6 +185,7 @@ core/       domain/ ←──── services/
   `FileAppendStrip`；各页只给中间几列（`FileTableColumn`，可按行宽收起）和每行的单元格。
 
 - `enqueue_request.dart`：`EnqueueRequest`，建任务表单交出来的「一批文件 + 一份参数」。
+- `footer_message.dart`：`FooterMessage` / `FooterTone`，表单报页脚文案的性质，图标由 `TaskFooterLine` 决定 —— 表单不 import material。
 
 共享组件放这里后，各 feature 不再互相 import 实现文件。
 
