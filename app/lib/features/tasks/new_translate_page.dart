@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../core/widgets/buttons.dart';
 import '../../pipeline/task_queue.dart';
 import '../shared/new_task_page.dart';
+import '../shared/new_task_panels.dart';
 import '../shell/page_chrome.dart';
 import 'new_translate_file_panel.dart';
 import 'new_translate_param_panel.dart';
@@ -15,10 +15,9 @@ PageChrome newTranslateChrome(TranslateFormController form) => PageChrome(
   title: '翻译',
   subtitle: form.summary,
   actions: [
-    ControlButton(
-      label: '上次参数',
-      icon: Symbols.history,
-      onPressed: form.hasLastUsed ? form.applyLastUsed : null,
+    LastUsedButton(
+      available: form.hasLastUsed,
+      onApply: form.applyLastUsed,
     ),
   ],
 );

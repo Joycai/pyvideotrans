@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 
-import '../../core/widgets/buttons.dart';
 import '../../pipeline/task_queue.dart';
 import '../shared/new_task_page.dart';
+import '../shared/new_task_panels.dart';
 import '../shell/page_chrome.dart';
 import 'transcode_file_panel.dart';
 import 'transcode_form.dart';
@@ -14,10 +13,9 @@ PageChrome transcodeChrome(TranscodeFormController form) => PageChrome(
   title: '转码',
   subtitle: form.summary,
   actions: [
-    ControlButton(
-      label: '上次参数',
-      icon: Symbols.history,
-      onPressed: form.hasLastUsed ? form.applyLastUsed : null,
+    LastUsedButton(
+      available: form.hasLastUsed,
+      onApply: form.applyLastUsed,
     ),
   ],
 );
