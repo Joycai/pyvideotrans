@@ -14,6 +14,7 @@ import 'features/editor/editor_leave_dialog.dart';
 import 'features/editor/editor_open_form.dart';
 import 'features/editor/editor_open_page.dart';
 import 'features/editor/editor_page.dart';
+import 'features/editor/editor_prompts.dart';
 import 'features/editor/editor_workspace.dart';
 import 'features/settings/settings_page.dart';
 import 'features/shared/page_chrome.dart';
@@ -117,8 +118,10 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     settings: widget.settings,
     store: widget.editorStore,
     queue: widget.queue,
-    dialogContext: () => _navigatorKey.currentContext,
-    say: _say,
+    prompts: DialogEditorPrompts(
+      context: () => _navigatorKey.currentContext,
+      onSay: _say,
+    ),
     onShow: () => _go(AppSection.editor),
   );
 
@@ -170,19 +173,11 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
   Future<AppExitResponse> _onExitRequested() async {
     await _flushProgress();
     final editor = _workspace.current;
-    final context = _navigatorKey.currentContext;
-    if (editor != null &&
-        context != null &&
-        context.mounted &&
-        editor.unsavedEdits > 0) {
+    if (editor != null && editor.unsavedEdits > 0) {
       if (_section != AppSection.editor || _workspace.showOpen) {
         _workspace.reveal();
       }
-      final ok = await confirmLeaveEditor(
-        context,
-        editor,
-        intent: LeaveIntent.exit,
-      );
+      final ok = await _workspace.confirmLeave(intent: LeaveIntent.exit);
       if (!ok) return AppExitResponse.cancel;
       // 写入产物后任务记下了新的时间戳，再落一次盘。
       await _flushProgress();
@@ -257,7 +252,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     ),
     AppSection.editor => editorChrome(
       _workspace,
-      onSave: () => _editorKey.currentState?.save(),
+      onSave: _workspace.save,
       onExport: () => _editorKey.currentState?.export(),
       onTranslateMissing: () => _editorKey.currentState?.translateMissing(),
     ),
@@ -338,6 +333,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     AppSection.editor when _workspace.editing => EditorPage(
       key: _editorKey,
       controller: _workspace.current!,
+      onSave: _workspace.save,
       onMountTranslation: () =>
           _workspace.stageReplacement(OpenSlot.translation),
       onDropFiles: (path, slot) =>

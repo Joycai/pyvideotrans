@@ -53,6 +53,8 @@ core/       domain/ ←──── services/
 
 只做接线：各页的顶栏内容由各自的 `xxxChrome()` 给出，状态栏快照由
 `StatusSnapshot.from` 拼，编辑器换会话、草稿恢复、最近打开的规则在 `EditorWorkspace`。
+编辑器要问用户的事（对话框、目录选择、SnackBar）由这里造一个 `DialogEditorPrompts`
+注入 `EditorWorkspace`，编辑器的 view-model 自己不碰 widget。
 
 ### `lib/features/shell/`
 
@@ -243,14 +245,16 @@ core/       domain/ ←──── services/
 ### 会话与状态
 
 - `editor_session.dart`：sealed `EditorSession`；两种会话同一套保存规则 —— 编辑进度自动存，字幕文件（任务产物 / 挂载的本地文件）只在保存时写；写前比对时间戳；任务排队 / 运行中时 `busy`，编辑器只读。
-- `editor_controller.dart`：筛选、搜索、选中、撤销、改字 / 时间、拆分 / 合并、说话人、翻译与导出；保存状态 `SyncState`、连续编辑合并、本地草稿；`follow` 任务队列，流水线换了文档就刷新、清撤销栈，`locked` 时一切修改不生效。
+- `editor_controller.dart`：筛选、搜索、选中、撤销、改字 / 时间、拆分 / 合并、说话人、翻译与导出；保存状态 `SyncState`、连续编辑合并、本地草稿；`follow` 任务队列，流水线换了文档就刷新、清撤销栈，`locked` 时一切修改不生效。写入流程也在这里：`confirmLeave`（离开前先写编辑进度、只读时不问、「先写入字幕文件？」）与 `writeFiles`（`save` → `WriteConflict` → 覆盖 / 挑目录 `saveAs`、`TargetRejected` 提示），要问用户的经 `EditorPrompts`。持有 `media`，随 controller 释放。
+- `editor_prompts.dart`：`EditorPrompts` 接口（`askLeave` / `askConflict` / `pickDir` / `say`）与 `LeaveIntent`、`LeaveChoice`、`ConflictChoice`；只 import domain，测试换成按剧本回答的假实现（`test/editor_fixtures.dart` 的 `ScriptedPrompts`）。
+- `editor_media.dart`：`EditorMedia`，检视面板预览的音视频：找文件（只找一次，手动关联优先）、「关联视频…」换上并记进 `EditorStore`、持有 `PreviewPlayback`；编辑页收起时只暂停，回来播放位置还在。
 - `editor_open_form.dart`：本地原文 / 译文槽位、解析与配对预检。
-- `preview_playback.dart`：media_kit 播放器封装。
-- `editor_workspace.dart`：`EditorWorkspace`，当前会话、入口页是否盖在上面、最近打开；换会话前询问写入、草稿恢复、替换 / 重新配对都走它。挂在根节点上，由 `main.dart` 接线。
+- `preview_playback.dart`：media_kit 播放器封装，与选中条双向同步；只依赖 `PlaybackCues` 接口（controller 实现它），免得 controller → media → playback → controller 成环。
+- `editor_workspace.dart`：`EditorWorkspace`，当前会话、入口页是否盖在上面、最近打开；换会话 / 退出前的询问（`confirmLeave`）、保存（`save`）、草稿恢复、替换 / 重新配对都走它，打开会话时让 `media` 去找音视频。只依赖 `EditorPrompts`，不 import widget；挂在根节点上，由 `main.dart` 接线。
 
 ### 编辑页
 
-- `editor_page.dart`：快捷键、生命周期、页面组合。
+- `editor_page.dart`：快捷键、生命周期、页面组合。不读写文件、不持有播放器：预览从 `controller.media` 拿，⌘S 交给上层的 `onSave`。
 - `editor_drop_zone.dart`：拖文件到编辑页的左右两块落区。
 - `editor_banners.dart`：只读横幅与恢复横幅。
 - `editor_chrome.dart`：编辑器分区的顶栏内容、副标题与状态栏文案。
@@ -258,7 +262,7 @@ core/       domain/ ←──── services/
 - `editor_title.dart`：顶栏标题右侧的组合与待校对徽标。
 - `editor_source_chip.dart`：本地会话的来源 chip 与来源浮层。
 - `editor_sync_chip.dart`：任务会话的保存状态 chip 与弹层。
-- `editor_leave_dialog.dart`：离开 / 退出前「先写入字幕文件？」、写入流程与外部修改冲突询问。
+- `editor_leave_dialog.dart`：`DialogEditorPrompts`，`EditorPrompts` 的界面实现 —— 「先写入字幕文件？」与外部修改冲突两个 `GlassDialog`、目录选择、SnackBar。只管问，不做决定。
 
 字幕表格拆成：
 
@@ -334,7 +338,8 @@ core/       domain/ ←──── services/
 | 建任务页的文件表、追加落区 | `features/shared/new_task_file_table.dart` |
 | 字幕表格 | `features/editor/cue_table*.dart` |
 | 编辑动作与撤销 | `features/editor/editor_controller.dart` + `domain/cue.dart` |
-| 预览播放 | `features/editor/preview_playback.dart` + `inspector_preview.dart` |
+| 预览播放 | `features/editor/editor_media.dart` + `preview_playback.dart` + `inspector_preview.dart` |
+| 保存 / 离开前询问 / 冲突 | `features/editor/editor_controller.dart`（`confirmLeave` / `writeFiles`）+ `editor_prompts.dart` + `editor_leave_dialog.dart` |
 
 ## 十四、验证
 
@@ -347,7 +352,9 @@ flutter test --tags golden --run-skipped
 
 - 常规测试覆盖 domain、provider、队列、续跑、表单、编辑器与转码。
 - `test/paths_test.dart` 钉死 POSIX / Windows 路径、盘符根目录与产物语言标签。
-- `test/editor_workspace_test.dart` 覆盖换会话、入口页开合与「最近打开」的串行写盘；
+- `test/editor_workspace_test.dart` 覆盖换会话、入口页开合、「最近打开」的串行写盘、换会话 / 退出前的询问与保存（用 `ScriptedPrompts`，不需要 widget 树）；
+  `test/editor_save_test.dart` 的「写入流程」组覆盖离开前写草稿、覆盖 / 另存为 / 取消与目标被拒的提示；
+  `test/preview_playback_test.dart` 的 `EditorMedia` 组覆盖只找一次、手动关联优先与记住关联；
   `test/text_focus_test.dart` 钉死「焦点在输入框里」的判断（单行 / 多行）。
 - `test/status_snapshot_test.dart` 钉死状态栏快照的服务文案（未选择 / 未配置 / 已配置）与任务计数。
 - golden 测试共 45 张场景图；拆 UI 文件后必须保持逐像素一致。

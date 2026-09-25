@@ -102,6 +102,9 @@ Python 后端都说 OpenAI 兼容协议，于是共用 `OpenAiCompatibleAsrProvi
   比对时间戳防止盖掉外部修改。「导出…」是另存到别处，不改变同步状态。
   任务排队或运行中时编辑器只读（`EditorSession.busy`），跟着任务队列刷新 ——
   流水线会整份换掉 `task.document`，两边同时改必有一方被盖掉。
+  写入流程（离开前先写编辑进度、冲突时覆盖 / 另存为）在 `EditorController.confirmLeave` /
+  `writeFiles`，要问用户的经 `main.dart` 注入的 `EditorPrompts`，view-model 不 import widget；
+  预览播放器由 controller 的 `EditorMedia` 持有 —— 页面切分区就重建，别把它挂回页面上。
 
 ### 持久化与外部依赖
 

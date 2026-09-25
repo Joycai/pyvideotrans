@@ -5,12 +5,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
+import 'package:subtitle_studio/domain/file_stamp.dart';
 import 'package:subtitle_studio/domain/subtitle_pairing.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_leave_dialog.dart';
 import 'package:subtitle_studio/features/editor/editor_open_form.dart';
 import 'package:subtitle_studio/features/editor/editor_page.dart';
 import 'package:subtitle_studio/features/editor/editor_page_actions.dart';
+import 'package:subtitle_studio/features/editor/editor_prompts.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/editor_widgets.dart';
 import 'package:subtitle_studio/services/settings.dart';
@@ -26,6 +28,10 @@ Future<EditorController> _controller({bool withTranslation = true}) async {
     settings: settings,
   );
 }
+
+/// 真对话框：测试点按钮作答。
+EditorPrompts _prompts(BuildContext context) =>
+    DialogEditorPrompts(context: () => context, onSay: (_) {});
 
 Future<void> _pump(WidgetTester tester, EditorController controller) async {
   tester.view
@@ -177,7 +183,7 @@ void main() {
           home: Builder(
             builder: (context) => TextButton(
               onPressed: () async =>
-                  result = await confirmLeaveEditor(context, c),
+                  result = await c.confirmLeave(_prompts(context)),
               child: const Text('go'),
             ),
           ),
@@ -198,7 +204,7 @@ void main() {
           home: Builder(
             builder: (context) => TextButton(
               onPressed: () async =>
-                  expect(await confirmLeaveEditor(context, c), isTrue),
+                  expect(await c.confirmLeave(_prompts(context)), isTrue),
               child: const Text('go'),
             ),
           ),
@@ -217,6 +223,80 @@ void main() {
       expect(await ask(tester, c, '取消'), isFalse);
       // 两个选项都不动字幕文件：修改还在，等下次写入。
       expect(c.unsavedEdits, 1);
+    });
+
+    testWidgets('外部修改冲突：对话框只回答选了什么', (tester) async {
+      ConflictChoice? choice;
+      final changes = <FileChange>[
+        (
+          path: '/m/ep.zh.srt',
+          before: const FileStamp(size: 1, modifiedMs: 0),
+          now: const FileStamp(size: 2, modifiedMs: 1000),
+        ),
+      ];
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: lightTheme,
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async =>
+                  choice = await _prompts(context)
+                      .askConflict(changes, remounts: true),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('go'));
+      await tester.pumpAndSettle();
+      expect(find.text('ep.zh.srt 在别处被改过'), findsOneWidget);
+      expect(find.textContaining('编辑器之后就挂在新文件上'), findsOneWidget);
+      await tester.tap(find.text('覆盖'));
+      await tester.pumpAndSettle();
+      expect(choice, ConflictChoice.overwrite);
+    });
+
+    test('没有能弹对话框的 context：离开按「稍后再写」放行', () async {
+      final prompts = DialogEditorPrompts(context: () => null, onSay: (_) {});
+      final c = await _controller()
+        ..select(0)
+        ..toggleReviewed();
+      expect(await c.confirmLeave(prompts), isTrue);
+      expect(c.unsavedEdits, 1);
+    });
+  });
+
+  group('编辑页只做装配', () {
+    testWidgets('⌘S 交给上层的写入流程', (tester) async {
+      final c = await _controller();
+      var saved = 0;
+      tester.view
+        ..physicalSize = const Size(1440, 900)
+        ..devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: lightTheme,
+          home: Scaffold(
+            body: EditorPage(controller: c, onSave: () async => saved++),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+      expect(saved, 1);
+    });
+
+    testWidgets('切走分区不释放预览：媒体跟着 controller 走', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await tester.pumpWidget(const SizedBox());
+      // 页面没了，预览还在；再回来的页面接着用同一个。
+      expect(() => c.media.addListener(() {}), returnsNormally);
+      c.dispose();
+      expect(() => c.media.addListener(() {}), throwsFlutterError);
     });
   });
 

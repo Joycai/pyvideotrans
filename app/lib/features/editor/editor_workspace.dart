@@ -1,4 +1,6 @@
-import 'package:flutter/widgets.dart';
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 
 import '../../domain/paths.dart';
 import '../../domain/task.dart';
@@ -6,8 +8,8 @@ import '../../pipeline/task_queue.dart';
 import '../../services/editor_store.dart';
 import '../../services/settings.dart';
 import 'editor_controller.dart';
-import 'editor_leave_dialog.dart';
 import 'editor_open_form.dart';
+import 'editor_prompts.dart';
 import 'editor_session.dart';
 
 /// 编辑器分区的会话管理：当前开着哪个会话、入口页是否盖在上面、最近打开。
@@ -20,8 +22,7 @@ class EditorWorkspace extends ChangeNotifier {
     required this.settings,
     required this.store,
     required this.queue,
-    required this.dialogContext,
-    required this.say,
+    required this.prompts,
     required this.onShow,
   });
 
@@ -29,11 +30,9 @@ class EditorWorkspace extends ChangeNotifier {
   final EditorStore store;
   final TaskQueue queue;
 
-  /// 对话框要一个 MaterialApp 以下的 context，根节点自己没有，由装配层给。
-  final BuildContext? Function() dialogContext;
-
-  /// 轻提示（SnackBar）。
-  final ValueChanged<String> say;
+  /// 要问用户、告诉用户的事（对话框、目录选择、SnackBar），由装配层给。
+  /// 这里只有 ChangeNotifier，不碰 widget，测试换成按剧本回答的假实现。
+  final EditorPrompts prompts;
 
   /// 切到编辑器分区。打开会话后调用。
   final VoidCallback onShow;
@@ -82,17 +81,24 @@ class EditorWorkspace extends ChangeNotifier {
     _notify();
   }
 
-  /// 换成新会话前：字幕文件还没写入最新修改的先问一句。
-  Future<bool> _leaveCurrent() async {
+  /// 换会话或退出应用前：字幕文件还没写入最新修改的先问一句。
+  /// 返回 true 表示可以继续；没有会话开着时直接放行。
+  Future<bool> confirmLeave({LeaveIntent intent = LeaveIntent.open}) async =>
+      await _current?.confirmLeave(prompts, intent: intent) ?? true;
+
+  /// ⌘S、「保存」按钮、恢复横幅「写入」：把修改写进字幕文件。
+  /// 写完的结果显示在状态栏与顶栏 chip 上，不再弹 SnackBar 挡住表格。
+  Future<void> save() async {
     final editor = _current;
-    final context = dialogContext();
-    if (editor == null || context == null) return true;
-    return confirmLeaveEditor(context, editor);
+    if (editor == null || !editor.canWrite) return;
+    await editor.writeFiles(prompts);
   }
 
   void _activate(EditorController controller) {
     final previous = _current;
     _current = controller;
+    controller.media.onError = prompts.say;
+    unawaited(controller.media.locate());
     reveal();
     previous?.dispose();
   }
@@ -131,7 +137,7 @@ class EditorWorkspace extends ChangeNotifier {
       reveal();
       return;
     }
-    if (!await _leaveCurrent()) return;
+    if (!await confirmLeave()) return;
     final controller =
         EditorController(
             session: TaskSession(task),
@@ -166,7 +172,7 @@ class EditorWorkspace extends ChangeNotifier {
       translationPath: session.translationPath,
     );
     if (form.source == null) {
-      say('${baseName(session.sourcePath)} 读不了，可能已经移动或删除');
+      prompts.say('${baseName(session.sourcePath)} 读不了，可能已经移动或删除');
       return;
     }
     await openFiles(askLeave: false);
@@ -176,7 +182,7 @@ class EditorWorkspace extends ChangeNotifier {
   /// 还有没写回文件的编辑进度的，接着显示并用横幅说明。
   Future<void> openFiles({bool askLeave = true}) async {
     if (!form.canOpen) return;
-    if (askLeave && !await _leaveCurrent()) return;
+    if (askLeave && !await confirmLeave()) return;
     final state = await store.loadFileDraft(
       form.source!.path,
       form.translation?.path,
@@ -211,7 +217,7 @@ class EditorWorkspace extends ChangeNotifier {
     if (recent.isTask) {
       final task = queue.byId(recent.taskId!);
       if (task == null) {
-        say('这个任务已经删除了');
+        prompts.say('这个任务已经删除了');
         return;
       }
       return openTask(task);
@@ -221,7 +227,7 @@ class EditorWorkspace extends ChangeNotifier {
       translationPath: recent.translationPath,
     );
     if (form.source == null) {
-      say('${baseName(recent.sourcePath!)} 读不了，可能已经移动或删除');
+      prompts.say('${baseName(recent.sourcePath!)} 读不了，可能已经移动或删除');
       return;
     }
     await openFiles();
