@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -9,6 +8,7 @@ import '../../domain/file_stamp.dart';
 import '../../domain/language.dart';
 import '../../domain/line_wrap.dart';
 import '../../domain/output_naming.dart';
+import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import '../../domain/task_options.dart';
 import '../../services/editor_store.dart';
@@ -911,28 +911,19 @@ class EditorController extends ChangeNotifier {
     }
     dir ??= session.exportDir;
     final stem = session.exportStem;
-    String pathOf(SrtField field) {
-      final suffix = switch (field) {
-        SrtField.source => languageTag(session.sourceLanguage),
-        SrtField.translation => languageTag(session.targetLanguage),
-        SrtField.bilingualTargetAbove || SrtField.bilingualTargetBelow =>
-          '${languageTag(session.sourceLanguage)}-'
-              '${languageTag(session.targetLanguage)}',
-      };
-      // 用平台分隔符：要与 targetPaths 比对，Windows 上混用 / 与 \ 会比不上。
-      return '$dir${Platform.pathSeparator}$stem.$suffix.'
-          '${options.format.extension}';
-    }
+    String pathOf(SrtField field) =>
+        '$dir$pathSeparator${OutputNaming.fileName(stem, field, options)}';
 
     // 导出是另存一份。落到字幕文件自己身上就成了绕过冲突检查的「保存」，
-    // 而同步状态还以为文件没更新 —— 让用户改用保存。
-    final own = session.targetPaths.toSet();
-    if (fields.map(pathOf).any(own.contains)) {
+    // 而同步状态还以为文件没更新 —— 让用户改用保存。任务产物的路径用 `/`
+    // 拼、选出来的目录在 Windows 上是 `\`，按统一分隔符后再比。
+    final own = session.targetPaths.map(sameSeparators).toSet();
+    if (fields.map(pathOf).map(sameSeparators).any(own.contains)) {
       throw const TargetRejected(
         '这个目录里就是字幕文件本身，想更新它们请用「保存」（⌘S）；导出请换一个目录',
       );
     }
-    await Directory(dir).create(recursive: true);
+    await ensureDir(dir);
 
     String Function(String) wrap(Language language) {
       final limit = language.cjk

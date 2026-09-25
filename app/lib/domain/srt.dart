@@ -26,11 +26,16 @@ abstract final class Srt {
   }
 
   /// 时长（不含毫秒），用于任务列表的 `48:12` / `1:32:05`。
-  static String formatDuration(Duration d) {
+  ///
+  /// [alwaysHours] 为 true 时不足一小时也写出小时位（`0:48:12`）：批量文件的
+  /// 总时长经常过小时，位数固定才好前后比较。
+  static String formatDuration(Duration d, {bool alwaysHours = false}) {
     final h = d.inHours;
     final m = d.inMinutes.remainder(60);
     final s = d.inSeconds.remainder(60);
-    return h > 0 ? '$h:${_pad(m)}:${_pad(s)}' : '${_pad(m)}:${_pad(s)}';
+    return h > 0 || alwaysHours
+        ? '$h:${_pad(m)}:${_pad(s)}'
+        : '${_pad(m)}:${_pad(s)}';
   }
 
   /// 解析 SRT / VTT 文本。

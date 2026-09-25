@@ -354,6 +354,8 @@ class _BatchSlider extends StatelessWidget {
   final int value;
   final ValueChanged<int> onChanged;
 
+  // 刻度按设计稿只到 50：设的是默认值，常用区间拉得开些好拖。个别任务要更大
+  // 的批量，在建任务页里填（上限 TaskOptions.batchSizeRange）。
   static const min = 1;
   static const max = 50;
 

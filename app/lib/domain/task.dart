@@ -204,6 +204,11 @@ class SubtitleTask {
     return TaskStage.finish;
   }
 
+  /// 续跑会不会盖掉编辑器里的修改：从翻译之前的阶段（准备 / 识别 / 断句）
+  /// 继续会重建整份文档；从翻译阶段继续只补没有译文的条目，不动已有修改。
+  bool get resumeOverwritesEdits =>
+      editorEdits > 0 && resumeStage.index < TaskStage.translate.index;
+
   /// 持久化用。[eta] 是运行时估算，不存。
   Map<String, Object?> toJson() => {
     'version': 1,

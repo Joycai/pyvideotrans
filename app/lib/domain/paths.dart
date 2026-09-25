@@ -30,3 +30,7 @@ String extensionOf(String path) {
   final dot = name.lastIndexOf('.');
   return dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
 }
+
+/// 分隔符统一成 `/`，只用来比较两条路径是否指向同一处：同一个目录，有的地方
+/// 按平台分隔符拼、有的用 `/` 拼，Windows 上字面上就对不上。
+String sameSeparators(String path) => path.replaceAll('\\', '/');

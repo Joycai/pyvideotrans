@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/language.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
+import 'package:subtitle_studio/features/shared/footer_message.dart';
 import 'package:subtitle_studio/features/translate/translate_form.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';

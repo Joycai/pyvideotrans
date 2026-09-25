@@ -112,7 +112,6 @@ class _EncoderList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    final transcoder = form.transcoder;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -135,10 +134,10 @@ class _EncoderList extends StatelessWidget {
         Row(
           children: [
             QuietButton(
-              label: transcoder.isProbing ? '检测中…' : '重新检测',
+              label: form.probingEncoders ? '检测中…' : '重新检测',
               icon: Symbols.refresh,
               height: 28,
-              onPressed: transcoder.isProbing ? null : transcoder.refresh,
+              onPressed: form.probingEncoders ? null : form.recheckEncoders,
             ),
             const SizedBox(width: AppSpacing.s2),
             Expanded(
@@ -174,7 +173,7 @@ class _EncoderCard extends StatelessWidget {
     final cs = context.colors;
     final ext = context.ext;
     // 设计稿：检测中的卡片不变淡，但要等结果出来才能选。
-    final enabled = status.state == EncoderState.available;
+    final enabled = status.usable;
     final dimmed = status.state == EncoderState.notCompiled ||
         status.state == EncoderState.failed;
     final (chipBg, chipFg, chipIcon) = switch (status.state) {

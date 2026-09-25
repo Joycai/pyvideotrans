@@ -5,6 +5,7 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/language.dart';
+import '../../domain/task_options.dart';
 import '../../services/readiness.dart';
 import '../../services/registry.dart';
 import '../shared/provider_fields.dart';
@@ -95,10 +96,7 @@ class TranslateLanguageSection extends StatelessWidget {
             model: id == o.translationProviderId ? o.translationModel : null,
           ),
         ),
-        // 换服务就把模型清掉，否则会把上一家的模型名发给下一家。
-        onChanged: (id) => form.update(
-          (o) => o.copyWith(translationProviderId: id, translationModel: null),
-        ),
+        onChanged: form.selectTranslationProvider,
       ),
     );
     final model = modelField(
@@ -108,13 +106,14 @@ class TranslateLanguageSection extends StatelessWidget {
       onChanged: (m) => form.update((o) => o.copyWith(translationModel: m)),
     );
     final batchHint = Text(
-      '一次送给模型的字幕条数。调大省 token，但更容易漏条或合并。范围 1–100。',
+      '一次送给模型的字幕条数。调大省 token，但更容易漏条或合并。'
+      '范围 ${TaskOptions.batchSizeRange.min}–${TaskOptions.batchSizeRange.max}。',
       style: context.texts.bodySmall?.copyWith(color: cs.onSurfaceVariant),
     );
     final batch = NumberField(
       value: o.translationBatchSize,
-      min: 1,
-      max: 100,
+      min: TaskOptions.batchSizeRange.min,
+      max: TaskOptions.batchSizeRange.max,
       width: flat ? double.infinity : 88,
       onChanged: (v) => form.update((o) => o.copyWith(translationBatchSize: v)),
     );

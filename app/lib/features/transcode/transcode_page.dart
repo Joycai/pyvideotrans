@@ -48,7 +48,7 @@ class TranscodePageState extends NewTaskPageState<TranscodePage> {
   void initState() {
     super.initState();
     // 打开页面就开始检测编码器：卡片上的状态在加文件之前就该是真的。
-    form.transcoder.ensureProbed();
+    form.probeEncoders();
   }
 
   @override

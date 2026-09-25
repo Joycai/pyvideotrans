@@ -2,6 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/language.dart';
 import 'package:subtitle_studio/domain/output_naming.dart';
 import 'package:subtitle_studio/domain/paths.dart';
+import 'package:subtitle_studio/domain/srt.dart';
+import 'package:subtitle_studio/domain/task_kind.dart';
+import 'package:subtitle_studio/domain/task_options.dart';
 
 void main() {
   group('跨平台路径', () {
@@ -36,5 +39,41 @@ void main() {
     test('文件名不安全字符替换成下划线', () {
       expect(languageTag(const Language('x custom/1', '测试')), 'x_custom_1');
     });
+  });
+
+  group('产物命名', () {
+    test('纯翻译任务不另写原文；转写且翻译写两份，双语带两种语言', () {
+      const options = TaskOptions(
+        sourceLanguage: Language('zh', '中文'),
+        asrProviderId: 'openai',
+        targetLanguage: Language('en', '英语'),
+        translationProviderId: 'deepseek',
+        translate: true,
+        bilingual: BilingualLayout.targetBelow,
+      );
+      expect(OutputNaming.fields(TaskKind.translate, options), [
+        SrtField.bilingualTargetBelow,
+      ]);
+      expect(OutputNaming.fields(TaskKind.transcribe, options), [
+        SrtField.source,
+      ]);
+      expect(
+        [
+          for (final f in OutputNaming.fields(
+            TaskKind.transcribeAndTranslate,
+            options,
+          ))
+            OutputNaming.fileName('ep1', f, options),
+        ],
+        ['ep1.zh.srt', 'ep1.zh-en.srt'],
+      );
+    });
+  });
+
+  test('比较路径时两种分隔符算同一处', () {
+    expect(
+      sameSeparators(r'C:\out/ep1.zh.srt'),
+      sameSeparators(r'C:\out\ep1.zh.srt'),
+    );
   });
 }
