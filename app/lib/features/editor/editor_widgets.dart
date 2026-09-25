@@ -307,6 +307,9 @@ String friendlyTime(DateTime time, {DateTime? now}) {
   return '${time.month}月${time.day}日';
 }
 
+/// 今天的只写钟点，其他日子带上日期。
+String shortFriendlyTime(DateTime t) => friendlyTime(t).replaceFirst('今天 ', '');
+
 class EditorTextAction extends StatelessWidget {
   const EditorTextAction({
     super.key,

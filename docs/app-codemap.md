@@ -237,7 +237,9 @@ core/       domain/ ←──── services/
 - `editor_banners.dart`：只读横幅与恢复横幅。
 - `editor_chrome.dart`：编辑器分区的顶栏内容、副标题与状态栏文案。
 - `editor_page_actions.dart`：视图菜单、保存 / 导出 / 翻译操作。
-- `editor_title.dart`：来源浮层、保存状态 chip 与弹层、待校对徽标。
+- `editor_title.dart`：顶栏标题右侧的组合与待校对徽标。
+- `editor_source_chip.dart`：本地会话的来源 chip 与来源浮层。
+- `editor_sync_chip.dart`：任务会话的保存状态 chip 与弹层。
 - `editor_leave_dialog.dart`：离开 / 退出前「先写入字幕文件？」、写入流程与外部修改冲突询问。
 
 字幕表格拆成：
