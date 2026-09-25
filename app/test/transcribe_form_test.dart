@@ -213,4 +213,26 @@ void main() {
       expect(form.options.outputDir, '/out');
     });
   });
+
+  group('换服务', () {
+    test('模型清掉；新识别服务不支持说话人分离时关掉开关', () async {
+      final form = TranscribeFormController(
+        settings: await _settings(),
+        media: GatedFfmpeg(),
+      );
+      form
+        ..selectAsrProvider('dashscope_qwen_asr')
+        ..update((o) => o.copyWith(asrModel: 'm1', diarize: true))
+        ..selectAsrProvider('openai');
+      expect(form.options.asrProviderId, 'openai');
+      expect(form.options.asrModel, isNull);
+      expect(form.options.diarize, isFalse);
+
+      form
+        ..update((o) => o.copyWith(translationModel: 'm2'))
+        ..selectTranslationProvider('ollama');
+      expect(form.options.translationProviderId, 'ollama');
+      expect(form.options.translationModel, isNull);
+    });
+  });
 }

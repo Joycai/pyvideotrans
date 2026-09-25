@@ -61,17 +61,7 @@ class TranscribeRecognizeSection extends StatelessWidget {
           Registry.asr,
           (id) => ProviderReadiness.asr(id, form.settings),
         ),
-        // 换服务就把模型清掉，否则会把上一家的模型名发给下一家。
-        // 新服务不支持说话人分离就把开关一并关掉，别留一个看不见的 true。
-        onChanged: (id) => form.update(
-          (o) => o.copyWith(
-            asrProviderId: id,
-            asrModel: null,
-            diarize:
-                o.diarize &&
-                (Registry.asrInfo(id)?.supportsDiarization ?? false),
-          ),
-        ),
+        onChanged: form.selectAsrProvider,
       ),
     );
     final model = modelField(

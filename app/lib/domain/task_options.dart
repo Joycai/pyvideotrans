@@ -287,6 +287,19 @@ class TaskOptions {
         : outputDir as String?,
   );
 
+  /// 换识别服务。模型一并清掉，否则会把上一家的模型名发给下一家；新服务
+  /// 不支持说话人分离就把开关关掉，别留一个界面上看不见的 true。
+  TaskOptions withAsrProvider(String id, {required bool supportsDiarization}) =>
+      copyWith(
+        asrProviderId: id,
+        asrModel: null,
+        diarize: diarize && supportsDiarization,
+      );
+
+  /// 换翻译服务。模型一并清掉，理由同上。
+  TaskOptions withTranslationProvider(String id) =>
+      copyWith(translationProviderId: id, translationModel: null);
+
   /// 产物目录：设了自定义输出目录就用它，否则与源文件同目录。
   String outputDirFor(String sourcePath) => switch (outputLocation) {
     OutputLocation.custom when outputDir?.trim().isNotEmpty == true =>

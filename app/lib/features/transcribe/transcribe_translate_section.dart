@@ -87,9 +87,7 @@ class TranscribeTranslateSection extends StatelessWidget {
             model: id == o.translationProviderId ? o.translationModel : null,
           ),
         ),
-        onChanged: (id) => form.update(
-          (o) => o.copyWith(translationProviderId: id, translationModel: null),
-        ),
+        onChanged: form.selectTranslationProvider,
       ),
     );
     final model = modelField(

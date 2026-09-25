@@ -8,6 +8,7 @@ import '../../domain/paths.dart';
 import '../../domain/task_options.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/readiness.dart';
+import '../../services/registry.dart';
 import '../../services/settings.dart';
 import '../shared/enqueue_request.dart';
 
@@ -117,6 +118,18 @@ class TranscribeFormController extends ChangeNotifier {
   }
 
   bool get hasLastUsed => settings.lastTranscribeOptions != null;
+
+  /// 换识别服务（规则见 [TaskOptions.withAsrProvider]）。
+  void selectAsrProvider(String id) => update(
+    (o) => o.withAsrProvider(
+      id,
+      supportsDiarization: Registry.asrInfo(id)?.supportsDiarization ?? false,
+    ),
+  );
+
+  /// 换翻译服务（规则见 [TaskOptions.withTranslationProvider]）。
+  void selectTranslationProvider(String id) =>
+      update((o) => o.withTranslationProvider(id));
 
   /// 切换输出位置。选「指定目录」而还没有目录时先弹选择框，选了才切过去 ——
   /// 取消的话留在原来的位置，不会停在「指定目录」却没有目录（那样实际会写到

@@ -95,10 +95,7 @@ class TranslateLanguageSection extends StatelessWidget {
             model: id == o.translationProviderId ? o.translationModel : null,
           ),
         ),
-        // 换服务就把模型清掉，否则会把上一家的模型名发给下一家。
-        onChanged: (id) => form.update(
-          (o) => o.copyWith(translationProviderId: id, translationModel: null),
-        ),
+        onChanged: form.selectTranslationProvider,
       ),
     );
     final model = modelField(
