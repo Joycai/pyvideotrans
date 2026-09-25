@@ -51,6 +51,23 @@ hello
         '1:32:05',
       );
     });
+
+    test('总时长固定写出小时位', () {
+      expect(
+        Srt.formatDuration(
+          const Duration(minutes: 5, seconds: 3),
+          alwaysHours: true,
+        ),
+        '0:05:03',
+      );
+      expect(
+        Srt.formatDuration(
+          const Duration(hours: 12, minutes: 1),
+          alwaysHours: true,
+        ),
+        '12:01:00',
+      );
+    });
   });
 
   group('说话人标签', () {
