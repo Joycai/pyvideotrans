@@ -33,14 +33,30 @@ typedef TranslationFactory =
 /// 继续，不重做已经花过钱和时间的阶段。界面上向用户明确承诺了这件事。
 class TaskRunner {
   TaskRunner({
-    required this.settings,
-    required this.workDir,
+    required AppSettings settings,
+    required String workDir,
     Media? media,
     Transcoder? transcoder,
     AsrFactory? asrFactory,
     TranslationFactory? translationFactory,
-  }) : media = media ?? Media(),
-       transcoder = transcoder ?? Transcoder(media: media),
+  }) : this._(
+         settings: settings,
+         workDir: workDir,
+         media: media ?? Media(),
+         transcoder: transcoder,
+         asrFactory: asrFactory,
+         translationFactory: translationFactory,
+       );
+
+  // 先把 media 定下来再建默认的 Transcoder，两者才共用同一个 ffmpeg 查找结果。
+  TaskRunner._({
+    required this.settings,
+    required this.workDir,
+    required this.media,
+    Transcoder? transcoder,
+    AsrFactory? asrFactory,
+    TranslationFactory? translationFactory,
+  }) : transcoder = transcoder ?? Transcoder(media: media),
        _asrOverride = asrFactory,
        _translationFactory = translationFactory ?? _defaultTranslationFactory;
 
