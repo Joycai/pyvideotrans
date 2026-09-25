@@ -77,10 +77,11 @@ Widget modelField({
     final example = info.defaultModel ?? '';
     return LabeledField(
       label: '模型',
-      child: ModelTextField(
+      // 自定义接口没有候选可列，只能让用户自己写；清空即回到设置里的默认模型。
+      child: SingleLineField(
         value: model ?? settings.endpointFor(info).model,
         hint: example.isEmpty ? '填写模型名' : '填写模型名，例 $example',
-        onChanged: onChanged,
+        onChanged: (v) => onChanged(v.trim().isEmpty ? null : v.trim()),
       ),
     );
   }
@@ -105,54 +106,6 @@ Widget modelField({
 String resolvedModel(ProviderInfo info, String? model, AppSettings settings) {
   final chosen = model?.trim() ?? '';
   return chosen.isNotEmpty ? chosen : settings.endpointFor(info).model;
-}
-
-/// 自定义接口的模型名：没有候选可列，只能让用户自己写。
-class ModelTextField extends StatefulWidget {
-  const ModelTextField({
-    super.key,
-    required this.value,
-    required this.hint,
-    required this.onChanged,
-  });
-
-  final String value;
-  final String hint;
-  final ValueChanged<String?> onChanged;
-
-  @override
-  State<ModelTextField> createState() => _ModelTextFieldState();
-}
-
-class _ModelTextFieldState extends State<ModelTextField> {
-  late final _controller = TextEditingController(text: widget.value);
-  final _focus = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => ControlSurface(
-    focused: _focus.hasFocus,
-    padding: const EdgeInsets.symmetric(horizontal: 12),
-    child: TextField(
-      controller: _controller,
-      focusNode: _focus,
-      style: context.texts.bodyMedium,
-      decoration: bareInputDecoration(context, hint: widget.hint),
-      onChanged: (v) => widget.onChanged(v.trim().isEmpty ? null : v.trim()),
-    ),
-  );
 }
 
 /// 整行可点：设计稿里开关和「高级」标题的热区都是一整行，不是那个小控件。

@@ -309,7 +309,7 @@ class _WarningBanner extends StatelessWidget {
 
 /// 密钥输入：默认掩码，眼睛图标只切显示、不改存储；显示态用等宽字体便于逐字符核对。
 /// 空着时描边换 2px error。
-class _KeyField extends StatefulWidget {
+class _KeyField extends StatelessWidget {
   const _KeyField({
     super.key,
     required this.value,
@@ -326,59 +326,24 @@ class _KeyField extends StatefulWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  State<_KeyField> createState() => _KeyFieldState();
-}
-
-class _KeyFieldState extends State<_KeyField> {
-  late final _controller = TextEditingController(text: widget.value);
-  final _focus = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = context.colors;
-    return ControlSurface(
-      focused: _focus.hasFocus,
-      error: widget.missing,
-      padding: const EdgeInsets.only(left: AppSpacing.s3, right: AppSpacing.s1),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              focusNode: _focus,
-              obscureText: !widget.visible,
-              obscuringCharacter: '•',
-              style: widget.visible
-                  ? kTimecodeStyle.copyWith(color: cs.onSurface)
-                  : context.texts.bodyMedium,
-              decoration: bareInputDecoration(context, hint: '未填写'),
-              onChanged: widget.onChanged,
-            ),
-          ),
-          IconActionButton(
-            icon: widget.visible ? Symbols.visibility_off : Symbols.visibility,
-            tooltip: widget.visible ? '隐藏密钥' : '显示密钥',
-            size: 28,
-            iconSize: 18,
-            onPressed: widget.onToggle,
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => SingleLineField(
+    value: value,
+    hint: '未填写',
+    obscure: !visible,
+    style: visible
+        ? kTimecodeStyle.copyWith(color: context.colors.onSurface)
+        : null,
+    error: missing,
+    padding: const EdgeInsets.only(left: AppSpacing.s3, right: AppSpacing.s1),
+    trailing: IconActionButton(
+      icon: visible ? Symbols.visibility_off : Symbols.visibility,
+      tooltip: visible ? '隐藏密钥' : '显示密钥',
+      size: 28,
+      iconSize: 18,
+      onPressed: onToggle,
+    ),
+    onChanged: onChanged,
+  );
 }
 
 /// 每批条数滑杆：4px 轨、primary 填充、20px 白色手柄；右侧当前值 + 「条 / 批」，
