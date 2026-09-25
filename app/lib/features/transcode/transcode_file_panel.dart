@@ -35,7 +35,7 @@ class TranscodeFilePanel extends StatelessWidget {
     final files = form.files;
     return AnimatedContainer(
       duration: AppDuration.medium,
-      curve: kEasingStandard,
+      curve: AppEasing.standard,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: dragging
@@ -79,7 +79,7 @@ class TranscodeFilePanel extends StatelessWidget {
           ),
           AnimatedSize(
             duration: AppDuration.medium,
-            curve: kEasingStandard,
+            curve: AppEasing.standard,
             alignment: Alignment.topCenter,
             child: enqueued == null
                 ? const SizedBox(width: double.infinity)

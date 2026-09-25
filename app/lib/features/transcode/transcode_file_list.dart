@@ -225,7 +225,7 @@ class _FileRowState extends State<_FileRow> {
           top ?? '—',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: kTimecodeStyle.copyWith(
+          style: AppTextStyles.timecode.copyWith(
             fontSize: 12,
             height: 16 / 12,
             fontWeight: FontWeight.w500,
@@ -237,7 +237,7 @@ class _FileRowState extends State<_FileRow> {
             bottom,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: kTimecodeStyle.copyWith(
+            style: AppTextStyles.timecode.copyWith(
               fontSize: 12,
               height: 16 / 12,
               fontWeight: FontWeight.w400,
@@ -300,7 +300,7 @@ class _FileRowState extends State<_FileRow> {
           len: Text(
             file.durationLabel,
             textAlign: TextAlign.right,
-            style: kTimecodeStyle.copyWith(color: numberColor),
+            style: AppTextStyles.timecode.copyWith(color: numberColor),
           ),
           video: twoLines(
             video == null ? null : MediaProbe.codecLabel(video.codec),
@@ -313,7 +313,7 @@ class _FileRowState extends State<_FileRow> {
           size: Text(
             file.sizeBytes > 0 ? file.sizeLabel : '',
             textAlign: TextAlign.right,
-            style: kTimecodeStyle.copyWith(color: cs.onSurfaceVariant),
+            style: AppTextStyles.timecode.copyWith(color: cs.onSurfaceVariant),
           ),
           chip: _StateChip(state: state),
           remove: Focus(

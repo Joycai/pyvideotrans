@@ -227,7 +227,7 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
       padding: const EdgeInsets.all(AppSpacing.s4),
       child: AnimatedContainer(
         duration: AppDuration.medium,
-        curve: kEasingStandard,
+        curve: AppEasing.standard,
         height: 136,
         decoration: BoxDecoration(
           color: _dragging ? cs.primary.withValues(alpha: 0.06) : null,
@@ -379,7 +379,7 @@ class _FileRow extends StatelessWidget {
                   : info?.duration == null
                   ? '—'
                   : Srt.formatDuration(info!.duration!),
-              style: kTimecodeStyle.copyWith(
+              style: AppTextStyles.timecode.copyWith(
                 color: unreadable ? cs.error : cs.onSurfaceVariant,
               ),
             ),

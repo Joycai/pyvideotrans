@@ -387,7 +387,7 @@ class _TranscodeServiceCell extends StatelessWidget {
           child: Text(
             detail,
             overflow: TextOverflow.ellipsis,
-            style: kTimecodeStyle.copyWith(
+            style: AppTextStyles.timecode.copyWith(
               fontSize: 12,
               fontWeight: FontWeight.w400,
               color: cs.onSurfaceVariant,

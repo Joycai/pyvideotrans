@@ -319,7 +319,7 @@ class _AdvancedSection extends StatelessWidget {
                   o.outputDir != null)
                 Text(
                   o.outputDir!,
-                  style: kTimecodeStyle.copyWith(
+                  style: AppTextStyles.timecode.copyWith(
                     fontSize: 12,
                     fontWeight: FontWeight.w400,
                     color: cs.onSurfaceVariant,
@@ -437,7 +437,7 @@ class _TextInputState extends State<_TextInput> {
       controller: _controller,
       focusNode: _focus,
       style: widget.mono
-          ? kTimecodeStyle.copyWith(
+          ? AppTextStyles.timecode.copyWith(
               fontSize: 13,
               fontWeight: FontWeight.w400,
               color: context.colors.onSurface,

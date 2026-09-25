@@ -251,7 +251,7 @@ class _FileRowState extends State<_FileRow> {
               child: Text(
                 file.cueCount == null ? '—' : grouped(file.cueCount!),
                 textAlign: TextAlign.right,
-                style: kTimecodeStyle.copyWith(color: numberColor),
+                style: AppTextStyles.timecode.copyWith(color: numberColor),
               ),
             ),
             const SizedBox(width: AppSpacing.s3),
@@ -262,7 +262,7 @@ class _FileRowState extends State<_FileRow> {
                     ? Srt.formatDuration(info!.duration!)
                     : '—',
                 textAlign: TextAlign.right,
-                style: kTimecodeStyle.copyWith(color: numberColor),
+                style: AppTextStyles.timecode.copyWith(color: numberColor),
               ),
             ),
             const SizedBox(width: AppSpacing.s3),
@@ -271,7 +271,9 @@ class _FileRowState extends State<_FileRow> {
               child: Text(
                 info?.sizeLabel ?? '',
                 textAlign: TextAlign.right,
-                style: kTimecodeStyle.copyWith(color: cs.onSurfaceVariant),
+                style: AppTextStyles.timecode.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
               ),
             ),
             const SizedBox(width: AppSpacing.s3),

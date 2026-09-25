@@ -111,7 +111,7 @@ Python 后端都说 OpenAI 兼容协议，于是共用 `OpenAiCompatibleAsrProvi
 - ffmpeg 查找顺序：应用目录/ffmpeg → `/opt/homebrew/bin`、`/usr/local/bin`、`/usr/bin`、
   `/snap/bin` → PATH。macOS 上 GUI 应用拿不到用户 shell 的 PATH，所以必须显式找 Homebrew。
 - 编码器可用性：先看 `ffmpeg -encoders` 有没有编入，再对硬件编码器试编码 1 帧；
-  每个编码器用自己一套参数（`VideoEncoders` in `domain/transcode.dart`），不做通用的质量映射。
+  每个编码器用自己一套参数（`VideoEncoders` in `domain/transcode/encoder_catalog.dart`），不做通用的质量映射。
 
 ## 约定
 

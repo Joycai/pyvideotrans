@@ -92,7 +92,7 @@ class _EnvironmentSectionState extends State<EnvironmentSection> {
                           _path ?? '未找到，放进目录后点重新检测',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: kTimecodeStyle.copyWith(
+                          style: AppTextStyles.timecode.copyWith(
                             color: found ? cs.onSurface : cs.onSurfaceVariant,
                           ),
                         ),

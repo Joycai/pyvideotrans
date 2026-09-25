@@ -113,7 +113,7 @@ class ProviderInfo {
 ///
 /// 实现者只需要把音频变成 [Cue] 列表；抽音、分段、重试由流水线负责。
 /// 逐段识别的实现可以用 [checkpoint] 记录每段结果，续跑时跳过已完成的段。
-abstract class AsrProvider {
+abstract interface class AsrProvider {
   ProviderInfo get info;
 
   /// [audioPath] 是流水线已经转好的 16kHz 单声道音频。
@@ -130,7 +130,7 @@ abstract class AsrProvider {
 ///
 /// 按批调用：流水线把字幕切成每批 N 条交给实现者，实现者必须
 /// **返回与输入等长的列表**，顺序一一对应。返回长度不符会被流水线视为失败并重试。
-abstract class TranslationProvider {
+abstract interface class TranslationProvider {
   ProviderInfo get info;
 
   Future<List<String>> translateBatch({

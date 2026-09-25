@@ -74,10 +74,10 @@ class EditorOpenSlot extends StatefulWidget {
   final OpenSlot slot;
 
   @override
-  State<EditorOpenSlot> createState() => _SlotState();
+  State<EditorOpenSlot> createState() => _EditorOpenSlotState();
 }
 
-class _SlotState extends State<EditorOpenSlot> {
+class _EditorOpenSlotState extends State<EditorOpenSlot> {
   bool _hot = false;
 
   @override
@@ -147,7 +147,7 @@ class _EmptySlot extends StatelessWidget {
 
     return AnimatedContainer(
       duration: AppDuration.medium,
-      curve: kEasingStandard,
+      curve: AppEasing.standard,
       decoration: BoxDecoration(
         color: hot ? cs.primary.withValues(alpha: 0.06) : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
@@ -190,7 +190,7 @@ class _FilledSlot extends StatelessWidget {
 
     return AnimatedContainer(
       duration: AppDuration.medium,
-      curve: kEasingStandard,
+      curve: AppEasing.standard,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
         color: hot

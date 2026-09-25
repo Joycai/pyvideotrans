@@ -104,7 +104,7 @@ class TasksBoard extends StatelessWidget {
         // 未选中时面板宽度与间隙一起收掉，与设计稿的 0px 宽度一致。
         AnimatedSize(
           duration: AppDuration.medium,
-          curve: kEasingEmphasized,
+          curve: AppEasing.emphasized,
           child: selected == null
               ? const SizedBox(height: double.infinity)
               : Padding(

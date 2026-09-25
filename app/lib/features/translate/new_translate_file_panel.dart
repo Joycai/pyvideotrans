@@ -42,7 +42,7 @@ class NewTranslateFilePanel extends StatelessWidget {
     // 整个面板就是落点：拖入时描边转 primary、底色 primary 6%。
     return AnimatedContainer(
       duration: AppDuration.medium,
-      curve: kEasingStandard,
+      curve: AppEasing.standard,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: dragging
@@ -86,7 +86,7 @@ class NewTranslateFilePanel extends StatelessWidget {
           ),
           AnimatedSize(
             duration: AppDuration.medium,
-            curve: kEasingStandard,
+            curve: AppEasing.standard,
             alignment: Alignment.topCenter,
             child: enqueued == null
                 ? const SizedBox(width: double.infinity)

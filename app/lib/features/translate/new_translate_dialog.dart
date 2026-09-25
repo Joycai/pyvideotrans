@@ -254,7 +254,7 @@ class NewTranslateDialogState extends State<NewTranslateDialog> {
           if (note != null) ...[note, const SizedBox(height: AppSpacing.s3)],
           AnimatedContainer(
             duration: AppDuration.medium,
-            curve: kEasingStandard,
+            curve: AppEasing.standard,
             height: 136,
             decoration: BoxDecoration(
               color: _dragging ? cs.primary.withValues(alpha: 0.08) : null,

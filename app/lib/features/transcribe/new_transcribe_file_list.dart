@@ -280,7 +280,7 @@ class _FileRowState extends State<_FileRow> {
                     ? '—'
                     : Srt.formatDuration(info!.duration!),
                 textAlign: TextAlign.right,
-                style: kTimecodeStyle.copyWith(
+                style: AppTextStyles.timecode.copyWith(
                   color: state == StagedFileState.ready
                       ? cs.onSurface
                       : cs.onSurfaceVariant,
@@ -293,7 +293,9 @@ class _FileRowState extends State<_FileRow> {
               child: Text(
                 info?.sizeLabel ?? '',
                 textAlign: TextAlign.right,
-                style: kTimecodeStyle.copyWith(color: cs.onSurfaceVariant),
+                style: AppTextStyles.timecode.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
               ),
             ),
             const SizedBox(width: AppSpacing.s3),

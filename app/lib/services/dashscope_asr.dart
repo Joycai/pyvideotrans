@@ -633,7 +633,7 @@ sealed class _Outcome {
 }
 
 /// 拿到文本；空串表示这段没话。[pieces] 是说话人分离切出来的小块。
-class _Ok extends _Outcome {
+final class _Ok extends _Outcome {
   const _Ok(this.text, {this.pieces});
 
   final String text;
@@ -641,7 +641,7 @@ class _Ok extends _Outcome {
 }
 
 /// 限流或断网：不是这一段的错，等一等再试同一段。
-class _Wait extends _Outcome {
+final class _Wait extends _Outcome {
   const _Wait(this.reason, {this.retryAfter});
 
   final _ErrorInfo reason;
@@ -649,7 +649,7 @@ class _Wait extends _Outcome {
 }
 
 /// 请求被拒（4xx）。[fatal] 的换一段也不会好。
-class _Failed extends _Outcome {
+final class _Failed extends _Outcome {
   const _Failed(this.error, {this.fatal = false});
 
   final _ErrorInfo error;
@@ -657,7 +657,7 @@ class _Failed extends _Outcome {
 }
 
 /// 服务端问题（5xx / 空响应）：记一次失败，稍后可重试。
-class _Transient extends _Outcome {
+final class _Transient extends _Outcome {
   const _Transient(this.error);
 
   final String error;

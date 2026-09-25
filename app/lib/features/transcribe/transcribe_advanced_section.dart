@@ -172,7 +172,7 @@ class TranscribeAdvancedSection extends StatelessWidget {
                       o.outputLocation == OutputLocation.custom
                           ? (o.outputDir ?? '点此选择目录…')
                           : '与源文件同一个文件夹',
-                      style: kTimecodeStyle.copyWith(
+                      style: AppTextStyles.timecode.copyWith(
                         color: cs.onSurfaceVariant,
                         fontWeight: FontWeight.w400,
                       ),
@@ -207,7 +207,7 @@ class _OutputLocationRadios extends StatelessWidget {
     final stem = sample.contains('.')
         ? sample.substring(0, sample.lastIndexOf('.'))
         : sample;
-    final mono = kTimecodeStyle.copyWith(
+    final mono = AppTextStyles.timecode.copyWith(
       fontSize: 12,
       fontWeight: FontWeight.w400,
       color: cs.onSurfaceVariant,

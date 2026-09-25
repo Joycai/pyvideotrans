@@ -29,7 +29,7 @@ class AudioClip {
 ///
 /// 只有不带时间戳的识别接口（阿里百炼 Qwen3-ASR）需要它；Whisper 系自己
 /// 分段。抽成接口是为了测试能塞假实现，不用真的起 ffmpeg。
-abstract class AudioSplitter {
+abstract interface class AudioSplitter {
   Future<List<AudioClip>> split(
     String audioPath, {
     required CancellationToken token,

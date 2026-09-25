@@ -174,7 +174,11 @@ class SettingsPageState extends State<SettingsPage> {
     );
     _jumping = true;
     _scroll
-        .animateTo(target, duration: AppDuration.long, curve: kEasingEmphasized)
+        .animateTo(
+          target,
+          duration: AppDuration.long,
+          curve: AppEasing.emphasized,
+        )
         .whenComplete(() => _jumping = false);
   }
 

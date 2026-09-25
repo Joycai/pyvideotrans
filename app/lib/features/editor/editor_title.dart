@@ -42,7 +42,7 @@ class EditorTitleTrailing extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        EditorReviewBadge(count: controller.countOf(CueFilter.review)),
+        _EditorReviewBadge(count: controller.countOf(CueFilter.review)),
         const SizedBox(width: AppSpacing.s3),
         switch (session) {
           FileSession() => _SourceChip(
@@ -460,19 +460,14 @@ class _SyncChip extends StatelessWidget {
         ),
       ),
       popover: (context, close) =>
-          SyncPopover(controller: controller, onSave: onSave, close: close),
+          _SyncPopover(controller: controller, onSave: onSave, close: close),
     );
   }
 }
 
 /// 保存状态弹层：把「编辑进度」与「字幕文件」两层分开讲清楚。
-class SyncPopover extends StatelessWidget {
-  const SyncPopover({
-    super.key,
-    required this.controller,
-    this.onSave,
-    this.close,
-  });
+class _SyncPopover extends StatelessWidget {
+  const _SyncPopover({required this.controller, this.onSave, this.close});
 
   final EditorController controller;
   final VoidCallback? onSave;
@@ -681,8 +676,8 @@ class SyncPopover extends StatelessWidget {
 }
 
 /// 顶栏标题右侧的「待校对 N」。
-class EditorReviewBadge extends StatelessWidget {
-  const EditorReviewBadge({super.key, required this.count});
+class _EditorReviewBadge extends StatelessWidget {
+  const _EditorReviewBadge({required this.count});
 
   final int count;
 

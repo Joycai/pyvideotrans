@@ -29,10 +29,10 @@ class InspectorCueEditor extends StatefulWidget {
   final VoidCallback? onMountTranslation;
 
   @override
-  State<InspectorCueEditor> createState() => _CueEditorState();
+  State<InspectorCueEditor> createState() => _InspectorCueEditorState();
 }
 
-class _CueEditorState extends State<InspectorCueEditor> {
+class _InspectorCueEditorState extends State<InspectorCueEditor> {
   final _source = TextEditingController();
   final _translation = TextEditingController();
   final _sourceFocus = FocusNode();
@@ -382,7 +382,7 @@ class _TimecodeField extends StatelessWidget {
           child: TextFormField(
             key: ValueKey('$label$ms'),
             initialValue: Srt.formatTimecode(ms),
-            style: kTimecodeStyle.copyWith(color: cs.onSurface),
+            style: AppTextStyles.timecode.copyWith(color: cs.onSurface),
             onFieldSubmitted: (text) {
               final parsed = Srt.parseTimecode(text);
               if (parsed != null) onChanged(parsed);

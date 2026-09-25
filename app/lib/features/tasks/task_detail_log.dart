@@ -52,7 +52,7 @@ class TaskLogView extends StatelessWidget {
                     Expanded(
                       child: Text(
                         entry.message,
-                        style: kTimecodeStyle.copyWith(
+                        style: AppTextStyles.timecode.copyWith(
                           fontSize: 12,
                           fontWeight: FontWeight.w400,
                           color: switch (entry.level) {

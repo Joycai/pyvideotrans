@@ -85,7 +85,7 @@ class _DropOverlay extends StatelessWidget {
       return Expanded(
         child: AnimatedContainer(
           duration: AppDuration.medium,
-          curve: kEasingStandard,
+          curve: AppEasing.standard,
           decoration: BoxDecoration(
             color: Color.alphaBlend(
               cs.primary.withValues(alpha: hot ? 0.12 : 0.04),

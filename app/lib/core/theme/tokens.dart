@@ -27,8 +27,10 @@ abstract final class AppDuration {
   static const long = Duration(milliseconds: 300);
 }
 
-const kEasingStandard = Cubic(0.2, 0, 0, 1);
-const kEasingEmphasized = Cubic(0.05, 0.7, 0.1, 1);
+abstract final class AppEasing {
+  static const standard = Cubic(0.2, 0, 0, 1);
+  static const emphasized = Cubic(0.05, 0.7, 0.1, 1);
+}
 
 /// 字体。设计稿要求 Noto Sans SC + JetBrains Mono；未打包 ttf 时按平台系统字体回退。
 abstract final class AppFonts {
@@ -47,14 +49,16 @@ abstract final class AppFonts {
   ];
 }
 
-/// 时间码样式：等宽 + 表格数字（tnum），保证列对齐不跳动。
-const kTimecodeStyle = TextStyle(
-  fontFamilyFallback: AppFonts.monoFallback,
-  fontSize: 13,
-  height: 20 / 13,
-  fontWeight: FontWeight.w500,
-  fontFeatures: [FontFeature.tabularFigures()],
-);
+abstract final class AppTextStyles {
+  /// 时间码样式：等宽 + 表格数字（tnum），保证列对齐不跳动。
+  static const timecode = TextStyle(
+    fontFamilyFallback: AppFonts.monoFallback,
+    fontSize: 13,
+    height: 20 / 13,
+    fontWeight: FontWeight.w500,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+}
 
 /// 状态层不透明度，对应 WidgetStateProperty.overlayColor。
 abstract final class AppStateLayer {

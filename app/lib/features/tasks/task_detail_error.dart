@@ -61,7 +61,7 @@ class TaskErrorBlock extends StatelessWidget {
           const SizedBox(height: AppSpacing.s2),
           SelectableText(
             error.detail,
-            style: kTimecodeStyle.copyWith(
+            style: AppTextStyles.timecode.copyWith(
               fontSize: 12,
               fontWeight: FontWeight.w400,
               color: cs.onErrorContainer.withValues(alpha: 0.9),

@@ -175,7 +175,7 @@ class _LayoutField extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.s2),
-          LayoutPreview(layout: layout),
+          _LayoutPreview(layout: layout),
           const SizedBox(height: AppSpacing.s1 + 2),
           Text(
             plain ? '纯文本不保留双语排版，已回落到「仅译文」' : '双语指同一条字幕里两行文字，不是两个文件。',
@@ -191,8 +191,8 @@ class _LayoutField extends StatelessWidget {
 
 /// 排版预览。纯展示，随选择实时变化 —— 让用户不用试跑就知道会得到什么。
 /// 仅译文一行，双语两行按所选顺序。
-class LayoutPreview extends StatelessWidget {
-  const LayoutPreview({super.key, required this.layout});
+class _LayoutPreview extends StatelessWidget {
+  const _LayoutPreview({required this.layout});
 
   final BilingualLayout layout;
 
@@ -202,11 +202,11 @@ class LayoutPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    final muted = kTimecodeStyle.copyWith(
+    final muted = AppTextStyles.timecode.copyWith(
       fontWeight: FontWeight.w400,
       color: cs.onSurfaceVariant,
     );
-    final body = kTimecodeStyle.copyWith(fontWeight: FontWeight.w400);
+    final body = AppTextStyles.timecode.copyWith(fontWeight: FontWeight.w400);
     final lines = switch (layout) {
       BilingualLayout.targetOnly => const [target],
       BilingualLayout.targetAbove => const [target, source],
@@ -247,7 +247,7 @@ class _OutputLocationRadios extends StatelessWidget {
     final cs = context.colors;
     final o = form.options;
     final custom = o.outputLocation == OutputLocation.custom;
-    final mono = kTimecodeStyle.copyWith(
+    final mono = AppTextStyles.timecode.copyWith(
       fontSize: 12,
       fontWeight: FontWeight.w400,
       color: cs.onSurfaceVariant,
@@ -361,7 +361,7 @@ class _OutputLocationSegments extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         o.outputDir ?? '点此选择目录…',
-                        style: kTimecodeStyle.copyWith(
+                        style: AppTextStyles.timecode.copyWith(
                           fontWeight: FontWeight.w400,
                         ),
                         maxLines: 1,
@@ -381,7 +381,7 @@ class _OutputLocationSegments extends StatelessWidget {
                   const TextSpan(text: '译文写成 '),
                   TextSpan(
                     text: form.outputNameExample,
-                    style: kTimecodeStyle.copyWith(
+                    style: AppTextStyles.timecode.copyWith(
                       fontWeight: FontWeight.w400,
                       color: cs.onSurfaceVariant,
                     ),

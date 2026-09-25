@@ -18,7 +18,7 @@
 - 编码器：CPU（x264 / x265 / SVT-AV1 / libaom）、VideoToolbox（Apple）、NVENC（NVIDIA）、
   QSV（Intel）、AMF（AMD）。**每个编码器用自己的一套参数**（x264 的 CRF 与 preset、
   NVENC 的 CQ 与 p1–p7、QSV 的 ICQ、AMF 的 CQP……），不做通用的「质量 / 速度」映射。
-  参数表定义在 `lib/domain/transcode.dart` 的 `VideoEncoders`。
+  参数表定义在 `lib/domain/transcode/encoder_catalog.dart` 的 `VideoEncoders`。
 - 可用性检测：先看 `ffmpeg -encoders` 有没有编入，再对硬件编码器试编码 1 帧。
   编入了但没有对应显卡的会标「设备不可用」并写明原因。
 - 产物写到 `原文件名.hevc.mp4`（后缀可改），已存在时加序号，不覆盖；先写 `.part`，

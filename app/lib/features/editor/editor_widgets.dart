@@ -31,10 +31,10 @@ class AnchoredPopover extends StatefulWidget {
   final bool matchAnchorWidth;
 
   @override
-  State<AnchoredPopover> createState() => AnchoredPopoverState();
+  State<AnchoredPopover> createState() => _AnchoredPopoverState();
 }
 
-class AnchoredPopoverState extends State<AnchoredPopover> {
+class _AnchoredPopoverState extends State<AnchoredPopover> {
   final _portal = OverlayPortalController();
   final _anchorKey = GlobalKey();
 
