@@ -312,3 +312,24 @@ class TaskFooterLine extends StatelessWidget {
     );
   }
 }
+
+/// 顶栏上的「上次参数」：把上次入队时的参数填回表单，还没入过队时置灰。
+class LastUsedButton extends StatelessWidget {
+  const LastUsedButton({
+    super.key,
+    required this.available,
+    required this.onApply,
+  });
+
+  final bool available;
+  final VoidCallback onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    return ControlButton(
+      label: '上次参数',
+      icon: Symbols.history,
+      onPressed: available ? onApply : null,
+    );
+  }
+}

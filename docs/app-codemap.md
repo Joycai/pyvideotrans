@@ -1,7 +1,7 @@
 # app/ 源码结构索引（app/lib）
 
 `app/` 是 Flutter 桌面客户端（macOS / Windows / Linux）的全部实现。
-当前 `lib/` 共 142 个 Dart 文件、约 3.3 万行；`test/` 共 49 个 Dart 文件、约 1.2 万行。
+当前 `lib/` 共 146 个 Dart 文件、约 3.2 万行；`test/` 共 50 个 Dart 文件、约 1.2 万行。
 本文路径一律相对 `app/`。
 
 - 设计决定与产品约束 → [`README.md`](../app/README.md)
@@ -177,7 +177,11 @@ core/       domain/ ←──── services/
 - `new_task_page.dart`：`NewTaskPageState`，三个建任务页的页面状态基类 —— 拖放、入队横幅、
   快捷键、960 / 1100 两栏布局；各页只说明表单、怎么入队、两栏各放什么。
 - `new_task_panels.dart`：建任务页的面板外框 —— 文件面板（标题行、横幅、提示条槽位）、
-  空态落区、参数面板（标题行、滚动段、页脚），以及页面与对话框共用的页脚校验文案 `TaskFooterLine`。
+  空态落区、参数面板（标题行、滚动段、页脚）、页面与对话框共用的页脚校验文案 `TaskFooterLine`，
+  以及顶栏的「上次参数」按钮 `LastUsedButton`。
+- `new_task_file_table.dart`：建任务页有文件时的文件表 `NewTaskFileTable` —— 表头、56px 行壳
+  （悬停底色、图标块、文件名 + 目录 / 问题说明、淡入的移除按钮）、参数说明、底部追加落区
+  `FileAppendStrip`；各页只给中间几列（`FileTableColumn`，可按行宽收起）和每行的单元格。
 
 - `enqueue_request.dart`：`EnqueueRequest`，建任务表单交出来的「一批文件 + 一份参数」。
 
@@ -210,8 +214,8 @@ core/       domain/ ←──── services/
 - `transcribe_recognize_section.dart`、`transcribe_translate_section.dart`、
   `transcribe_advanced_section.dart`：表单分区；`transcribe_footer.dart`：开始按钮。
 - `new_transcribe_page.dart`：顶栏内容、表单与入队（页面行为在 `shared/new_task_page.dart`）。
-- `new_transcribe_file_panel.dart`、`new_transcribe_file_list.dart`、
-  `new_transcribe_param_panel.dart`：往共享面板外框里填的内容。
+- `new_transcribe_file_panel.dart`、`new_transcribe_file_list.dart`（列定义与单元格，表格在
+  `shared/new_task_file_table.dart`）、`new_transcribe_param_panel.dart`：往共享面板外框里填的内容。
 - `new_transcribe_dialog.dart`：任务页使用的紧凑对话框入口。
 
 ### 新建翻译 `lib/features/translate/`
@@ -220,15 +224,16 @@ core/       domain/ ←──── services/
 - `translate_language_section.dart`、`translate_advanced_section.dart`；`translate_footer.dart`：开始按钮。
 - `translate_file_notes.dart`：忽略媒体 / 拒收格式提示（页面与对话框共用）。
 - `new_translate_page.dart`：顶栏内容、表单、入队与「改用新建转写」（页面行为在 `shared/new_task_page.dart`）。
-- `new_translate_file_panel.dart`、`new_translate_file_list.dart`、
-  `new_translate_param_panel.dart`：往共享面板外框里填的内容。
+- `new_translate_file_panel.dart`、`new_translate_file_list.dart`（列定义与单元格，表格在
+  `shared/new_task_file_table.dart`）、`new_translate_param_panel.dart`：往共享面板外框里填的内容。
 - `new_translate_dialog.dart`：任务页使用的紧凑对话框入口。
 
 ## 九、转码功能 `lib/features/transcode/`
 
 - `transcode_form.dart`：`TranscodeFormController`、源文件探测、参数选择和入队。
 - `transcode_page.dart`：顶栏内容、表单、入队、进页即探测编码器（页面行为在 `shared/new_task_page.dart`）。
-- `transcode_file_panel.dart`、`transcode_file_list.dart`：文件区。
+- `transcode_file_panel.dart`、`transcode_file_list.dart`：文件区；表格在 `shared/new_task_file_table.dart`，
+  这里只给列定义（窄窗口收起视频、音频列）与单元格。
 - `transcode_param_panel.dart`：输出、音频、高级区及开始按钮，装进共享参数面板外框。
 - `transcode_video_section.dart`：编码器卡片和每家自己的参数控件。
 - `transcode_widgets.dart`：转码页内共用的 Section / Hint。
@@ -325,7 +330,8 @@ core/       domain/ ←──── services/
 | 导航项 | `features/shell/nav_rail.dart` + `main.dart` 的页面 switch |
 | 顶栏内容 | 各页的 `xxxChrome()` + `features/shared/page_chrome.dart` |
 | 建任务页的拖放、横幅、快捷键、两栏断点 | `features/shared/new_task_page.dart` |
-| 建任务页的面板外框、空态、页脚文案 | `features/shared/new_task_panels.dart` |
+| 建任务页的面板外框、空态、页脚文案、「上次参数」 | `features/shared/new_task_panels.dart` |
+| 建任务页的文件表、追加落区 | `features/shared/new_task_file_table.dart` |
 | 字幕表格 | `features/editor/cue_table*.dart` |
 | 编辑动作与撤销 | `features/editor/editor_controller.dart` + `domain/cue.dart` |
 | 预览播放 | `features/editor/preview_playback.dart` + `inspector_preview.dart` |

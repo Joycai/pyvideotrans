@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
-import '../../core/widgets/buttons.dart';
 import '../../pipeline/task_queue.dart';
 import '../shared/new_task_page.dart';
+import '../shared/new_task_panels.dart';
 import '../shared/page_chrome.dart';
 import 'new_transcribe_file_panel.dart';
 import 'new_transcribe_param_panel.dart';
@@ -20,10 +20,9 @@ PageChrome newTranscribeChrome(TranscribeFormController form) {
         : '$n 个文件 · 总时长 ${_hms(form.totalDuration)} · '
               '将创建 $n 个${form.kindLabel}任务',
     actions: [
-      ControlButton(
-        label: '上次参数',
-        icon: Symbols.history,
-        onPressed: form.hasLastUsed ? form.applyLastUsed : null,
+      LastUsedButton(
+        available: form.hasLastUsed,
+        onApply: form.applyLastUsed,
       ),
     ],
   );
