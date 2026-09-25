@@ -5,7 +5,7 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/glass_panel.dart';
 import '../../core/widgets/indicators.dart';
-import '../../domain/task.dart';
+import '../../domain/task_filter.dart';
 import '../../pipeline/task_queue.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/provider_api.dart';
@@ -49,9 +49,7 @@ class StatusSnapshot {
         Registry.translationInfo(settings.translationProviderId),
         '翻译',
       ),
-      runningTasks: queue.countWhere(
-        (t) => t.status == TaskStatus.running || t.status == TaskStatus.queued,
-      ),
+      runningTasks: queue.countWhere(TaskFilter.running.matches),
       overallProgress: queue.overallProgress,
       etaText: eta == null ? null : '剩余约 ${eta.inMinutes} 分钟',
       note: note,
