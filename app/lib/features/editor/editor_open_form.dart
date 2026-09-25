@@ -160,8 +160,7 @@ class EditorOpenForm extends ChangeNotifier {
     await load(target, subs.first);
   }
 
-  static bool isOpenable(String path) =>
-      extensions.contains(extensionOf(path));
+  static bool isOpenable(String path) => extensions.contains(extensionOf(path));
 
   /// 两个文件怎么分：语言段不同时，和设置里目标语言一致的那份当译文；
   /// 分不出来就只放第一个进原文。

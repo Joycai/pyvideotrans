@@ -102,15 +102,11 @@ class AppStatusBar extends StatelessWidget {
           const SizedBox(width: AppSpacing.s1 + 2),
           Text(snapshot.ffmpeg, style: muted),
           _divider(cs),
-          StatusDot(
-            snapshot.asr.connected ? ext.success : cs.outline,
-          ),
+          StatusDot(snapshot.asr.connected ? ext.success : cs.outline),
           const SizedBox(width: AppSpacing.s1 + 2),
           Text(snapshot.asr.label, style: muted),
           _divider(cs),
-          StatusDot(
-            snapshot.translation.connected ? ext.success : cs.outline,
-          ),
+          StatusDot(snapshot.translation.connected ? ext.success : cs.outline),
           const SizedBox(width: AppSpacing.s1 + 2),
           Text(snapshot.translation.label, style: muted),
           const Spacer(),

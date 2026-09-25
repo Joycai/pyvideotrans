@@ -87,10 +87,7 @@ void main() {
       final statusRect = tester.getRect(statusBar);
       expect(statusRect.height, 32);
       final statusText = tester.getRect(
-        find.descendant(
-          of: statusBar,
-          matching: find.textContaining('ffmpeg'),
-        ),
+        find.descendant(of: statusBar, matching: find.textContaining('ffmpeg')),
       );
       expect(
         statusText.center.dy,
