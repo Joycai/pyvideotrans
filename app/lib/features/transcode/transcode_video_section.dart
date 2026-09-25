@@ -174,7 +174,7 @@ class _EncoderCard extends StatelessWidget {
     final cs = context.colors;
     final ext = context.ext;
     // 设计稿：检测中的卡片不变淡，但要等结果出来才能选。
-    final enabled = status.state == EncoderState.available;
+    final enabled = status.usable;
     final dimmed = status.state == EncoderState.notCompiled ||
         status.state == EncoderState.failed;
     final (chipBg, chipFg, chipIcon) = switch (status.state) {
