@@ -1,5 +1,4 @@
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../domain/media_kinds.dart';
 import '../../domain/output_naming.dart';
@@ -8,9 +7,9 @@ import '../../domain/task_options.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/readiness.dart';
 import '../../services/registry.dart';
-import '../../services/settings.dart';
 import '../shared/enqueue_request.dart';
 import '../shared/footer_message.dart';
+import '../shared/new_task_form.dart';
 
 /// 文件列表里一行的探测状态。
 enum StagedFileState {
@@ -23,20 +22,11 @@ enum StagedFileState {
 }
 
 /// 加进「新建转写」列表里的一个文件。
-class StagedFile {
-  const StagedFile({required this.path, this.info, required this.state});
+class StagedFile extends StagedPath {
+  const StagedFile({required super.path, this.info, required this.state});
 
-  final String path;
   final MediaFileInfo? info;
   final StagedFileState state;
-
-  String get fileName => baseName(path);
-
-  /// 所在目录，用于列表副信息。
-  String get directory {
-    final cut = path.length - fileName.length;
-    return cut <= 0 ? '' : path.substring(0, cut);
-  }
 
   bool get isVideo => MediaKinds.isMedia(path) && !MediaKinds.isAudio(path);
 
@@ -48,76 +38,27 @@ class StagedFile {
 /// 对话框与导航栏的「新建转写」页共用这一份 —— 两处的字段、校验文案与就绪
 /// 判断必须逐字相同，各写一份必然走形。它不碰任务队列：`submit` 只把文件与
 /// 参数打包交出去，入队由调用方完成，进度归任务页。
-class TranscribeFormController extends ChangeNotifier {
+///
+/// 参数、文件列表、拖放说明与输出位置这些与另两个表单共有的部分在
+/// [NewTaskFormBase]。
+class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
   TranscribeFormController({
-    required this.settings,
+    required super.settings,
     Ffmpeg? media,
-    TaskOptions? initial,
-    Future<String?> Function()? pickDirectory,
-  }) : media = media ?? Ffmpeg(),
-       _options = initial ?? settings.defaultTaskOptions(),
-       _pickDirectory = pickDirectory ?? getDirectoryPath;
+    super.initial,
+    super.pickDirectory,
+  }) : media = media ?? Ffmpeg();
 
-  final AppSettings settings;
   final Ffmpeg media;
 
-  /// 选目录的对话框。测试里换成假的：平台插件在单元测试里没有实现。
-  final Future<String?> Function() _pickDirectory;
-
-  TaskOptions _options;
-  TaskOptions get options => _options;
-
-  final _files = <StagedFile>[];
-  List<StagedFile> get files => List.unmodifiable(_files);
-
-  /// 拖进来的东西不是音视频时的说明。落下即清掉上一次的。
-  String? _dropError;
-  String? get dropError => _dropError;
-
-  bool _advancedOpen = false;
-  bool get advancedOpen => _advancedOpen;
-  set advancedOpen(bool v) {
-    if (_advancedOpen == v) return;
-    _advancedOpen = v;
-    notifyListeners();
-  }
-
-  bool _disposed = false;
+  @override
+  TaskOptions? get lastUsedOptions => settings.lastTranscribeOptions;
 
   @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
-  }
-
-  void _notify() {
-    if (!_disposed) notifyListeners();
-  }
+  XTypeGroup get browseTypes =>
+      XTypeGroup(label: '音视频', extensions: MediaKinds.media.toList());
 
   // —— 参数 ————————————————————————————————————————————————
-
-  /// 改一项参数。多行输入框每个字符都会调，传 `notify: false` 省掉重建。
-  void update(TaskOptions Function(TaskOptions) change, {bool notify = true}) {
-    _options = change(_options);
-    if (notify) _notify();
-  }
-
-  /// 恢复为设置页的默认值，不动文件列表。
-  void reset() {
-    _options = settings.defaultTaskOptions();
-    _notify();
-  }
-
-  /// 把最近一次成功提交的参数整份填回。没有存档时返回 false，界面据此禁用按钮。
-  bool applyLastUsed() {
-    final last = settings.lastTranscribeOptions;
-    if (last == null) return false;
-    _options = last;
-    _notify();
-    return true;
-  }
-
-  bool get hasLastUsed => settings.lastTranscribeOptions != null;
 
   /// 换识别服务（规则见 [TaskOptions.withAsrProvider]）。
   void selectAsrProvider(String id) => update(
@@ -130,28 +71,6 @@ class TranscribeFormController extends ChangeNotifier {
   /// 换翻译服务（规则见 [TaskOptions.withTranslationProvider]）。
   void selectTranslationProvider(String id) =>
       update((o) => o.withTranslationProvider(id));
-
-  /// 切换输出位置。选「指定目录」而还没有目录时先弹选择框，选了才切过去 ——
-  /// 取消的话留在原来的位置，不会停在「指定目录」却没有目录（那样实际会写到
-  /// 源文件旁边，摘要却说指定目录）。
-  void chooseOutputLocation(OutputLocation location) {
-    if (location == OutputLocation.custom &&
-        (_options.outputDir?.trim().isEmpty ?? true)) {
-      pickOutputDir();
-      return;
-    }
-    update((o) => o.copyWith(outputLocation: location));
-  }
-
-  Future<void> pickOutputDir() async {
-    final dir = await _pickDirectory();
-    if (dir == null || _disposed) return;
-    _options = _options.copyWith(
-      outputDir: dir,
-      outputLocation: OutputLocation.custom,
-    );
-    _notify();
-  }
 
   // —— 文件 ————————————————————————————————————————————————
 
@@ -169,15 +88,13 @@ class TranscribeFormController extends ChangeNotifier {
 
   /// 加一批路径。非音视频与已在列表里的跳过；先以「探测中」入列，探完再更新，
   /// 用户不必等 ffprobe 跑完才看到文件出现。
+  @override
   Future<void> add(List<String> paths) async {
-    final known = _files.map((f) => f.path).toSet();
-    final fresh = paths.where(MediaKinds.isMedia).where(known.add).toList();
+    final fresh = stageNew(
+      paths.where(MediaKinds.isMedia),
+      (p) => StagedFile(path: p, state: StagedFileState.probing),
+    );
     if (fresh.isEmpty) return;
-    _files.addAll([
-      for (final p in fresh)
-        StagedFile(path: p, state: StagedFileState.probing),
-    ]);
-    _notify();
     await Future.wait(fresh.map(_probe));
   }
 
@@ -195,81 +112,46 @@ class TranscribeFormController extends ChangeNotifier {
     _setProbeResult(path, info);
   }
 
-  void _setProbeResult(String path, MediaFileInfo info) {
-    if (_disposed) return;
-    final i = _files.indexWhere((f) => f.path == path);
-    if (i < 0) return; // 探测期间被移除了。
-    _files[i] = StagedFile(
+  void _setProbeResult(String path, MediaFileInfo info) => replaceStaged(
+    StagedFile(
       path: path,
       info: info,
       state: info.exists ? StagedFileState.ready : StagedFileState.unreadable,
-    );
-    _notify();
-  }
+    ),
+  );
 
-  Future<void> browse() async {
-    final picked = await openFiles(
-      acceptedTypeGroups: [
-        XTypeGroup(label: '音视频', extensions: MediaKinds.media.toList()),
-      ],
-    );
-    if (picked.isNotEmpty) await add(picked.map((f) => f.path).toList());
-  }
-
-  /// 落下一批路径：记下被拒的说明，收下其余。
+  /// 落下一批路径：记下被拒的说明（比如混进来的字幕该去哪儿），收下其余。
+  @override
   void handleDrop(List<String> paths) {
-    _dropError = rejection(paths);
-    _notify();
+    dropError = rejection(paths);
+    notifyIfAlive();
     add(paths);
   }
 
-  /// 预填的一批里可能混着字幕（任务页把整把拖放原样转过来），说清楚它们去哪儿了。
-  void seed(List<String> paths) {
-    if (paths.isEmpty) return;
-    handleDrop(paths);
-  }
-
-  void remove(StagedFile file) {
-    _files.removeWhere((f) => f.path == file.path);
-    _notify();
-  }
-
-  void clear() {
-    _files.clear();
-    _dropError = null;
-    _notify();
-  }
-
-  void clearDropError() {
-    if (_dropError == null) return;
-    _dropError = null;
-    _notify();
-  }
-
-  /// 会入队的文件（读不出来的不算）。
   /// 输出位置下面那行示例：`interview_ep12.mp4 → interview_ep12.zh.srt`，
   /// 开了翻译再加上译文那份。与流水线实际写出的同一条规则。
   String get outputNameExample {
     final sample = enqueueable.firstOrNull?.fileName ?? 'interview_ep12.mp4';
     final stem = stemOf(sample);
     final names = [
-      for (final field in OutputNaming.fields(_options.kind, _options))
-        OutputNaming.fileName(stem, field, _options),
+      for (final field in OutputNaming.fields(options.kind, options))
+        OutputNaming.fileName(stem, field, options),
     ];
     return '$sample → ${names.join('、')}';
   }
 
+  /// 会入队的文件（读不出来的不算）。
   List<StagedFile> get enqueueable =>
-      _files.where((f) => f.willEnqueue).toList();
+      stagedFiles.where((f) => f.willEnqueue).toList();
 
   int get probingCount =>
-      _files.where((f) => f.state == StagedFileState.probing).length;
+      stagedFiles.where((f) => f.state == StagedFileState.probing).length;
 
   int get unreadableCount =>
-      _files.where((f) => f.state == StagedFileState.unreadable).length;
+      stagedFiles.where((f) => f.state == StagedFileState.unreadable).length;
 
   /// 已探明的总时长。仍在探测的文件不计。
-  Duration get totalDuration => _files.fold(
+  Duration get totalDuration => stagedFiles.fold(
     Duration.zero,
     (sum, f) => sum + (f.info?.duration ?? Duration.zero),
   );
@@ -277,34 +159,32 @@ class TranscribeFormController extends ChangeNotifier {
   // —— 校验 ————————————————————————————————————————————————
 
   Readiness get asrReadiness => ProviderReadiness.asr(
-    _options.asrProviderId,
+    options.asrProviderId,
     settings,
-    language: _options.sourceLanguage,
-    model: _options.asrModel,
-    diarize: _options.diarize,
+    language: options.sourceLanguage,
+    model: options.asrModel,
+    diarize: options.diarize,
   );
 
   Readiness get translationReadiness => ProviderReadiness.translation(
-    _options.translationProviderId,
+    options.translationProviderId,
     settings,
-    model: _options.translationModel,
+    model: options.translationModel,
   );
 
   List<Readiness> get _checks => [
     asrReadiness,
-    if (_options.translate) translationReadiness,
+    if (options.translate) translationReadiness,
   ];
 
   bool get canStart =>
       enqueueable.isNotEmpty && !_checks.any((r) => r.isBlocked);
 
-  String get kindLabel => _options.translate ? '转写并翻译' : '转写';
+  String get kindLabel => options.translate ? '转写并翻译' : '转写';
 
   /// 底部那一行。阻断用 error 色并禁用按钮，提示用中性色但照常可以开始。
   FooterMessage get footer {
-    if (_dropError != null) {
-      return (text: _dropError!, tone: FooterTone.error);
-    }
+    if (dropErrorFooter case final dropped?) return dropped;
     final n = enqueueable.length;
     if (n == 0) {
       return (
@@ -312,52 +192,39 @@ class TranscribeFormController extends ChangeNotifier {
         tone: unreadableCount > 0 ? FooterTone.error : FooterTone.add,
       );
     }
-    for (final r in _checks) {
-      if (r.isBlocked) {
-        return (
-          text: [r.message, r.hint].nonNulls.join('，'),
-          tone: FooterTone.error,
-        );
-      }
+    final checks = _checks;
+    if (blockedFooter(checks) ?? advisoryFooter(checks) case final gate?) {
+      return gate;
     }
-    for (final r in _checks) {
-      if (r.level == ReadinessLevel.advisory) {
-        return (text: r.message, tone: FooterTone.info);
-      }
-    }
-    final probing = probingCount > 0 ? '；$probingCount 个文件仍在探测，可先开始' : '';
-    return (
-      text: n == 1
-          ? '将创建 1 个$kindLabel任务，加入队列后在任务页查看进度$probing'
-          : '将创建 $n 个$kindLabel任务，按列表顺序排队$probing',
-      tone: FooterTone.info,
-    );
+    return queuedFooter(n, kindLabel, [
+      if (probingCount > 0) '$probingCount 个文件仍在探测，可先开始',
+    ]);
   }
 
   /// 高级区折叠时标题旁那行摘要。
   String get advancedSummary => [
-    if (_options.asrPrompt.trim().isNotEmpty) '识别提示词已填' else '识别提示词',
-    '每行 ${_options.cjkLineLength} / ${_options.latinLineLength}',
-    '输出 ${_options.format.extension.toUpperCase()}',
-    _options.outputLocation.label,
+    if (options.asrPrompt.trim().isNotEmpty) '识别提示词已填' else '识别提示词',
+    '每行 ${options.cjkLineLength} / ${options.latinLineLength}',
+    '输出 ${options.format.extension.toUpperCase()}',
+    options.outputLocation.label,
   ].join(' · ');
 
   /// 页面参数面板只有 400 宽，用更短的一版：格式 · 位置 · 每行字数[ · 提示词已填]。
   String get compactAdvancedSummary => [
-    _options.format.extension.toUpperCase(),
-    _options.outputLocation.label,
-    '每行 ${_options.cjkLineLength} / ${_options.latinLineLength} 字',
-    if (_options.asrPrompt.trim().isNotEmpty) '识别提示词已填',
+    options.format.extension.toUpperCase(),
+    options.outputLocation.label,
+    '每行 ${options.cjkLineLength} / ${options.latinLineLength} 字',
+    if (options.asrPrompt.trim().isNotEmpty) '识别提示词已填',
   ].join(' · ');
 
   /// 打包交出去，并把这份参数记为「上次参数」。不能开始时返回 null。
   /// 不清空列表 —— 对话框随即关闭，页面则自己决定清空的时机。
   EnqueueRequest? submit() {
     if (!canStart) return null;
-    settings.lastTranscribeOptions = _options;
+    settings.lastTranscribeOptions = options;
     return EnqueueRequest(
       paths: enqueueable.map((f) => f.path).toList(),
-      options: _options,
+      options: options,
     );
   }
 }
