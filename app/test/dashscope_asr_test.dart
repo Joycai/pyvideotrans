@@ -462,7 +462,7 @@ void main() {
           checkpoint: cp,
         ),
         throwsA(
-          isA<ProviderException>()
+          isA<ActionableException>()
               .having((e) => e.message, 'message', '有 1 段识别失败')
               .having((e) => e.detail, 'detail', contains('HTTP 503')),
         ),
@@ -512,8 +512,8 @@ void main() {
         checkpoint: cp,
       );
 
-      await expectLater(run(), throwsA(isA<ProviderException>()));
-      await expectLater(run(), throwsA(isA<ProviderException>()));
+      await expectLater(run(), throwsA(isA<ActionableException>()));
+      await expectLater(run(), throwsA(isA<ActionableException>()));
       final cues = await run();
 
       expect(cp.skippedCount, 1);
@@ -549,7 +549,7 @@ void main() {
           checkpoint: cp,
         ),
         throwsA(
-          isA<ProviderException>().having((e) => e.message, 'message', contains('限流')),
+          isA<ActionableException>().having((e) => e.message, 'message', contains('限流')),
         ),
       );
       // 限流后不再碰第三段；限流不是这一段的错，不计失败。
@@ -699,7 +699,7 @@ void main() {
           checkpoint: RecognitionCheckpoint()..autoRetry = true,
         ),
         throwsA(
-          isA<ProviderException>().having((e) => e.hint, 'hint', contains('API Key')),
+          isA<ActionableException>().having((e) => e.hint, 'hint', contains('API Key')),
         ),
       );
       expect(n, 1);
@@ -730,7 +730,7 @@ void main() {
         onProgress: _noProgress,
         checkpoint: cp,
       );
-      await expectLater(run(), throwsA(isA<ProviderException>()));
+      await expectLater(run(), throwsA(isA<ActionableException>()));
       expect(cp.length, 2);
       expect(cp.total, 3);
       expect(cp.doneCount, 1);
@@ -781,7 +781,7 @@ void main() {
           onProgress: _noProgress,
         ),
         throwsA(
-          isA<ProviderException>().having((e) => e.message, 'message', '未识别到语音'),
+          isA<ActionableException>().having((e) => e.message, 'message', '未识别到语音'),
         ),
       );
     });
@@ -805,7 +805,7 @@ void main() {
           onProgress: _noProgress,
         ),
         throwsA(
-          isA<ProviderException>().having((e) => e.hint, 'hint', contains('API Key')),
+          isA<ActionableException>().having((e) => e.hint, 'hint', contains('API Key')),
         ),
       );
       expect(calls, 1);

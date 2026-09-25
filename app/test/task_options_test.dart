@@ -5,10 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task.dart';
+import 'package:subtitle_studio/domain/task_control.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
-import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 import 'helpers.dart';
@@ -231,9 +231,9 @@ void main() {
       } catch (e) {
         caught = e;
       }
-      expect(caught, isA<ProviderException>());
-      expect((caught! as ProviderException).message, contains('ASS'));
-      expect((caught as ProviderException).hint, contains('第二期'));
+      expect(caught, isA<ActionableException>());
+      expect((caught! as ActionableException).message, contains('ASS'));
+      expect((caught as ActionableException).hint, contains('第二期'));
     });
 
     test('指定目录不存在时自动建出来', () async {
@@ -266,11 +266,12 @@ void main() {
 
     // 存盘用的是枚举名，认不出来的值（旧版本写的、手改坏的）回落到默认。
     test('读不认识的值回落到仅译文', () {
-      expect(
-        BilingualLayout.byName('targetAbove'),
-        BilingualLayout.targetAbove,
-      );
-      expect(BilingualLayout.byName('乱写'), BilingualLayout.targetOnly);
+      TaskOptions read(String bilingual) => TaskOptions.fromJson({
+        'bilingual': bilingual,
+      }, fallback: testOptions(bilingual: BilingualLayout.targetBelow));
+      expect(read('targetAbove').bilingual, BilingualLayout.targetAbove);
+      expect(read(' targetAbove ').bilingual, BilingualLayout.targetAbove);
+      expect(read('乱写').bilingual, BilingualLayout.targetOnly);
     });
 
     test('设置里存得住，并带进默认参数', () async {

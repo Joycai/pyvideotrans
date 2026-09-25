@@ -8,7 +8,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/glass_panel.dart';
 import '../../domain/srt.dart';
-import '../../services/media.dart';
+import '../../services/ffmpeg.dart';
 import '../../services/settings.dart';
 import '../shared/provider_fields.dart';
 import 'translate_advanced_section.dart';
@@ -30,7 +30,7 @@ Future<NewTranslateResult?> showNewTranslateDialog(
   BuildContext context, {
   required AppSettings settings,
   List<String> initialPaths = const [],
-  Media? media,
+  Ffmpeg? media,
   VoidCallback? onOpenSettings,
   ValueChanged<List<String>>? onSwitchToTranscribe,
 }) => showDialog<NewTranslateResult>(
@@ -57,7 +57,7 @@ class NewTranslateDialog extends StatefulWidget {
 
   final AppSettings settings;
   final List<String> initialPaths;
-  final Media? media;
+  final Ffmpeg? media;
 
   /// 缺密钥时那个「去设置」。为 null 就只显示文字。
   final VoidCallback? onOpenSettings;

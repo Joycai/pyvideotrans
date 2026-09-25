@@ -11,7 +11,7 @@ import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
@@ -20,7 +20,7 @@ const _mtInfo = ProviderInfo(id: 'fake_mt', name: '假翻译', vendor: '测试')
 
 /// 记录调用次数的假识别服务，用来验证续跑时不会重做已完成阶段。
 /// 不碰 ffmpeg 的假实现 —— 转写链路的前两阶段只关心「有没有产出音频」。
-class FakeMedia extends Media {
+class FakeFfmpeg extends Ffmpeg {
   @override
   Future<Duration?> probeDuration(String path) async =>
       const Duration(seconds: 42);
@@ -68,7 +68,7 @@ class FakeAsr implements AsrProvider {
     if (failTimes-- > 0) {
       // 失败前已经识别了一段，记进检查点。
       checkpoint?.segment(0, 2000).text = '第一句';
-      throw const ProviderException('识别服务挂了', hint: '稍后重试');
+      throw const ActionableException('识别服务挂了', hint: '稍后重试');
     }
     onProgress(1, 1, note: '完成');
     if (cues != null) return cues!;
@@ -83,7 +83,7 @@ class FakeTranslator implements TranslationProvider {
   FakeTranslator({this.rejectLargerThan, this.failWith});
 
   final int? rejectLargerThan;
-  final ProviderException? failWith;
+  final ActionableException? failWith;
   final batchSizes = <int>[];
   int calls = 0;
 
@@ -102,7 +102,7 @@ class FakeTranslator implements TranslationProvider {
     batchSizes.add(lines.length);
     if (failWith != null) throw failWith!;
     if (rejectLargerThan != null && lines.length > rejectLargerThan!) {
-      throw const ProviderException(
+      throw const ActionableException(
         '译文与原文条数对不上',
         hint: '减半重试',
         batchTooLarge: true,
@@ -228,7 +228,7 @@ void main() {
 
     test('网络类错误不减半，直接失败并给出建议', () async {
       final mt = FakeTranslator(
-        failWith: const ProviderException('无法连接到 测试', hint: '检查网络与服务地址'),
+        failWith: const ActionableException('无法连接到 测试', hint: '检查网络与服务地址'),
       );
       final (task, runner, _) = await translateTask(
         translator: mt,
@@ -249,7 +249,7 @@ void main() {
       var allow = 1;
       final mt = _StatefulTranslator(() {
         if (allow-- <= 0) {
-          throw const ProviderException('临时故障', hint: '重试');
+          throw const ActionableException('临时故障', hint: '重试');
         }
       });
       final (task, runner, _) = await translateTask(
@@ -324,7 +324,7 @@ void main() {
       final runner = TaskRunner(
         settings: settings,
         workDir: work.path,
-        media: FakeMedia(),
+        media: FakeFfmpeg(),
         asrFactory: (_, _, _) => asr,
         translationFactory: (_, _, _) => FakeTranslator(),
       );

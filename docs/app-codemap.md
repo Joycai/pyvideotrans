@@ -1,7 +1,7 @@
 # app/ 源码结构索引（app/lib）
 
 `app/` 是 Flutter 桌面客户端（macOS / Windows / Linux）的全部实现。
-当前 `lib/` 共 135 个 Dart 文件、约 3.1 万行；`test/` 共 47 个 Dart 文件、约 1.1 万行。
+当前 `lib/` 共 142 个 Dart 文件、约 3.3 万行；`test/` 共 49 个 Dart 文件、约 1.2 万行。
 本文路径一律相对 `app/`。
 
 - 设计决定与产品约束 → [`README.md`](../app/README.md)
@@ -46,7 +46,7 @@ core/       domain/ ←──── services/
 
 1. 初始化 Flutter 与 media_kit。
 2. 载入 `AppSettings`，创建应用支持目录。
-3. 构造 `Media`、`Transcoder`、`TaskRunner`、`TaskQueue`、`TaskStore`、`EditorStore`。
+3. 构造 `Ffmpeg`、`Transcoder`、`TaskRunner`、`TaskQueue`、`TaskStore`、`EditorStore`。
 4. 恢复任务后启动 `SubtitleStudioApp`。
 5. 持有转写、翻译、转码和编辑器入口的表单控制器，保证切页不丢状态。
 6. 用 `Listenable.merge` 只驱动顶栏、状态栏和需要实时更新的页面，避免进度回调重建整棵应用树。
@@ -102,6 +102,8 @@ core/       domain/ ←──── services/
 | `media_kinds.dart` | 按扩展名判断媒体 / 音频 / 字幕 |
 | `app_branding.dart` | 应用名的中英两份；另有五份在各平台的清单与 runner 里，见 `packaging/README.md` |
 | `file_stamp.dart` | 文件大小 + 修改时间，判断字幕文件是否在外部被改过 |
+| `task_control.dart` | 跨层共用的 `CancellationToken`、`TaskCancelled`、`ActionableException`（带建议的失败）、`ProgressSink`；provider、ffmpeg、转码、字幕写出、编辑器都用 |
+| `enum_by_name.dart` | `values.tryByName(x)`：认不出的枚举名返回 null，读存档与偏好时用 `??` 写明回落值 |
 
 ### `domain/transcode/`
 
@@ -120,7 +122,7 @@ core/       domain/ ←──── services/
 
 ### Provider
 
-- `provider_api.dart`：取消令牌、`ProviderException`、`ProviderInfo`、ASR / 翻译接口。
+- `provider_api.dart`：`ProviderInfo`、ASR / 翻译接口；re-export `domain/task_control.dart`。
 - `registry.dart`：可选服务登记表和 provider 工厂。
 - `openai_compatible.dart`：OpenAI 兼容 ASR 与翻译实现；在线服务、Ollama、LM Studio、
   将来的本地 Python 后端共用。
@@ -132,7 +134,8 @@ core/       domain/ ←──── services/
 
 ### 本地 IO 与持久化
 
-- `media.dart`：定位 ffmpeg / ffprobe、探测文件、抽音、静音检测、切音频、取消时杀进程树。
+- `ffmpeg.dart`：`Ffmpeg` 定位 ffmpeg / ffprobe、探测文件、抽音、静音检测、切音频、取消时杀进程树。
+  不叫 `Media`：会和 media_kit 的 `Media` 撞名。
 - `transcoder.dart`：编码器检测、试编码、ffprobe、执行转码和错误解释。
 - `settings.dart`：shared_preferences 设置和 provider 连接配置；不依赖 Registry，由调用方传 provider id。
 - `task_store.dart`：一个任务一份 JSON，进度更新时只重写变化的任务。
@@ -287,7 +290,7 @@ core/       domain/ ←──── services/
 | 折行 | `domain/line_wrap.dart`；调用在 `pipeline/subtitle_output_writer.dart` |
 | SRT / VTT 与说话人标签 | `domain/srt.dart` |
 | 产物目录 / 文件名 | `domain/paths.dart`、`output_naming.dart`、`task_options.dart` |
-| ffmpeg 查找顺序 | `services/media.dart` |
+| ffmpeg 查找顺序 | `services/ffmpeg.dart` |
 | 编码器参数目录 | `domain/transcode/encoder_catalog.dart` |
 | ffmpeg 命令 | `domain/transcode/command.dart` |
 | 编码器可用性检测 | `services/transcoder.dart` |

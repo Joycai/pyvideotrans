@@ -3,13 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/task.dart';
+import 'package:subtitle_studio/domain/task_control.dart';
 import 'package:subtitle_studio/domain/transcode/codecs.dart';
 import 'package:subtitle_studio/domain/transcode/probe.dart';
 import 'package:subtitle_studio/features/transcode/transcode_form.dart';
 import 'package:subtitle_studio/features/transcode/transcode_page.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
-import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
 import 'package:subtitle_studio/services/transcoder.dart';
 
@@ -42,7 +42,7 @@ class FakeTranscoder extends Transcoder {
       );
     }
     if (path.contains('broken')) {
-      throw const ProviderException('ffprobe 读不出这个文件');
+      throw const ActionableException('ffprobe 读不出这个文件');
     }
     return const MediaProbe(
       duration: Duration(minutes: 48, seconds: 12),
@@ -188,7 +188,7 @@ void main() {
   });
 
   // 这句提示以前对所有平台都写死「macOS 执行 brew install ffmpeg」，
-  // Windows 用户看到的恰恰是最没用的那句。现在按平台的建议由 Media 给出、
+  // Windows 用户看到的恰恰是最没用的那句。现在按平台的建议由 Ffmpeg 给出、
   // Transcoder 透传，界面只管显示。
   test('找不到 FFmpeg 时，开始的拦截理由带上按平台给的建议', () async {
     SharedPreferences.setMockInitialValues({});

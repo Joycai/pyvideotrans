@@ -1,13 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:subtitle_studio/domain/task_control.dart';
 import 'package:subtitle_studio/services/audio_splitter.dart';
-import 'package:subtitle_studio/services/media.dart';
-import 'package:subtitle_studio/services/provider_api.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 
 /// 真的起 ffmpeg 切一段合成音频。没装 ffmpeg 的机器上跳过。
 void main() {
-  final media = Media();
+  final media = Ffmpeg();
   final hasFfmpeg = media.available;
 
   late Directory tmp;
@@ -30,7 +30,7 @@ void main() {
       expect(gen.exitCode, 0, reason: gen.stderr.toString());
 
       final clips = await FfmpegAudioSplitter(
-        Media(),
+        Ffmpeg(),
       ).split(wav, token: CancellationToken());
 
       expect(clips, hasLength(2));
@@ -45,7 +45,7 @@ void main() {
       for (final c in clips) {
         expect(c.fileStartMs, c.startMs - 200);
       }
-      final probe = await Media().probeDuration(clips[1].path);
+      final probe = await Ffmpeg().probeDuration(clips[1].path);
       expect(
         probe!.inMilliseconds,
         closeTo(clips[1].endMs - clips[1].startMs + 400, 30),

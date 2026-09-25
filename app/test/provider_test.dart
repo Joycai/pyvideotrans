@@ -128,7 +128,7 @@ void main() {
           token: CancellationToken(),
         ),
         throwsA(
-          isA<ProviderException>().having(
+          isA<ActionableException>().having(
             (e) => e.message,
             'message',
             contains('条数对不上'),
@@ -147,7 +147,7 @@ void main() {
           token: CancellationToken(),
         ),
         throwsA(
-          isA<ProviderException>()
+          isA<ActionableException>()
               .having((e) => e.message, 'message', contains('拒绝'))
               .having((e) => e.hint, 'hint', contains('API 密钥')),
         ),
@@ -198,7 +198,7 @@ void main() {
       expect(
         () => Registry.buildAsr('local_backend', settings),
         throwsA(
-          isA<ProviderException>()
+          isA<ActionableException>()
               .having((e) => e.message, 'message', contains('尚未实施'))
               .having((e) => e.hint, 'hint', contains('OpenAI')),
         ),
@@ -209,7 +209,7 @@ void main() {
       final settings = await _settings();
       expect(
         () => Registry.buildTranslation('不存在', settings),
-        throwsA(isA<ProviderException>()),
+        throwsA(isA<ActionableException>()),
       );
     });
 

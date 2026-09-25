@@ -5,11 +5,11 @@ import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/core/widgets/buttons.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/features/tasks/new_transcribe_dialog.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 /// 不碰 ffprobe 的探测：文件列表只要大小与时长，测试里给固定值。
-class FakeMedia extends Media {
+class FakeFfmpeg extends Ffmpeg {
   @override
   Future<MediaFileInfo> probeFile(String path) async => MediaFileInfo(
     path: path,
@@ -56,7 +56,7 @@ void main() {
                 context,
                 settings: settings,
                 initialPaths: paths,
-                media: FakeMedia(),
+                media: FakeFfmpeg(),
                 onOpenSettings: () => openedSettings = true,
               );
             },

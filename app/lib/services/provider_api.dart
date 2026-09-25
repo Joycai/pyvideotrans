@@ -1,52 +1,10 @@
 import '../domain/cue.dart';
 import '../domain/recognition_checkpoint.dart';
+import '../domain/task_control.dart';
 
 export '../domain/recognition_checkpoint.dart';
-
-/// 协作式取消。所有 provider 在每个可中断点检查 [throwIfCancelled]。
-class CancellationToken {
-  bool _cancelled = false;
-
-  bool get isCancelled => _cancelled;
-
-  void cancel() => _cancelled = true;
-
-  void throwIfCancelled() {
-    if (_cancelled) throw const TaskCancelled();
-  }
-}
-
-class TaskCancelled implements Exception {
-  const TaskCancelled();
-
-  @override
-  String toString() => '任务已取消';
-}
-
-/// provider 抛出的、带可行动建议的错误。
-class ProviderException implements Exception {
-  const ProviderException(
-    this.message, {
-    this.detail,
-    this.hint,
-    this.batchTooLarge = false,
-  });
-
-  final String message;
-  final String? detail;
-  final String? hint;
-
-  /// 这次失败是「一批给太多了」引起的（模型合并了行、上下文超长）。
-  /// 流水线看到它会减半批量重试；其他失败（网络、鉴权）减半没有意义。
-  final bool batchTooLarge;
-
-  @override
-  String toString() => message;
-}
-
-/// 阶段内的进度回调：[done]/[total] 为已完成/总数，[note] 是界面上的补充说明。
-typedef ProgressSink =
-    void Function(int done, int total, {String? note});
+// 接口签名里用到取消与进度类型，实现者只 import 这一个文件就够。
+export '../domain/task_control.dart';
 
 /// provider 的元信息，用于设置页与任务列表的「服务 / 模型」列。
 class ProviderInfo {

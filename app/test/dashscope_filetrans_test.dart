@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/services/dashscope_filetrans.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/openai_compatible.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/registry.dart';
@@ -28,8 +28,8 @@ Endpoint _endpoint([String model = 'qwen-audio-3.0-asr-flash-filetrans']) =>
     );
 
 /// 不起 ffprobe。
-class _FakeMedia extends Media {
-  _FakeMedia([this.duration = const Duration(minutes: 3)]);
+class _FakeFfmpeg extends Ffmpeg {
+  _FakeFfmpeg([this.duration = const Duration(minutes: 3)]);
   final Duration duration;
 
   @override
@@ -168,11 +168,11 @@ void main() {
     MockClient client, {
     String model = 'qwen-audio-3.0-asr-flash-filetrans',
     bool diarize = true,
-    Media? media,
+    Ffmpeg? media,
   }) => DashScopeFileTransProvider(
     info: _info,
     endpoint: _endpoint(model),
-    media: media ?? _FakeMedia(),
+    media: media ?? _FakeFfmpeg(),
     diarize: diarize,
     client: client,
     delay: (_) async {},
@@ -348,7 +348,7 @@ void main() {
           onProgress: _noProgress,
           checkpoint: cp,
         ),
-        throwsA(isA<ProviderException>()),
+        throwsA(isA<ActionableException>()),
       );
       expect(cp.asyncTaskId, isNull);
       expect(cp.asyncFileUrl, 'oss://f');
@@ -370,7 +370,7 @@ void main() {
           onProgress: _noProgress,
           checkpoint: cp,
         ),
-        throwsA(isA<ProviderException>()),
+        throwsA(isA<ActionableException>()),
       );
       expect(cp.asyncTaskId, isNull);
       expect(cp.asyncFileUrl, isNull);
@@ -402,7 +402,7 @@ void main() {
           onProgress: _noProgress,
           checkpoint: cp,
         ),
-        throwsA(isA<ProviderException>().having((e) => e.hint, 'hint', contains('重新提交'))),
+        throwsA(isA<ActionableException>().having((e) => e.hint, 'hint', contains('重新提交'))),
       );
       expect(cp.asyncTaskId, isNull);
       expect(cp.asyncFileUrl, 'oss://f');
@@ -476,7 +476,7 @@ void main() {
           onProgress: _noProgress,
         ),
         throwsA(
-          isA<ProviderException>()
+          isA<ActionableException>()
               .having((e) => e.message, 'message', contains('失败'))
               .having((e) => e.detail, 'detail', contains('DownloadFailed'))
               .having((e) => e.hint, 'hint', contains('重新上传')),
@@ -493,7 +493,7 @@ void main() {
           token: CancellationToken(),
           onProgress: _noProgress,
         ),
-        throwsA(isA<ProviderException>().having((e) => e.hint, 'hint', contains('API Key'))),
+        throwsA(isA<ActionableException>().having((e) => e.hint, 'hint', contains('API Key'))),
       );
 
       final gone = MockClient((req) async => http.Response('{"code":"NotFound"}', 404));
@@ -506,7 +506,7 @@ void main() {
           onProgress: _noProgress,
           checkpoint: cp,
         ),
-        throwsA(isA<ProviderException>().having((e) => e.message, 'message', contains('找不到该任务'))),
+        throwsA(isA<ActionableException>().having((e) => e.message, 'message', contains('找不到该任务'))),
       );
     });
 
@@ -529,18 +529,18 @@ void main() {
           token: CancellationToken(),
           onProgress: _noProgress,
         ),
-        throwsA(isA<ProviderException>().having((e) => e.message, 'message', contains('大小限制'))),
+        throwsA(isA<ActionableException>().having((e) => e.message, 'message', contains('大小限制'))),
       );
       expect(uploaded, isFalse);
 
       await expectLater(
-        build(client, media: _FakeMedia(const Duration(hours: 13))).transcribe(
+        build(client, media: _FakeFfmpeg(const Duration(hours: 13))).transcribe(
           audioPath: audio,
           language: 'zh',
           token: CancellationToken(),
           onProgress: _noProgress,
         ),
-        throwsA(isA<ProviderException>().having((e) => e.message, 'message', contains('时长上限'))),
+        throwsA(isA<ActionableException>().having((e) => e.message, 'message', contains('时长上限'))),
       );
     });
 
@@ -595,7 +595,7 @@ void main() {
           'dashscope_qwen_asr',
           settings,
           model: 'qwen3-asr-flash-filetrans',
-          media: _FakeMedia(),
+          media: _FakeFfmpeg(),
         ),
         isA<DashScopeFileTransProvider>(),
       );
@@ -604,7 +604,7 @@ void main() {
           'dashscope_qwen_asr',
           settings,
           model: 'qwen-audio-3.0-asr-flash',
-          media: _FakeMedia(),
+          media: _FakeFfmpeg(),
         ),
         isNot(isA<DashScopeFileTransProvider>()),
       );

@@ -2,7 +2,7 @@ import '../domain/speech_segments.dart';
 import 'audio_splitter.dart';
 import 'dashscope_asr.dart';
 import 'dashscope_filetrans.dart';
-import 'media.dart';
+import 'ffmpeg.dart';
 import 'openai_compatible.dart';
 import 'provider_api.dart';
 import 'settings.dart';
@@ -167,15 +167,15 @@ abstract final class Registry {
     AppSettings settings, {
     String? model,
     String? prompt,
-    Media? media,
+    Ffmpeg? media,
     bool diarize = false,
   }) {
     final info = asrInfo(id);
     if (info == null) {
-      throw ProviderException('未知的识别服务：$id', hint: '在设置里重新选择识别服务。');
+      throw ActionableException('未知的识别服务：$id', hint: '在设置里重新选择识别服务。');
     }
     if (!info.implemented) {
-      throw ProviderException(
+      throw ActionableException(
         '${info.name} 尚未实施',
         hint: '第一期只对接在线 API。改选 OpenAI、Groq 或硅基流动。',
       );
@@ -188,7 +188,7 @@ abstract final class Registry {
           info: info,
           endpoint: resolved,
           diarize: diarize,
-          media: media ?? Media(),
+          media: media ?? Ffmpeg(),
         );
       }
       return DashScopeAsrProvider(
@@ -199,7 +199,7 @@ abstract final class Registry {
         // 说话人编号只在同一次请求里一致：开分离时把片段切得长一些，
         // 跨片段对不上号的机会就少得多。
         splitter: FfmpegAudioSplitter(
-          media ?? Media(),
+          media ?? Ffmpeg(),
           maxMs: diarize
               ? DashScopeAsrProvider.diarizeClipMs
               : SpeechSegments.defaultMaxMs,
@@ -221,10 +221,10 @@ abstract final class Registry {
   }) {
     final info = translationInfo(id);
     if (info == null) {
-      throw ProviderException('未知的翻译服务：$id', hint: '在设置里重新选择翻译服务。');
+      throw ActionableException('未知的翻译服务：$id', hint: '在设置里重新选择翻译服务。');
     }
     if (!info.implemented) {
-      throw ProviderException(
+      throw ActionableException(
         '${info.name} 尚未实施',
         hint: '第一期只对接在线 API 与 Ollama / LM Studio。',
       );

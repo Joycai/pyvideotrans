@@ -1,3 +1,4 @@
+import '../enum_by_name.dart';
 import '../task_options.dart';
 import 'codecs.dart';
 import 'encoder_catalog.dart';
@@ -16,9 +17,6 @@ enum ResolutionLimit {
 
   final String label;
   final int? height;
-
-  static ResolutionLimit byName(Object? name) =>
-      values.where((r) => r.name == name).firstOrNull ?? keep;
 }
 
 /// 一个转码任务的全部参数。与 [TaskOptions] 同理：入队那一刻定死。
@@ -135,7 +133,8 @@ class TranscodeOptions {
   /// 缺项、类型不对、不认识的编码器都回落到默认，不因为一份旧存档抛异常。
   factory TranscodeOptions.fromJson(Map<String, Object?> json) {
     T? pick<T>(String key) => json[key] is T ? json[key] as T : null;
-    final codec = VideoCodec.byName(json['videoCodec']);
+    final codec =
+        VideoCodec.values.tryByName(json['videoCodec']) ?? VideoCodec.h264;
     var encoder = VideoEncoders.byId(pick<String>('encoderId'));
     if (encoder != null && encoder.codec != codec) encoder = null;
     // 编码器被换掉时存档里的参数是别家的，同名的键（crf）含义与范围也不同，全部作废。
@@ -143,26 +142,28 @@ class TranscodeOptions {
         ? null
         : pick<Map>('encoderParams')?.cast<String, Object?>();
     encoder ??= VideoEncoders.defaultFor(codec);
-    final location = OutputLocation.values
-            .where((l) => l.name == json['outputLocation'])
-            .firstOrNull ??
+    final location =
+        OutputLocation.values.tryByName(json['outputLocation']) ??
         OutputLocation.besideSource;
     final dir = pick<String>('outputDir');
     return TranscodeOptions(
-      mode: TranscodeMode.values
-              .where((m) => m.name == json['mode'])
-              .firstOrNull ??
+      mode: TranscodeMode.values.tryByName(json['mode']) ??
           TranscodeMode.transcode,
-      container: OutputContainer.byName(json['container']),
+      container:
+          OutputContainer.values.tryByName(json['container']) ??
+          OutputContainer.mp4,
       videoCodec: codec,
       encoderId: encoder?.id ?? '',
       encoderParams: encoder?.sanitize(rawParams) ?? const {},
-      resolution: ResolutionLimit.byName(json['resolution']),
+      resolution:
+          ResolutionLimit.values.tryByName(json['resolution']) ??
+          ResolutionLimit.keep,
       fps: switch (pick<int>('fps')) {
         final f? when frameRates.contains(f) => f,
         _ => null,
       },
-      audioCodec: AudioCodec.byName(json['audioCodec']),
+      audioCodec:
+          AudioCodec.values.tryByName(json['audioCodec']) ?? AudioCodec.aac,
       audioBitrate: switch (pick<int>('audioBitrate')) {
         final b? when bitrates.contains(b) => b,
         _ => 160,

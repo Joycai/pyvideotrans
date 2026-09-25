@@ -10,11 +10,11 @@ import 'package:subtitle_studio/features/tasks/new_translate_page.dart';
 import 'package:subtitle_studio/features/tasks/translate_form.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 /// 不碰文件系统的解析。名字里带 broken 的当作解析不出内容的字幕。
-class FakeMedia extends Media {
+class FakeFfmpeg extends Ffmpeg {
   @override
   bool get available => false;
 
@@ -44,7 +44,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     settings = await AppSettings.load()
       ..setConfig('deepseek', const ProviderConfig(apiKey: 'sk-test'));
-    final media = FakeMedia();
+    final media = FakeFfmpeg();
     queue = TaskQueue(
       runner: TaskRunner(settings: settings, workDir: work.path, media: media),
       settings: settings,

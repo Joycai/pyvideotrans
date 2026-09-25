@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/media_kinds.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 
 void main() {
   group('文件类型', () {
@@ -33,7 +33,7 @@ void main() {
           '1\n00:00:01,000 --> 00:00:02,000\n第一句\n\n'
           '2\n00:00:10,000 --> 00:00:12,500\n第二句\n',
         );
-      final info = await Media().probeFile(srt.path);
+      final info = await Ffmpeg().probeFile(srt.path);
       expect(info.cueCount, 2);
       expect(info.duration, const Duration(milliseconds: 12500));
       expect(info.isEmptySubtitle, isFalse);
@@ -45,7 +45,7 @@ void main() {
     // 否则跑起来是个空任务，用户等半天才发现。
     test('解析不出内容的字幕标为 0 条', () async {
       final srt = File('${dir.path}/bad.srt')..writeAsStringSync('x' * 2048);
-      final info = await Media().probeFile(srt.path);
+      final info = await Ffmpeg().probeFile(srt.path);
       expect(info.cueCount, 0);
       expect(info.isEmptySubtitle, isTrue);
       expect(info.duration, isNull);
@@ -59,18 +59,18 @@ void main() {
           0xE9, 0xE8, // latin1 的 é è，按 UTF-8 解码会抛
           ...'\n'.codeUnits,
         ]);
-      final info = await Media().probeFile(srt.path);
+      final info = await Ffmpeg().probeFile(srt.path);
       expect(info.cueCount, 1);
     });
 
     test('音视频没有条数这一项', () async {
       final mp4 = File('${dir.path}/a.mp4')..writeAsStringSync('x');
-      expect((await Media().probeFile(mp4.path)).cueCount, isNull);
+      expect((await Ffmpeg().probeFile(mp4.path)).cueCount, isNull);
     });
 
     // 文件列表显示不出信息不该拦着用户建任务，真正的报错留给准备阶段。
     test('文件不存在时不抛异常', () async {
-      final info = await Media().probeFile('${dir.path}/nope.mp4');
+      final info = await Ffmpeg().probeFile('${dir.path}/nope.mp4');
       expect(info.exists, isFalse);
       expect(info.sizeBytes, 0);
       expect(info.sizeLabel, '—');
@@ -83,16 +83,16 @@ void main() {
   group('查找 ffmpeg', () {
     late Directory dropIn;
     late Directory other;
-    final original = Media.dropInDir;
+    final original = Ffmpeg.dropInDir;
 
     setUp(() async {
       dropIn = await Directory.systemTemp.createTemp('subtitle_studio_dropin');
       other = await Directory.systemTemp.createTemp('subtitle_studio_dropin2');
-      Media.dropInDir = dropIn.path;
+      Ffmpeg.dropInDir = dropIn.path;
     });
     tearDown(() {
       // 静态量，不还原会污染同一个 isolate 里后面的用例。
-      Media.dropInDir = original;
+      Ffmpeg.dropInDir = original;
       dropIn.deleteSync(recursive: true);
       other.deleteSync(recursive: true);
     });
@@ -100,7 +100,7 @@ void main() {
     // 非 Windows 上查找会要求执行位，造的假文件也得带上，否则会被跳过。
     File place(Directory dir) {
       final file = File(
-        '${dir.path}${Platform.pathSeparator}${Media.dropInNames.first}',
+        '${dir.path}${Platform.pathSeparator}${Ffmpeg.dropInNames.first}',
       )..writeAsStringSync('');
       if (!Platform.isWindows) Process.runSync('chmod', ['+x', file.path]);
       return file;
@@ -109,24 +109,24 @@ void main() {
     // 用户特意放进来的那份，就该盖过系统里和随包带的。
     test('投放目录优先于其他位置', () {
       final placed = place(dropIn);
-      expect(Media().ffmpeg, placed.path);
+      expect(Ffmpeg().ffmpeg, placed.path);
     });
 
     test('投放目录是空的就继续往下找', () {
       final placed =
           '${dropIn.path}${Platform.pathSeparator}'
-          '${Media.dropInNames.first}';
-      expect(Media().ffmpegOrNull, isNot(placed));
+          '${Ffmpeg.dropInNames.first}';
+      expect(Ffmpeg().ffmpegOrNull, isNot(placed));
     });
 
     // 「放进去 → 重新检测」这条路必须真的生效：找到过一次之后结果会缓存住，
     // 不作废它，换了文件也还是用旧的。
     test('reset 之后改用新投放的那份', () {
       final first = place(dropIn);
-      final media = Media();
+      final media = Ffmpeg();
       expect(media.ffmpeg, first.path);
 
-      Media.dropInDir = other.path;
+      Ffmpeg.dropInDir = other.path;
       final second = place(other);
       expect(media.ffmpeg, first.path, reason: '没 reset 前应该还用缓存');
 
@@ -136,7 +136,7 @@ void main() {
 
     // 构造时显式指定的路径是「就用这一份」的意思，reset 不该把它一起清掉。
     test('reset 退回构造时指定的路径', () {
-      final media = Media(ffmpegPath: '/x/ffmpeg', ffprobePath: '/x/ffprobe');
+      final media = Ffmpeg(ffmpegPath: '/x/ffmpeg', ffprobePath: '/x/ffprobe');
       media.reset();
       expect(media.ffmpeg, '/x/ffmpeg');
       expect(media.ffprobe, '/x/ffprobe');
@@ -145,9 +145,9 @@ void main() {
     // ffmpeg 有、ffprobe 没有是最难懂的半坏状态：抽音能跑，读时长却失败。
     // 界面照着 dropInNames 提示要放哪几个文件，两个名字都得在。
     test('提示要放的文件名包含 ffmpeg 与 ffprobe', () {
-      expect(Media.dropInNames, hasLength(2));
-      expect(Media.dropInNames.first, contains('ffmpeg'));
-      expect(Media.dropInNames.last, contains('ffprobe'));
+      expect(Ffmpeg.dropInNames, hasLength(2));
+      expect(Ffmpeg.dropInNames.first, contains('ffmpeg'));
+      expect(Ffmpeg.dropInNames.last, contains('ffprobe'));
     });
   });
 }

@@ -5,12 +5,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/task_control.dart';
 import 'package:subtitle_studio/services/audio_splitter.dart';
 import 'package:subtitle_studio/services/dashscope_asr.dart';
 import 'package:subtitle_studio/services/dashscope_filetrans.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/openai_compatible.dart';
-import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
@@ -26,7 +26,7 @@ void main() {
   final models = ProviderConfig.splitModels(
     Platform.environment['DASHSCOPE_MODELS'],
   );
-  final media = Media();
+  final media = Ffmpeg();
 
   test(
     '合成语音 → 切分 → 百炼识别',
@@ -128,7 +128,7 @@ void main() {
           token: CancellationToken(),
           onProgress: (d, t, {note}) => notes.add('$d/$t $note'),
         );
-      } on ProviderException catch (e) {
+      } on ActionableException catch (e) {
         // 失败原因全打出来：服务端的错误码与说明都在 detail 里。
         // ignore: avoid_print
         print('FAILED: ${e.message}\n  detail: ${e.detail}\n  hint: ${e.hint}\n'

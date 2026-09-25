@@ -703,7 +703,7 @@ class EditorController extends ChangeNotifier {
       if (code == 28 || code == 112) return '磁盘空间不足';
       return e.message;
     }
-    if (e is ProviderException) return e.message;
+    if (e is ActionableException) return e.message;
     return '$e';
   }
 
@@ -817,7 +817,7 @@ class EditorController extends ChangeNotifier {
         token: CancellationToken(),
       );
       if (result.length != 1) {
-        throw const ProviderException(
+        throw const ActionableException(
           '译文与原文条数对不上',
           hint: '模型没有返回恰好一条译文，请稍后重试。',
         );
@@ -874,7 +874,7 @@ class EditorController extends ChangeNotifier {
       // 翻到一半任务被续跑了：文档归流水线，再写回去会盖掉它的结果。
       if (locked || _disposed) return done;
       if (result.length != slice.length) {
-        throw ProviderException(
+        throw ActionableException(
           '译文与原文条数对不上',
           detail: '期望 ${slice.length} 条，实际收到 ${result.length} 条',
           hint: '模型合并或丢弃了字幕行，请减小批量后重试。',
@@ -912,7 +912,7 @@ class EditorController extends ChangeNotifier {
     if (locked) throw const TargetRejected('任务还在运行，完成后再导出');
     final options = session.options;
     if (!options.format.implemented) {
-      throw const ProviderException(
+      throw const ActionableException(
         '当前字幕格式尚未实施',
         hint: '先在任务参数中选择 SRT、WebVTT 或纯文本。',
       );

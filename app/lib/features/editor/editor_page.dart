@@ -11,7 +11,7 @@ import '../../domain/media_kinds.dart';
 import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import '../../domain/task.dart';
-import '../../services/provider_api.dart';
+import '../../domain/task_control.dart';
 import 'cue_table.dart';
 import 'editor_controller.dart';
 import 'editor_leave_dialog.dart';
@@ -142,7 +142,7 @@ class EditorPageState extends State<EditorPage> {
   }
 
   /// provider 的报错本来就带 hint，直接原样展示给用户。
-  String _describe(Object error) => error is ProviderException
+  String _describe(Object error) => error is ActionableException
       ? [error.message, if (error.hint != null) error.hint!].join(' · ')
       : '$error';
 
