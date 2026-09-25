@@ -226,14 +226,7 @@ class _AdvancedSection extends StatelessWidget {
                           for (final l in OutputLocation.values)
                             (value: l, label: l.label, enabled: true),
                         ],
-                        onChanged: (l) {
-                          if (l == OutputLocation.custom &&
-                              (o.outputDir?.isEmpty ?? true)) {
-                            form.pickOutputDir();
-                          } else {
-                            form.update((o) => o.copyWith(outputLocation: l));
-                          }
-                        },
+                        onChanged: form.chooseOutputLocation,
                       ),
                     ),
                     if (o.outputLocation == OutputLocation.custom) ...[

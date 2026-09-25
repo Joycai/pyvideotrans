@@ -265,9 +265,7 @@ class _OutputLocationRadios extends StatelessWidget {
         RadioRow(
           selected: !custom,
           label: OutputLocation.besideSource.label,
-          onTap: () => form.update(
-            (o) => o.copyWith(outputLocation: OutputLocation.besideSource),
-          ),
+          onTap: () => form.chooseOutputLocation(OutputLocation.besideSource),
         ),
         const SizedBox(height: AppSpacing.s1),
         RadioRow(
@@ -284,12 +282,7 @@ class _OutputLocationRadios extends StatelessWidget {
                   ),
                 )
               : null,
-          onTap: () {
-            form.update(
-              (o) => o.copyWith(outputLocation: OutputLocation.custom),
-            );
-            if (form.options.outputDir == null) form.pickOutputDir();
-          },
+          onTap: () => form.chooseOutputLocation(OutputLocation.custom),
         ),
         const SizedBox(height: AppSpacing.s2),
         Text.rich(
@@ -337,13 +330,7 @@ class _OutputLocationSegments extends StatelessWidget {
         children: [
           SegmentedToggle<OutputLocation>(
             value: o.outputLocation,
-            onChanged: (v) {
-              form.update((o) => o.copyWith(outputLocation: v));
-              if (v == OutputLocation.custom &&
-                  form.options.outputDir == null) {
-                form.pickOutputDir();
-              }
-            },
+            onChanged: form.chooseOutputLocation,
             segments: [
               for (final v in OutputLocation.values)
                 (value: v, label: v.label, enabled: true),

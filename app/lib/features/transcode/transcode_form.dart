@@ -82,8 +82,10 @@ class TranscodeFormController extends ChangeNotifier {
     required this.transcoder,
     TranscodeOptions? initial,
     Future<int> Function(String path)? fileSize,
+    Future<String?> Function()? pickDirectory,
   }) : _options = initial ?? defaults,
-       _fileSize = fileSize ?? fileLength {
+       _fileSize = fileSize ?? fileLength,
+       _pickDirectory = pickDirectory ?? getDirectoryPath {
     transcoder.addListener(_notify);
   }
 
@@ -92,6 +94,9 @@ class TranscodeFormController extends ChangeNotifier {
 
   /// 读文件大小。截图测试里换成假的：真 IO 在测试的假时钟里不会完成。
   final Future<int> Function(String path) _fileSize;
+
+  /// 选目录的对话框。测试里换成假的：平台插件在单元测试里没有实现。
+  final Future<String?> Function() _pickDirectory;
 
   /// 默认参数：H.264 · x264 · CRF 23 · AAC 160k · MP4。
   static TranscodeOptions get defaults => TranscodeOptions(
@@ -212,8 +217,20 @@ class TranscodeFormController extends ChangeNotifier {
     _notify();
   }
 
+  /// 切换输出位置。选「指定目录」而还没有目录时先弹选择框，选了才切过去 ——
+  /// 取消的话留在原来的位置，不会停在「指定目录」却没有目录（那样实际会写到
+  /// 源文件旁边，摘要却说指定目录）。
+  void chooseOutputLocation(OutputLocation location) {
+    if (location == OutputLocation.custom &&
+        (_options.outputDir?.trim().isEmpty ?? true)) {
+      pickOutputDir();
+      return;
+    }
+    update((o) => o.copyWith(outputLocation: location));
+  }
+
   Future<void> pickOutputDir() async {
-    final dir = await getDirectoryPath();
+    final dir = await _pickDirectory();
     if (dir == null || _disposed) return;
     _options = _options.copyWith(
       outputDir: dir,

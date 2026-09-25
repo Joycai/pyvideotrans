@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/language.dart';
+import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/features/transcribe/transcribe_form.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
@@ -181,6 +182,35 @@ void main() {
         ),
       );
       expect(form.outputNameExample, 'talk.mov → talk.zh.srt、talk.en.srt');
+    });
+  });
+
+  group('输出位置', () {
+    test('选「指定目录」时取消选择框：留在原来的位置', () async {
+      String? picked;
+      final form = TranscribeFormController(
+        settings: await _settings(),
+        media: GatedFfmpeg(),
+        pickDirectory: () async => picked,
+      );
+      form.chooseOutputLocation(OutputLocation.custom);
+      await pumpEventQueue();
+      expect(form.options.outputLocation, OutputLocation.besideSource);
+      expect(form.options.outputDir, isNull);
+
+      picked = '/out';
+      form.chooseOutputLocation(OutputLocation.custom);
+      await pumpEventQueue();
+      expect(form.options.outputLocation, OutputLocation.custom);
+      expect(form.options.outputDir, '/out');
+
+      // 已有目录时来回切不再弹框。
+      picked = null;
+      form
+        ..chooseOutputLocation(OutputLocation.besideSource)
+        ..chooseOutputLocation(OutputLocation.custom);
+      expect(form.options.outputLocation, OutputLocation.custom);
+      expect(form.options.outputDir, '/out');
     });
   });
 }

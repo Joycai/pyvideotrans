@@ -52,11 +52,16 @@ class TranscribeFormController extends ChangeNotifier {
     required this.settings,
     Ffmpeg? media,
     TaskOptions? initial,
+    Future<String?> Function()? pickDirectory,
   }) : media = media ?? Ffmpeg(),
-       _options = initial ?? settings.defaultTaskOptions();
+       _options = initial ?? settings.defaultTaskOptions(),
+       _pickDirectory = pickDirectory ?? getDirectoryPath;
 
   final AppSettings settings;
   final Ffmpeg media;
+
+  /// 选目录的对话框。测试里换成假的：平台插件在单元测试里没有实现。
+  final Future<String?> Function() _pickDirectory;
 
   TaskOptions _options;
   TaskOptions get options => _options;
@@ -113,8 +118,20 @@ class TranscribeFormController extends ChangeNotifier {
 
   bool get hasLastUsed => settings.lastTranscribeOptions != null;
 
+  /// 切换输出位置。选「指定目录」而还没有目录时先弹选择框，选了才切过去 ——
+  /// 取消的话留在原来的位置，不会停在「指定目录」却没有目录（那样实际会写到
+  /// 源文件旁边，摘要却说指定目录）。
+  void chooseOutputLocation(OutputLocation location) {
+    if (location == OutputLocation.custom &&
+        (_options.outputDir?.trim().isEmpty ?? true)) {
+      pickOutputDir();
+      return;
+    }
+    update((o) => o.copyWith(outputLocation: location));
+  }
+
   Future<void> pickOutputDir() async {
-    final dir = await getDirectoryPath();
+    final dir = await _pickDirectory();
     if (dir == null || _disposed) return;
     _options = _options.copyWith(
       outputDir: dir,
