@@ -6,6 +6,7 @@ import '../../domain/media_kinds.dart';
 import '../../domain/numbers.dart';
 import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
+import '../../domain/task_kind.dart';
 import '../../domain/task_options.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/readiness.dart';
@@ -373,14 +374,11 @@ class TranslateFormController extends ChangeNotifier {
     );
   }
 
-  /// 产物名里的语言段。与流水线写产物共用 [languageTag]，双语带上两种语言。
-  String get langTag => _options.resolvedBilingual.isBilingual
-      ? '${languageTag(_options.sourceLanguage)}-'
-            '${languageTag(_options.targetLanguage)}'
-      : languageTag(_options.targetLanguage);
-
-  /// 「原文件名.en.srt」这样的产物名示例。
-  String get outputNameExample => '原文件名.$langTag.${_options.format.extension}';
+  /// 「原文件名.en.srt」这样的产物名示例，与流水线实际写出的同一条规则。
+  String get outputNameExample => [
+    for (final field in OutputNaming.fields(TaskKind.translate, _options))
+      OutputNaming.fileName('原文件名', field, _options),
+  ].join('、');
 
   /// 高级区折叠时标题旁那行摘要。
   String get advancedSummary => [

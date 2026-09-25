@@ -113,26 +113,9 @@ abstract final class SubtitleOutputWriter {
 
   static List<(String, SrtField)> _plan(SubtitleTask task, String dir) {
     final stem = stemOf(task.fileName);
-    final ext = task.options.format.extension;
     return [
-      // 纯翻译任务的「原文」就是用户选的那个字幕文件，再写一份只是重复；
-      // 转写任务则必须写出原文，那是识别的产物。
-      if (task.kind != TaskKind.translate)
-        (
-          '$dir/$stem.${languageTag(task.sourceLanguage)}.$ext',
-          SrtField.source,
-        ),
-      if (task.kind.needsTranslation)
-        switch (task.options.resolvedBilingual) {
-          final layout => (
-            layout.isBilingual
-                // 双语产物带上两种语言，跟单语那份区分得开，也说明了里面有什么。
-                ? '$dir/$stem.${languageTag(task.sourceLanguage)}-'
-                      '${languageTag(task.targetLanguage)}.$ext'
-                : '$dir/$stem.${languageTag(task.targetLanguage)}.$ext',
-            layout.field,
-          ),
-        },
+      for (final field in OutputNaming.fields(task.kind, task.options))
+        ('$dir/${OutputNaming.fileName(stem, field, task.options)}', field),
     ];
   }
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:subtitle_studio/domain/language.dart';
 import 'package:subtitle_studio/features/transcribe/transcribe_form.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
@@ -148,6 +149,38 @@ void main() {
       );
       expect(form.submit(), isNull);
       expect(settings.lastTranscribeOptions, isNull);
+    });
+  });
+
+  group('产物名示例', () {
+    // 与流水线写出的同名：原文带语言段，开了翻译再列上译文那份。
+    test('带语言段；开翻译后列出两份', () async {
+      final media = GatedFfmpeg();
+      final form = TranscribeFormController(
+        settings: await _settings(),
+        media: media,
+      );
+      form.update(
+        (o) => o.copyWith(
+          sourceLanguage: Languages.resolve('zh'),
+          translate: false,
+        ),
+      );
+      expect(
+        form.outputNameExample,
+        'interview_ep12.mp4 → interview_ep12.zh.srt',
+      );
+
+      final done = form.add(['/v/talk.mov']);
+      media.finish('/v/talk.mov');
+      await done;
+      form.update(
+        (o) => o.copyWith(
+          translate: true,
+          targetLanguage: Languages.resolve('en'),
+        ),
+      );
+      expect(form.outputNameExample, 'talk.mov → talk.zh.srt、talk.en.srt');
     });
   });
 }

@@ -201,11 +201,6 @@ class _OutputLocationRadios extends StatelessWidget {
     final cs = context.colors;
     final o = form.options;
     final custom = o.outputLocation == OutputLocation.custom;
-    final sample =
-        form.enqueueable.firstOrNull?.fileName ?? 'interview_ep12.mp4';
-    final stem = sample.contains('.')
-        ? sample.substring(0, sample.lastIndexOf('.'))
-        : sample;
     final mono = AppTextStyles.timecode.copyWith(
       fontSize: 12,
       fontWeight: FontWeight.w400,
@@ -255,7 +250,7 @@ class _OutputLocationRadios extends StatelessWidget {
           TextSpan(
             children: [
               TextSpan(
-                text: '$sample → $stem.${o.format.extension}',
+                text: form.outputNameExample,
                 style: mono,
               ),
               const TextSpan(text: '，同名文件会被覆盖'),

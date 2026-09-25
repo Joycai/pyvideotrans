@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../domain/media_kinds.dart';
+import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
 import '../../domain/task_options.dart';
 import '../../services/ffmpeg.dart';
@@ -216,6 +217,18 @@ class TranscribeFormController extends ChangeNotifier {
   }
 
   /// 会入队的文件（读不出来的不算）。
+  /// 输出位置下面那行示例：`interview_ep12.mp4 → interview_ep12.zh.srt`，
+  /// 开了翻译再加上译文那份。与流水线实际写出的同一条规则。
+  String get outputNameExample {
+    final sample = enqueueable.firstOrNull?.fileName ?? 'interview_ep12.mp4';
+    final stem = stemOf(sample);
+    final names = [
+      for (final field in OutputNaming.fields(_options.kind, _options))
+        OutputNaming.fileName(stem, field, _options),
+    ];
+    return '$sample → ${names.join('、')}';
+  }
+
   List<StagedFile> get enqueueable =>
       _files.where((f) => f.willEnqueue).toList();
 

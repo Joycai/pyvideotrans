@@ -4,7 +4,9 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
+import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
+import '../../domain/srt.dart';
 import '../../domain/task.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/reveal.dart';
@@ -22,22 +24,29 @@ class TaskOutputs extends StatelessWidget {
     final translatedCount =
         task.document.cues.length - task.document.untranslatedCount;
 
+    // 列哪几份、叫什么，跟流水线实际写出的走同一条规则：纯翻译任务不另写
+    // 原文，格式也未必是 SRT。
+    final fields = OutputNaming.fields(task.kind, task.options);
+    final ext = task.options.format.extension.toUpperCase();
+    final translation = fields.where((f) => f != SrtField.source).firstOrNull;
+
     final outputs = <TaskOutput>[
+      if (fields.contains(SrtField.source))
+        TaskOutput(
+          name: '原文 $ext',
+          meta: hasSource ? '${task.document.cues.length} 条' : '尚未生成',
+          ready: hasSource && done,
+        ),
       TaskOutput(
-        name: '原文 SRT',
-        meta: hasSource ? '${task.document.cues.length} 条' : '尚未生成',
-        ready: hasSource && done,
-      ),
-      TaskOutput(
-        name: '译文 SRT',
-        meta: !task.kind.needsTranslation
+        name: '${translation?.isBilingual == true ? '双语' : '译文'} $ext',
+        meta: translation == null
             ? '未选择翻译'
             : translatedCount == 0
             ? '尚未生成'
             : done
             ? '$translatedCount 条'
             : '生成中 · ${task.percentLabel}',
-        ready: task.kind.needsTranslation && done && translatedCount > 0,
+        ready: translation != null && done && translatedCount > 0,
       ),
     ];
 
