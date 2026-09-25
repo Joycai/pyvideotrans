@@ -23,7 +23,7 @@ core/       domain/ ←──── services/
 | 层 | 目录 | 责任 |
 |---|---|---|
 | 装配 | `lib/main.dart` | 初始化服务、持有根级表单控制器、页面切换、顶栏与状态栏快照 |
-| 界面 | `lib/features/` | 按功能分 `shell / tasks / transcode / editor / settings`；跨功能 UI 放 `shared/` |
+| 界面 | `lib/features/` | 按功能分 `shell / tasks / transcribe / translate / transcode / editor / settings`；跨功能 UI 放 `shared/` |
 | 流水线 | `lib/pipeline/` | 串行队列、任务编排、阶段壳、字幕写出与转码任务执行 |
 | 服务 | `lib/services/` | 网络、ffmpeg / ffprobe、文件持久化、shared_preferences、provider 构造 |
 | 领域 | `lib/domain/` | 数据模型与纯规则；不依赖 Flutter，不执行网络或外部进程 |
@@ -163,13 +163,19 @@ core/       domain/ ←──── services/
 - `page_chrome.dart`：页面交给顶栏的稳定契约：标题、副标题、尾随标签、操作区。Shell 与各页都依赖它，
   放在这里而不是 `shell/`，各页就不必 import 另一个 feature。
 
-共享组件放这里后，`settings`、`tasks`、`transcode` 不再互相 import 实现文件。
+- `enqueue_request.dart`：`EnqueueRequest`，建任务表单交出来的「一批文件 + 一份参数」。
 
-## 八、任务功能 `lib/features/tasks/`
+共享组件放这里后，各 feature 不再互相 import 实现文件。
 
-### 任务列表
+## 八、任务与建任务
 
-- `tasks_page.dart`：筛选、选中、对话框入口。
+新建转写、新建翻译与转码一样是导航栏上的同级入口，所以各自是一个 feature，
+不放在 `tasks/` 下面。任务页的「新建转写 / 新建翻译」对话框由 `main.dart` 注入，
+`tasks/` 不 import 另外两个 feature。
+
+### 任务列表 `lib/features/tasks/`
+
+- `tasks_page.dart`：筛选、选中；建任务对话框由装配层注入。
 - `task_resume_dialog.dart`：续跑会重建文档、而编辑器里改过时的提醒。
 - `tasks_board.dart`：列表、详情和拖放区的组合。
 - `task_table.dart`：任务表格、行内操作与空态。
@@ -182,7 +188,7 @@ core/       domain/ ←──── services/
 - `task_detail_header.dart`、`task_detail_error.dart`、`task_detail_stages.dart`。
 - `task_detail_outputs.dart`、`task_detail_log.dart`、`task_detail_section.dart`。
 
-### 转写
+### 新建转写 `lib/features/transcribe/`
 
 - `transcribe_form.dart`：`TranscribeFormController`、暂存文件与提交结果。
 - `transcribe_recognize_section.dart`、`transcribe_translate_section.dart`、
@@ -192,7 +198,7 @@ core/       domain/ ←──── services/
   `new_transcribe_param_panel.dart`：页面内容。
 - `new_transcribe_dialog.dart`：任务页使用的紧凑对话框入口。
 
-### 翻译
+### 新建翻译 `lib/features/translate/`
 
 - `translate_form.dart`：`TranslateFormController`、暂存字幕与提交结果。
 - `translate_language_section.dart`、`translate_advanced_section.dart`、`translate_footer.dart`。

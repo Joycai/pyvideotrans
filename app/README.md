@@ -78,7 +78,7 @@ lib/
   services/          provider、ffmpeg / ffprobe、设置与持久化
   pipeline/          串行队列、任务编排、阶段壳、字幕写出、转码执行
   features/shared/   跨 feature 共用的服务字段、命令块、入队横幅与步骤说明
-  features/          shell / tasks / transcode / editor / settings
+  features/          shell / tasks / transcribe / translate / transcode / editor / settings
 ```
 
 逐文件的职责、按功能反查、测试对照见 [`../docs/app-codemap.md`](../docs/app-codemap.md)。

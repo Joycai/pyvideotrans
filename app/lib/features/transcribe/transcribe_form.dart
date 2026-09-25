@@ -8,14 +8,7 @@ import '../../domain/task_options.dart';
 import '../../services/media.dart';
 import '../../services/readiness.dart';
 import '../../services/settings.dart';
-
-/// 表单确认后交出来的东西：一批文件 + 一份参数。
-class NewTranscribeResult {
-  const NewTranscribeResult({required this.paths, required this.options});
-
-  final List<String> paths;
-  final TaskOptions options;
-}
+import '../shared/enqueue_request.dart';
 
 /// 文件列表里一行的探测状态。
 enum StagedFileState {
@@ -327,10 +320,10 @@ class TranscribeFormController extends ChangeNotifier {
 
   /// 打包交出去，并把这份参数记为「上次参数」。不能开始时返回 null。
   /// 不清空列表 —— 对话框随即关闭，页面则自己决定清空的时机。
-  NewTranscribeResult? submit() {
+  EnqueueRequest? submit() {
     if (!canStart) return null;
     settings.lastTranscribeOptions = _options;
-    return NewTranscribeResult(
+    return EnqueueRequest(
       paths: enqueueable.map((f) => f.path).toList(),
       options: _options,
     );

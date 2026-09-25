@@ -6,8 +6,7 @@ import '../../domain/media_kinds.dart';
 import '../../domain/task.dart';
 import '../../pipeline/task_queue.dart';
 import '../../services/reveal.dart';
-import 'new_transcribe_dialog.dart';
-import 'new_translate_dialog.dart';
+import '../shared/enqueue_request.dart';
 import 'task_resume_dialog.dart';
 import 'task_table.dart';
 import 'tasks_board.dart';
@@ -18,14 +17,28 @@ class TasksPage extends StatefulWidget {
     super.key,
     required this.queue,
     required this.onOpenEditor,
-    required this.onOpenSettings,
+    required this.showNewTranscribe,
+    required this.showNewTranslate,
   });
 
   final TaskQueue queue;
   final ValueChanged<SubtitleTask> onOpenEditor;
 
-  /// 对话框里发现服务没配好时，用它跳到设置页。
-  final VoidCallback onOpenSettings;
+  /// 「新建转写」对话框。它属于 transcribe feature，由装配层注入，
+  /// 任务页不直接 import；返回 null 表示用户取消。
+  final Future<EnqueueRequest?> Function(
+    BuildContext context,
+    List<String> paths,
+  )
+  showNewTranscribe;
+
+  /// 「新建翻译」对话框，同上。[onSwitchToTranscribe] 接住拖错门的音视频。
+  final Future<EnqueueRequest?> Function(
+    BuildContext context,
+    List<String> paths,
+    ValueChanged<List<String>> onSwitchToTranscribe,
+  )
+  showNewTranslate;
 
   @override
   State<TasksPage> createState() => TasksPageState();
@@ -64,12 +77,7 @@ class TasksPageState extends State<TasksPage> {
 
   /// 顶栏的「新建转写」，也是拖入音视频后的落点。
   Future<void> newTranscribe({List<String> paths = const []}) async {
-    final result = await showNewTranscribeDialog(
-      context,
-      settings: widget.queue.settings,
-      initialPaths: paths,
-      onOpenSettings: widget.onOpenSettings,
-    );
+    final result = await widget.showNewTranscribe(context, paths);
     if (result == null) return;
     widget.queue.enqueueAll(result.paths, options: result.options);
     _selectFirst();
@@ -77,13 +85,11 @@ class TasksPageState extends State<TasksPage> {
 
   /// 顶栏的「新建翻译」，也是拖入字幕后的落点。
   Future<void> newTranslate({List<String> paths = const []}) async {
-    final result = await showNewTranslateDialog(
+    final result = await widget.showNewTranslate(
       context,
-      settings: widget.queue.settings,
-      initialPaths: paths,
-      onOpenSettings: widget.onOpenSettings,
+      paths,
       // 拖错了门的音视频，原样交给「新建转写」，不让用户再拖一次。
-      onSwitchToTranscribe: (media) => newTranscribe(paths: media),
+      (media) => newTranscribe(paths: media),
     );
     if (result == null) return;
     widget.queue.enqueueAll(result.paths, options: result.options);

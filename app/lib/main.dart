@@ -22,13 +22,15 @@ import 'features/shared/page_chrome.dart';
 import 'features/shell/app_shell.dart';
 import 'features/shell/nav_rail.dart';
 import 'features/shell/status_bar.dart';
-import 'features/tasks/new_transcribe_page.dart';
-import 'features/tasks/new_translate_page.dart';
 import 'features/tasks/tasks_page.dart';
-import 'features/tasks/transcribe_form.dart';
-import 'features/tasks/translate_form.dart';
 import 'features/transcode/transcode_form.dart';
 import 'features/transcode/transcode_page.dart';
+import 'features/transcribe/new_transcribe_dialog.dart';
+import 'features/transcribe/new_transcribe_page.dart';
+import 'features/transcribe/transcribe_form.dart';
+import 'features/translate/new_translate_dialog.dart';
+import 'features/translate/new_translate_page.dart';
+import 'features/translate/translate_form.dart';
 import 'pipeline/task_queue.dart';
 import 'pipeline/task_runner.dart';
 import 'services/editor_store.dart';
@@ -543,7 +545,21 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
         key: _tasksKey,
         queue: widget.queue,
         onOpenEditor: _openEditor,
-        onOpenSettings: () => setState(() => _section = AppSection.settings),
+        showNewTranscribe: (context, paths) => showNewTranscribeDialog(
+          context,
+          settings: widget.settings,
+          initialPaths: paths,
+          onOpenSettings: () => setState(() => _section = AppSection.settings),
+        ),
+        showNewTranslate: (context, paths, onSwitchToTranscribe) =>
+            showNewTranslateDialog(
+              context,
+              settings: widget.settings,
+              initialPaths: paths,
+              onOpenSettings: () =>
+                  setState(() => _section = AppSection.settings),
+              onSwitchToTranscribe: onSwitchToTranscribe,
+            ),
       ),
     ),
     AppSection.newTranscribe => NewTranscribePage(

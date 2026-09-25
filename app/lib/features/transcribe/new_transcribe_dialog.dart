@@ -10,13 +10,14 @@ import '../../core/widgets/glass_panel.dart';
 import '../../domain/srt.dart';
 import '../../services/media.dart';
 import '../../services/settings.dart';
+import '../shared/enqueue_request.dart';
 import 'transcribe_advanced_section.dart';
 import 'transcribe_footer.dart';
 import 'transcribe_form.dart';
 import 'transcribe_recognize_section.dart';
 import 'transcribe_translate_section.dart';
 
-export 'transcribe_form.dart' show NewTranscribeResult;
+export '../shared/enqueue_request.dart';
 
 /// 「新建转写」对话框。
 ///
@@ -26,13 +27,13 @@ export 'transcribe_form.dart' show NewTranscribeResult;
 ///
 /// 表单状态与三段字段在 [TranscribeFormController] 及配套的 Section 里，
 /// 与导航栏的「新建转写」页共用；这里只负责对话框的壳、文件区与底栏。
-Future<NewTranscribeResult?> showNewTranscribeDialog(
+Future<EnqueueRequest?> showNewTranscribeDialog(
   BuildContext context, {
   required AppSettings settings,
   List<String> initialPaths = const [],
   Media? media,
   VoidCallback? onOpenSettings,
-}) => showDialog<NewTranscribeResult>(
+}) => showDialog<EnqueueRequest>(
   context: context,
   barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.32),
   builder: (_) => NewTranscribeDialog(

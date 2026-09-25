@@ -10,13 +10,14 @@ import '../../core/widgets/glass_panel.dart';
 import '../../domain/srt.dart';
 import '../../services/media.dart';
 import '../../services/settings.dart';
+import '../shared/enqueue_request.dart';
 import '../shared/provider_fields.dart';
 import 'translate_advanced_section.dart';
 import 'translate_footer.dart';
 import 'translate_form.dart';
 import 'translate_language_section.dart';
 
-export 'translate_form.dart' show NewTranslateResult;
+export '../shared/enqueue_request.dart';
 
 /// 「新建翻译」对话框。
 ///
@@ -26,14 +27,14 @@ export 'translate_form.dart' show NewTranslateResult;
 ///
 /// 表单状态、校验与文案都在 [TranslateFormController] 里，与导航栏的
 /// 「翻译」页共用；这里只负责对话框的外形与关闭时机。
-Future<NewTranslateResult?> showNewTranslateDialog(
+Future<EnqueueRequest?> showNewTranslateDialog(
   BuildContext context, {
   required AppSettings settings,
   List<String> initialPaths = const [],
   Media? media,
   VoidCallback? onOpenSettings,
   ValueChanged<List<String>>? onSwitchToTranscribe,
-}) => showDialog<NewTranslateResult>(
+}) => showDialog<EnqueueRequest>(
   context: context,
   barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.32),
   builder: (_) => NewTranslateDialog(

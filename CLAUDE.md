@@ -44,7 +44,7 @@ app/lib/
   services/          网络、外部进程、设置与持久化
   pipeline/          队列、任务编排、阶段壳、字幕写出、转码执行
   features/shared/   跨 feature 共用组件
-  features/          shell / tasks / transcode / editor / settings
+  features/          shell / tasks / transcribe / translate / transcode / editor / settings
 ```
 
 `app/README.md` 有每条设计决定的完整理由，改到相关代码前先读那一节。

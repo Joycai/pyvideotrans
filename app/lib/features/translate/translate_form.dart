@@ -9,18 +9,8 @@ import '../../domain/task_options.dart';
 import '../../services/media.dart';
 import '../../services/readiness.dart';
 import '../../services/settings.dart';
+import '../shared/enqueue_request.dart';
 import '../shared/provider_fields.dart';
-
-/// 表单确认后交出来的东西：一批字幕文件 + 一份参数。
-///
-/// [paths] 已经剔掉解析不出内容的文件 —— 那些留在界面上是为了让用户知道
-/// 自己拖了什么，但不该变成必然失败的任务。
-class NewTranslateResult {
-  const NewTranslateResult({required this.paths, required this.options});
-
-  final List<String> paths;
-  final TaskOptions options;
-}
 
 /// 字幕列表里一行的解析状态。
 enum StagedSubtitleState {
@@ -405,10 +395,10 @@ class TranslateFormController extends ChangeNotifier {
 
   /// 打包交出去，并把这份参数记为「上次参数」。不能开始时返回 null。
   /// 不清空列表 —— 对话框随即关闭，页面则自己决定清空的时机。
-  NewTranslateResult? submit() {
+  EnqueueRequest? submit() {
     if (!canStart) return null;
     settings.lastTranslateOptions = _options;
-    return NewTranslateResult(
+    return EnqueueRequest(
       paths: enqueueable.map((f) => f.path).toList(),
       options: _options,
     );
