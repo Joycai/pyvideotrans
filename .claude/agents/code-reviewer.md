@@ -52,7 +52,7 @@ flutter test
 
 **翻译（`services/translation_protocol.dart`、`openai_compatible.dart`）**
 - `§N§` 行号协议是硬约束：返回条数不符、行号越界或重复，这批必须判为不可信并
-  **减半批量重试**（`ProviderException.batchTooLarge`），绝不能把对不上的译文写进字幕 ——
+  **减半批量重试**（`ActionableException.batchTooLarge`），绝不能把对不上的译文写进字幕 ——
   一旦错位，后面所有字幕的时间轴全毁。任何"容错地接受长度不一致"的改动都是严重问题。
 
 **服务登记表（`services/registry.dart`）**

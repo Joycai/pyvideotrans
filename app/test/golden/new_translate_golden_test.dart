@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/features/tasks/new_translate_dialog.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 /// 与 render_test.dart 同样的字体处理：测试默认字体不含汉字。
@@ -34,7 +34,7 @@ ThemeData _readable(ThemeData theme) => theme.copyWith(
   primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'Noto Sans SC'),
 );
 
-class _FakeMedia extends Media {
+class _FakeFfmpeg extends Ffmpeg {
   /// 与设计稿同一批样例：条数、时间跨度、大小。
   static const _files = {
     'interview_ep12.en.srt': (1284, Duration(minutes: 48, seconds: 12), 24576),
@@ -96,7 +96,7 @@ void main() {
             child: NewTranslateDialog(
               settings: settings,
               initialPaths: paths,
-              media: _FakeMedia(),
+              media: _FakeFfmpeg(),
             ),
           ),
         ),

@@ -6,9 +6,9 @@ import '../domain/output_naming.dart';
 import '../domain/paths.dart';
 import '../domain/srt.dart';
 import '../domain/task.dart';
+import '../domain/task_control.dart';
 import '../domain/task_options.dart';
 import '../services/file_stamps.dart';
-import '../services/provider_api.dart';
 
 /// 把内存中的字幕文档写成用户选择的产物格式。
 ///
@@ -29,7 +29,7 @@ abstract final class SubtitleOutputWriter {
     final options = task.options;
     final format = options.format;
     if (!format.implemented) {
-      throw ProviderException(
+      throw ActionableException(
         '${format.label} 格式尚未实施',
         hint: 'ASS 要带一整套样式配置，留到第二期。先导出 SRT。',
       );

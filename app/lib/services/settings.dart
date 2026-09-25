@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domain/enum_by_name.dart';
 import '../domain/language.dart';
 import '../domain/task_options.dart';
 import '../domain/transcode/options.dart';
@@ -181,7 +182,8 @@ class AppSettings extends ChangeNotifier {
   set outputFormat(SubtitleFormat v) => _write(_kOutputFormat, v.extension);
 
   BilingualLayout get bilingual =>
-      BilingualLayout.byName(_prefs.getString(_kBilingual) ?? '');
+      BilingualLayout.values.tryByName(_prefs.getString(_kBilingual)?.trim()) ??
+      BilingualLayout.targetOnly;
   set bilingual(BilingualLayout v) => _write(_kBilingual, v.name);
 
   /// 「新建转写」「新建翻译」打开时的默认参数。用户在对话框里改动的是这份拷贝，

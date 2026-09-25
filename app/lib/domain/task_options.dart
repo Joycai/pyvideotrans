@@ -1,3 +1,4 @@
+import 'enum_by_name.dart';
 import 'language.dart';
 import 'paths.dart';
 import 'srt.dart';
@@ -45,11 +46,6 @@ enum BilingualLayout {
   final SrtField field;
 
   bool get isBilingual => this != targetOnly;
-
-  static BilingualLayout byName(String value) => values.firstWhere(
-    (l) => l.name == value.trim(),
-    orElse: () => BilingualLayout.targetOnly,
-  );
 }
 
 /// 产物放哪儿。
@@ -190,10 +186,9 @@ class TaskOptions {
       return v is T ? v : orElse;
     }
 
-    final location = OutputLocation.values.firstWhere(
-      (l) => l.name == json['outputLocation'],
-      orElse: () => fallback.outputLocation,
-    );
+    final location =
+        OutputLocation.values.tryByName(json['outputLocation']) ??
+        fallback.outputLocation;
     final dir = pick<String?>('outputDir', fallback.outputDir);
     return TaskOptions(
       sourceLanguage: Languages.resolve(
@@ -223,9 +218,11 @@ class TaskOptions {
         'translationGuidance',
         fallback.translationGuidance,
       ),
-      bilingual: BilingualLayout.byName(
-        pick('bilingual', fallback.bilingual.name),
-      ),
+      bilingual:
+          BilingualLayout.values.tryByName(
+            pick('bilingual', fallback.bilingual.name).trim(),
+          ) ??
+          BilingualLayout.targetOnly,
       cjkLineLength: pick('cjkLineLength', fallback.cjkLineLength).clamp(4, 60),
       latinLineLength: pick(
         'latinLineLength',

@@ -18,7 +18,7 @@ import 'package:subtitle_studio/features/tasks/new_translate_page.dart';
 import 'package:subtitle_studio/features/tasks/translate_form.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 /// 与 render_test.dart 同样的字体处理：测试默认字体不含汉字。
@@ -45,7 +45,7 @@ ThemeData _readable(ThemeData theme) => theme.copyWith(
 
 /// 设计稿 M-TranslatePage 里的样例：两个解析完，`lecture_week3.ass` 永远
 /// 停在「解析中」，`notes_raw.txt` 解析不出内容。
-class _FakeMedia extends Media {
+class _FakeFfmpeg extends Ffmpeg {
   static const _known = {
     'interview_ep12.en.srt': (1284, Duration(minutes: 48, seconds: 12), 24576),
     'product_demo_en.vtt': (312, Duration(minutes: 6, seconds: 40), 7168),
@@ -89,7 +89,7 @@ void main() {
     if (variant != 'C') {
       settings.setConfig('deepseek', const ProviderConfig(apiKey: 'sk-test'));
     }
-    final media = _FakeMedia();
+    final media = _FakeFfmpeg();
     final form = TranslateFormController(settings: settings, media: media);
     addTearDown(form.dispose);
     final queue = TaskQueue(

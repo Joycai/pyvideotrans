@@ -3,11 +3,11 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/features/tasks/transcribe_form.dart';
-import 'package:subtitle_studio/services/media.dart';
+import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 /// 可控的探测：每个路径一个 Completer，测试决定什么时候「探完」。
-class GatedMedia extends Media {
+class GatedFfmpeg extends Ffmpeg {
   final gates = <String, Completer<MediaFileInfo>>{};
 
   @override
@@ -42,7 +42,7 @@ void main() {
 
   group('文件列表', () {
     test('先以「探测中」入列，探完再就绪；探测中不阻断提交', () async {
-      final media = GatedMedia();
+      final media = GatedFfmpeg();
       final form = TranscribeFormController(
         settings: await _settings(),
         media: media,
@@ -62,7 +62,7 @@ void main() {
     });
 
     test('读不出来的文件不入队、不计入总数，全都读不出时拦住', () async {
-      final media = GatedMedia();
+      final media = GatedFfmpeg();
       final form = TranscribeFormController(
         settings: await _settings(),
         media: media,
@@ -83,7 +83,7 @@ void main() {
     });
 
     test('探测期间被移除的文件不会再冒出来', () async {
-      final media = GatedMedia();
+      final media = GatedFfmpeg();
       final form = TranscribeFormController(
         settings: await _settings(),
         media: media,
@@ -96,7 +96,7 @@ void main() {
     });
 
     test('拒收说明压过其他所有文案，清掉后恢复', () async {
-      final media = GatedMedia();
+      final media = GatedFfmpeg();
       final form = TranscribeFormController(
         settings: await _settings(),
         media: media,
@@ -114,7 +114,7 @@ void main() {
   group('上次参数', () {
     test('提交时记下参数，下次可整份填回', () async {
       final settings = await _settings();
-      final media = GatedMedia();
+      final media = GatedFfmpeg();
       final form = TranscribeFormController(settings: settings, media: media);
       expect(form.hasLastUsed, isFalse);
       expect(form.applyLastUsed(), isFalse);
@@ -144,7 +144,7 @@ void main() {
       final settings = await _settings(withKey: false);
       final form = TranscribeFormController(
         settings: settings,
-        media: GatedMedia(),
+        media: GatedFfmpeg(),
       );
       expect(form.submit(), isNull);
       expect(settings.lastTranscribeOptions, isNull);

@@ -1,4 +1,5 @@
 import 'cue.dart';
+import 'enum_by_name.dart';
 import 'file_stamp.dart';
 import 'language.dart';
 import 'paths.dart';
@@ -68,12 +69,10 @@ class LogEntry {
     'message': message,
   };
 
-  static LogEntry? fromJson(Object? raw) {
+  static LogEntry? tryFromJson(Object? raw) {
     if (raw is! Map) return null;
     final time = DateTime.tryParse(raw['time'] as String? ?? '');
-    final level = LogLevel.values
-        .where((l) => l.name == raw['level'])
-        .firstOrNull;
+    final level = LogLevel.values.tryByName(raw['level']);
     final message = raw['message'];
     if (time == null || level == null || message is! String) return null;
     return LogEntry(time, level, message);
@@ -237,8 +236,6 @@ class SubtitleTask {
     if (id is! String || sourcePath is! String) {
       throw const FormatException('任务存档缺少 id 或 sourcePath');
     }
-    T byName<T extends Enum>(List<T> values, Object? name, T orElse) =>
-        values.where((v) => v.name == name).firstOrNull ?? orElse;
     Map<String, Object?>? map(Object? v) =>
         v is Map ? v.cast<String, Object?>() : null;
 
@@ -246,14 +243,14 @@ class SubtitleTask {
     final task = SubtitleTask(
       id: id,
       sourcePath: sourcePath,
-      kind: byName(TaskKind.values, json['kind'], TaskKind.transcribe),
+      kind: TaskKind.values.tryByName(json['kind']) ?? TaskKind.transcribe,
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
       options: TaskOptions.fromJson(
         map(json['options']) ?? const {},
         fallback: fallbackOptions,
       ),
-      status: byName(TaskStatus.values, json['status'], TaskStatus.paused),
-      stage: byName(TaskStage.values, json['stage'], TaskStage.queued),
+      status: TaskStatus.values.tryByName(json['status']) ?? TaskStatus.paused,
+      stage: TaskStage.values.tryByName(json['stage']) ?? TaskStage.queued,
       stages: {
         for (final s in TaskStage.values)
           s: switch (map(rawStages[s.name])) {
@@ -268,7 +265,7 @@ class SubtitleTask {
       },
       log: [
         for (final raw in json['log'] as List? ?? const [])
-          ?LogEntry.fromJson(raw),
+          ?LogEntry.tryFromJson(raw),
       ],
       error: switch (map(json['error'])) {
         final m? => TaskError.fromJson(m),
@@ -285,7 +282,7 @@ class SubtitleTask {
       outputs: {
         for (final MapEntry(:key, :value)
             in (map(json['outputs']) ?? const {}).entries)
-          key: ?FileStamp.fromJson(value),
+          key: ?FileStamp.tryFromJson(value),
       },
       outputsWrittenAt: DateTime.tryParse(
         json['outputsWrittenAt'] as String? ?? '',

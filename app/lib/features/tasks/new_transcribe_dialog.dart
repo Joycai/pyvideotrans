@@ -8,7 +8,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/glass_panel.dart';
 import '../../domain/srt.dart';
-import '../../services/media.dart';
+import '../../services/ffmpeg.dart';
 import '../../services/settings.dart';
 import 'transcribe_advanced_section.dart';
 import 'transcribe_footer.dart';
@@ -30,7 +30,7 @@ Future<NewTranscribeResult?> showNewTranscribeDialog(
   BuildContext context, {
   required AppSettings settings,
   List<String> initialPaths = const [],
-  Media? media,
+  Ffmpeg? media,
   VoidCallback? onOpenSettings,
 }) => showDialog<NewTranscribeResult>(
   context: context,
@@ -54,7 +54,7 @@ class NewTranscribeDialog extends StatefulWidget {
 
   final AppSettings settings;
   final List<String> initialPaths;
-  final Media? media;
+  final Ffmpeg? media;
 
   /// 缺密钥时那个「去设置」。为 null 就只显示文字 —— 宁可不给链接，
   /// 也不要给一个点了没反应的链接。

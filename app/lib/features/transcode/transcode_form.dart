@@ -7,6 +7,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/paths.dart';
 import '../../domain/srt.dart';
+import '../../domain/task_control.dart';
 import '../../domain/task_options.dart';
 import '../../domain/transcode/codecs.dart';
 import '../../domain/transcode/command.dart';
@@ -14,8 +15,7 @@ import '../../domain/transcode/encoder_catalog.dart';
 import '../../domain/transcode/encoder_params.dart';
 import '../../domain/transcode/options.dart';
 import '../../domain/transcode/probe.dart';
-import '../../services/media.dart';
-import '../../services/provider_api.dart';
+import '../../services/ffmpeg.dart';
 import '../../services/settings.dart';
 import '../../services/transcoder.dart';
 
@@ -267,7 +267,7 @@ class TranscodeFormController extends ChangeNotifier {
     try {
       final probe = await transcoder.probe(path);
       result = StagedVideo(path: path, sizeBytes: size, probe: probe, probing: false);
-    } on ProviderException catch (e) {
+    } on ActionableException catch (e) {
       result = StagedVideo(path: path, sizeBytes: size, error: e.message, probing: false);
     } catch (e) {
       result = StagedVideo(path: path, sizeBytes: size, error: '$e', probing: false);

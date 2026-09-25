@@ -32,7 +32,7 @@ import 'features/transcode/transcode_page.dart';
 import 'pipeline/task_queue.dart';
 import 'pipeline/task_runner.dart';
 import 'services/editor_store.dart';
-import 'services/media.dart';
+import 'services/ffmpeg.dart';
 import 'services/registry.dart';
 import 'services/settings.dart';
 import 'services/task_store.dart';
@@ -52,9 +52,9 @@ Future<void> main() async {
   // 安装目录在 Program Files 里，用户往里拖文件要过 UAC。
   // 用平台分隔符拼：这个路径要交给资源管理器打开，Windows 的 explorer
   // 对正斜杠的路径经常不认。
-  Media.dropInDir = '$support${Platform.pathSeparator}ffmpeg';
+  Ffmpeg.dropInDir = '$support${Platform.pathSeparator}ffmpeg';
 
-  final media = Media();
+  final media = Ffmpeg();
   // 转码页（检测编码器、读源文件）与流水线（跑转码）共用一份，
   // 编码器检测结果只做一次。
   final transcoder = Transcoder(media: media);
@@ -95,7 +95,7 @@ class SubtitleStudioApp extends StatefulWidget {
 
   final AppSettings settings;
   final TaskQueue queue;
-  final Media media;
+  final Ffmpeg media;
   final Transcoder transcoder;
   final EditorStore editorStore;
 

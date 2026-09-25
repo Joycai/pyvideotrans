@@ -2,10 +2,10 @@ import 'dart:io';
 
 import '../domain/srt.dart';
 import '../domain/task.dart';
+import '../domain/task_control.dart';
 import '../domain/transcode/command.dart';
 import '../domain/transcode/probe.dart';
-import '../services/media.dart';
-import '../services/provider_api.dart';
+import '../services/ffmpeg.dart';
 import '../services/transcoder.dart';
 import 'task_progress.dart';
 import 'task_stage_runner.dart';
@@ -23,10 +23,10 @@ class TranscodeTaskPipeline {
   ) => stages.run(task, TaskStage.prepare, onChange, () async {
     final job = task.transcode;
     if (job == null) {
-      throw const ProviderException('转码任务缺少参数', hint: '删除这个任务后重新建。');
+      throw const ActionableException('转码任务缺少参数', hint: '删除这个任务后重新建。');
     }
     if (!File(task.sourcePath).existsSync()) {
-      throw ProviderException(
+      throw ActionableException(
         '源文件不存在',
         detail: task.sourcePath,
         hint: '文件可能已被移动或删除。重新选择文件。',
@@ -35,7 +35,7 @@ class TranscodeTaskPipeline {
     final options = job.options;
     final problem = options.problem;
     if (problem != null) {
-      throw ProviderException(problem, hint: '删除这个任务，改好参数后重新建。');
+      throw ActionableException(problem, hint: '删除这个任务，改好参数后重新建。');
     }
 
     final probe = await transcoder.probe(task.sourcePath);
@@ -47,7 +47,7 @@ class TranscodeTaskPipeline {
 
     final clash = probe.incompatibility(options);
     if (clash != null) {
-      throw ProviderException(
+      throw ActionableException(
         clash,
         hint: '把这一路改为重新编码，或换一个容器，然后从准备阶段继续。',
       );
@@ -168,7 +168,7 @@ class TranscodeTaskPipeline {
         final file = File(job.outputPath!);
         final size = file.existsSync() ? file.lengthSync() : 0;
         if (size == 0) {
-          throw ProviderException(
+          throw ActionableException(
             '产物为空',
             detail: job.outputPath,
             hint: '源文件可能没有可用的音视频流。从转码阶段继续重试一次。',
