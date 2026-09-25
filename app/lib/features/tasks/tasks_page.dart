@@ -7,6 +7,7 @@ import '../../domain/task.dart';
 import '../../pipeline/task_queue.dart';
 import '../../services/reveal.dart';
 import '../shared/enqueue_request.dart';
+import '../shared/page_chrome.dart';
 import 'task_resume_dialog.dart';
 import 'task_table.dart';
 import 'tasks_board.dart';
@@ -155,6 +156,27 @@ class TasksPageState extends State<TasksPage> {
 }
 
 /// 顶栏右侧的两个操作。属于 PageChrome，所以放在页面外面。
+/// 任务页交给顶栏的内容。两个「新建」按钮落在 [TasksPageState] 上，
+/// 由装配层经 GlobalKey 转交。
+PageChrome tasksChrome(
+  TaskQueue queue, {
+  required VoidCallback onNewTranslate,
+  required VoidCallback onNewTranscribe,
+}) {
+  final running = queue.countWhere((t) => t.status == TaskStatus.running);
+  final failed = queue.countWhere((t) => t.status == TaskStatus.failed);
+  return PageChrome(
+    title: '任务',
+    subtitle: '${queue.tasks.length} 个任务 · $running 个进行中 · $failed 个失败',
+    actions: [
+      TasksPageActions(
+        onNewTranslate: onNewTranslate,
+        onNewTranscribe: onNewTranscribe,
+      ),
+    ],
+  );
+}
+
 class TasksPageActions extends StatelessWidget {
   const TasksPageActions({
     super.key,

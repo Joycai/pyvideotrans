@@ -124,11 +124,11 @@ void main() {
           onSectionChanged: (_) {},
           chrome: () => newTranscribeChrome(form),
           status: () => StatusSnapshot(
-            localEngine: 'ffmpeg · 就绪',
-            cloud: variant == 'C'
+            ffmpeg: 'ffmpeg · 就绪',
+            asr: variant == 'C'
                 ? (connected: false, label: 'Groq · 未配置')
                 : (connected: true, label: '阿里百炼 · 已配置'),
-            localBackend: (connected: true, label: 'DeepSeek · 已配置'),
+            translation: (connected: true, label: 'DeepSeek · 已配置'),
           ),
           live: form,
           child: NewTranscribePage(

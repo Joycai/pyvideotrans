@@ -142,9 +142,9 @@ void main() {
           onSectionChanged: (_) {},
           chrome: chrome,
           status: () => const StatusSnapshot(
-            localEngine: 'ffmpeg · 就绪',
-            cloud: (connected: true, label: '阿里百炼 · 已配置'),
-            localBackend: (connected: true, label: 'DeepSeek · 已配置'),
+            ffmpeg: 'ffmpeg · 就绪',
+            asr: (connected: true, label: '阿里百炼 · 已配置'),
+            translation: (connected: true, label: 'DeepSeek · 已配置'),
           ),
           live: live,
           child: child,

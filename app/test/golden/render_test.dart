@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/task.dart';
+import 'package:subtitle_studio/features/editor/editor_chrome.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_open_form.dart';
 import 'package:subtitle_studio/features/editor/editor_open_page.dart';
@@ -249,9 +250,9 @@ void main() {
             ],
           ),
           status: () => const StatusSnapshot(
-            localEngine: 'ffmpeg · 就绪',
-            cloud: (connected: true, label: 'OpenAI · 已配置'),
-            localBackend: (connected: true, label: 'DeepSeek · 已配置'),
+            ffmpeg: 'ffmpeg · 就绪',
+            asr: (connected: true, label: 'OpenAI · 已配置'),
+            translation: (connected: true, label: 'DeepSeek · 已配置'),
             runningTasks: 2,
             overallProgress: 0.63,
             etaText: '剩余约 4 分钟',
@@ -341,9 +342,9 @@ void main() {
             ],
           ),
           status: () => StatusSnapshot(
-            localEngine: 'ffmpeg · 就绪',
-            cloud: (connected: true, label: 'OpenAI · 已配置'),
-            localBackend: (connected: true, label: 'DeepSeek · 已配置'),
+            ffmpeg: 'ffmpeg · 就绪',
+            asr: (connected: true, label: 'OpenAI · 已配置'),
+            translation: (connected: true, label: 'DeepSeek · 已配置'),
             note: editorStatusNote(controller),
           ),
           child: EditorPage(controller: controller),
@@ -399,9 +400,9 @@ void main() {
           onSectionChanged: (_) {},
           chrome: chrome,
           status: () => StatusSnapshot(
-            localEngine: 'ffmpeg · 就绪',
-            cloud: (connected: true, label: '阿里百炼 · 已配置'),
-            localBackend: (connected: true, label: 'DeepSeek · 已配置'),
+            ffmpeg: 'ffmpeg · 就绪',
+            asr: (connected: true, label: '阿里百炼 · 已配置'),
+            translation: (connected: true, label: 'DeepSeek · 已配置'),
             note: note,
           ),
           child: child,

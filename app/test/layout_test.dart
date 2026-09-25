@@ -89,7 +89,7 @@ void main() {
       final statusText = tester.getRect(
         find.descendant(
           of: statusBar,
-          matching: find.textContaining('本地识别'),
+          matching: find.textContaining('ffmpeg'),
         ),
       );
       expect(

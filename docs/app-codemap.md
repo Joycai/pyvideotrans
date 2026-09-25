@@ -48,8 +48,11 @@ core/       domain/ ←──── services/
 2. 载入 `AppSettings`，创建应用支持目录。
 3. 构造 `Media`、`Transcoder`、`TaskRunner`、`TaskQueue`、`TaskStore`、`EditorStore`。
 4. 恢复任务后启动 `SubtitleStudioApp`。
-5. 持有转写、翻译、转码和编辑器入口的表单控制器，保证切页不丢状态。
+5. 持有转写、翻译、转码的表单控制器和编辑器的 `EditorWorkspace`，保证切页不丢状态。
 6. 用 `Listenable.merge` 只驱动顶栏、状态栏和需要实时更新的页面，避免进度回调重建整棵应用树。
+
+只做接线：各页的顶栏内容由各自的 `xxxChrome()` 给出，状态栏快照由
+`StatusSnapshot.from` 拼，编辑器换会话、草稿恢复、最近打开的规则在 `EditorWorkspace`。
 
 ### `lib/features/shell/`
 
@@ -57,7 +60,7 @@ core/       domain/ ←──── services/
 |---|---|
 | `nav_rail.dart` | `AppSection` 六个导航项和 72px 导航栏 |
 | `app_shell.dart` | Rail + 顶栏 + 内容区 + 状态栏的总体栅格 |
-| `status_bar.dart` | `StatusSnapshot` 与底部状态栏；状态由上层传入，不自行查服务 |
+| `status_bar.dart` | `StatusSnapshot`（`from` 按设置、ffmpeg 与队列拼出快照）与底部状态栏；控件只画快照 |
 
 ## 三、视觉基座 `lib/core/`
 
@@ -225,10 +228,14 @@ core/       domain/ ←──── services/
 - `editor_controller.dart`：筛选、搜索、选中、撤销、改字 / 时间、拆分 / 合并、说话人、翻译与导出；保存状态 `SyncState`、连续编辑合并、本地草稿；`follow` 任务队列，流水线换了文档就刷新、清撤销栈，`locked` 时一切修改不生效。
 - `editor_open_form.dart`：本地原文 / 译文槽位、解析与配对预检。
 - `preview_playback.dart`：media_kit 播放器封装和按时间定位字幕。
+- `editor_workspace.dart`：`EditorWorkspace`，当前会话、入口页是否盖在上面、最近打开；换会话前询问写入、草稿恢复、替换 / 重新配对都走它。挂在根节点上，由 `main.dart` 接线。
 
 ### 编辑页
 
-- `editor_page.dart`：快捷键、拖放、页面组合、恢复横幅、编辑器状态文案。
+- `editor_page.dart`：快捷键、生命周期、页面组合。
+- `editor_drop_zone.dart`：拖文件到编辑页的左右两块落区。
+- `editor_banners.dart`：只读横幅与恢复横幅。
+- `editor_chrome.dart`：编辑器分区的顶栏内容、副标题与状态栏文案。
 - `editor_page_actions.dart`：视图菜单、保存 / 导出 / 翻译操作。
 - `editor_title.dart`：来源浮层、保存状态 chip 与弹层、待校对徽标。
 - `editor_leave_dialog.dart`：离开 / 退出前「先写入字幕文件？」、写入流程与外部修改冲突询问。

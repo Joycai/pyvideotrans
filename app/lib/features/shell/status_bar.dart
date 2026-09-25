@@ -5,39 +5,79 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/glass_panel.dart';
 import '../../core/widgets/indicators.dart';
+import '../../domain/task.dart';
+import '../../pipeline/task_queue.dart';
+import '../../services/media.dart';
+import '../../services/provider_api.dart';
+import '../../services/registry.dart';
+import '../../services/settings.dart';
 
-/// 状态栏要显示的一次快照。由上层按真实状态填充，避免这里自己去查服务。
+/// 状态栏要显示的一次快照。状态栏控件只画它，不自己去查服务。
 class StatusSnapshot {
   const StatusSnapshot({
-    required this.localEngine,
-    required this.cloud,
-    required this.localBackend,
+    required this.ffmpeg,
+    required this.asr,
+    required this.translation,
     this.runningTasks = 0,
     this.overallProgress = 0,
     this.etaText,
     this.note,
   });
 
+  /// 按当前设置、ffmpeg 与队列拼出一份快照。[note] 由当前页面决定。
+  factory StatusSnapshot.from({
+    required AppSettings settings,
+    required Media media,
+    required TaskQueue queue,
+    String? note,
+  }) {
+    ({bool connected, String label}) service(ProviderInfo? info, String kind) {
+      final ok = info != null && settings.isConfigured(info);
+      return (
+        connected: ok,
+        label: info == null
+            ? '$kind · 未选择'
+            : '${info.name} · ${ok ? '已配置' : '未配置'}',
+      );
+    }
+
+    final eta = queue.running?.eta;
+    return StatusSnapshot(
+      ffmpeg: media.available ? 'ffmpeg · 就绪' : 'ffmpeg · 未找到',
+      asr: service(Registry.asrInfo(settings.asrProviderId), '识别'),
+      translation: service(
+        Registry.translationInfo(settings.translationProviderId),
+        '翻译',
+      ),
+      runningTasks: queue.countWhere(
+        (t) => t.status == TaskStatus.running || t.status == TaskStatus.queued,
+      ),
+      overallProgress: queue.overallProgress,
+      etaText: eta == null ? null : '剩余约 ${eta.inMinutes} 分钟',
+      note: note,
+    );
+  }
+
   /// 右侧附加的一句话，比如编辑器的「未保存 3 处修改」。
   final String? note;
 
-  /// 本地识别：第一期未实施，显示为「未启用」。
-  final String localEngine;
+  /// ffmpeg 找没找到。转写抽音频、转码都靠它。
+  final String ffmpeg;
 
-  /// 云端连通性与延迟。
-  final ({bool connected, String label}) cloud;
+  /// 当前识别服务配没配好。
+  final ({bool connected, String label}) asr;
 
-  /// 本地后端（Ollama / 自建 Python 服务）。
-  final ({bool connected, String label}) localBackend;
+  /// 当前翻译服务配没配好。
+  final ({bool connected, String label}) translation;
 
   final int runningTasks;
   final double overallProgress;
   final String? etaText;
 
   static const idle = StatusSnapshot(
-    localEngine: '本地识别 · 未启用',
-    cloud: (connected: false, label: '云端 · 未配置'),
-    localBackend: (connected: false, label: '本地服务 · 未连接'),
+    ffmpeg: 'ffmpeg · 未找到',
+    asr: (connected: false, label: '识别 · 未选择'),
+    translation: (connected: false, label: '翻译 · 未选择'),
   );
 }
 
@@ -60,19 +100,19 @@ class AppStatusBar extends StatelessWidget {
         children: [
           Icon(Symbols.memory, size: 16, weight: 400, color: cs.onSurfaceVariant),
           const SizedBox(width: AppSpacing.s1 + 2),
-          Text(snapshot.localEngine, style: muted),
+          Text(snapshot.ffmpeg, style: muted),
           _divider(cs),
           StatusDot(
-            snapshot.cloud.connected ? ext.success : cs.outline,
+            snapshot.asr.connected ? ext.success : cs.outline,
           ),
           const SizedBox(width: AppSpacing.s1 + 2),
-          Text(snapshot.cloud.label, style: muted),
+          Text(snapshot.asr.label, style: muted),
           _divider(cs),
           StatusDot(
-            snapshot.localBackend.connected ? ext.success : cs.outline,
+            snapshot.translation.connected ? ext.success : cs.outline,
           ),
           const SizedBox(width: AppSpacing.s1 + 2),
-          Text(snapshot.localBackend.label, style: muted),
+          Text(snapshot.translation.label, style: muted),
           const Spacer(),
           if (snapshot.note != null) ...[
             Text(snapshot.note!, style: muted),
