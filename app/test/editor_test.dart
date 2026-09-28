@@ -304,6 +304,138 @@ void main() {
     });
   });
 
+  group('多选', () {
+    test('单击单选，Shift 扩选，⌘/Ctrl 切换', () async {
+      final c = await _speakerController()..selectWith(1);
+      expect(c.multiSelected, isFalse);
+      c.selectWith(3, extend: true);
+      expect(c.selectedPositions, [1, 2, 3]);
+      expect(c.selected, 3);
+      c.selectWith(5, toggle: true);
+      expect(c.selectedPositions, [1, 2, 3, 5]);
+      expect(c.selected, 5);
+      c.selectWith(2, toggle: true);
+      expect(c.selectedPositions, [1, 3, 5]);
+      c.selectWith(4);
+      expect(c.selectedPositions, [4]);
+      expect(c.multiSelected, isFalse);
+    });
+
+    test('Shift 扩选只覆盖筛选后看得见的行', () async {
+      // 周老师：第 3、5、6 条（下标 2、4、5）。
+      final c = await _speakerController()..setSpeakerFilter({1});
+      c
+        ..selectWith(2)
+        ..selectWith(5, extend: true);
+      expect(c.selectedPositions, [2, 4, 5]);
+    });
+
+    test('批量改说话人：一次提交，一步撤销', () async {
+      final c = await _speakerController()
+        ..selectWith(0)
+        ..selectWith(3, toggle: true)
+        ..selectWith(5, toggle: true);
+      c.assignSpeaker(2);
+      expect(c.document.cues.map((x) => x.speaker), [2, 0, 1, 2, 1, 2]);
+      // 条数没变，选区保留，可以接着改。
+      expect(c.selectedPositions, [0, 3, 5]);
+      c.undo();
+      expect(c.document.cues.map((x) => x.speaker), [0, 0, 1, 2, 1, 1]);
+      expect(c.canUndo, isFalse);
+    });
+
+    test('批量清除说话人；多选时忽略「连续段」', () async {
+      final c = await _speakerController()
+        ..selectWith(4)
+        ..selectWith(5, extend: true);
+      c.assignSpeaker(null, run: true);
+      expect(c.document.cues.map((x) => x.speaker), [0, 0, 1, 2, null, null]);
+    });
+
+    test('选中各条已经是那个人时不进撤销栈', () async {
+      final c = await _speakerController()
+        ..selectWith(4)
+        ..selectWith(5, extend: true);
+      c.assignSpeaker(1);
+      expect(c.canUndo, isFalse);
+    });
+
+    test('共同说话人与「多个说话人」', () async {
+      final c = await _speakerController()
+        ..selectWith(4)
+        ..selectWith(5, extend: true);
+      expect(c.selectionMixedSpeakers, isFalse);
+      expect(c.selectionSpeaker, 1);
+      c.selectWith(3, toggle: true);
+      expect(c.selectionMixedSpeakers, isTrue);
+    });
+
+    test('只读时批量修改无效', () async {
+      final c = await _speakerController();
+      (c.session as TaskSession).task.status = TaskStatus.running;
+      c
+        ..selectWith(0)
+        ..selectWith(2, extend: true)
+        ..assignSpeaker(2);
+      expect(c.document.cues.map((x) => x.speaker), [0, 0, 1, 2, 1, 1]);
+    });
+
+    test('筛选、搜索、J/K、Esc 都回到单选，焦点不变', () async {
+      final c = await _speakerController();
+      void multi() => c
+        ..selectWith(1)
+        ..selectWith(3, extend: true);
+
+      multi();
+      c.setFilter(CueFilter.all);
+      expect((c.multiSelected, c.selected), (false, 3));
+      multi();
+      c.setSearch('嗯');
+      expect((c.multiSelected, c.selected), (false, 3));
+      c.setSearch('');
+      multi();
+      c.toggleSpeakerFilter(1);
+      expect(c.multiSelected, isFalse);
+      c.setSpeakerFilter({});
+      multi();
+      c.step(1);
+      expect((c.multiSelected, c.selected), (false, 4));
+      multi();
+      c.clearMultiSelection();
+      expect((c.multiSelected, c.selected), (false, 3));
+    });
+
+    test('条数变了回到单选：撤销一次拆分', () async {
+      final c = await _speakerController()..select(2);
+      c.split();
+      c
+        ..selectWith(0)
+        ..selectWith(6, extend: true);
+      c.undo();
+      expect(c.multiSelected, isFalse);
+      expect(c.selected, lessThan(c.document.cues.length));
+    });
+
+    test('播放跟随：多选时不动选区，单选时跟过去', () async {
+      final c = await _speakerController()
+        ..selectWith(0)
+        ..selectWith(2, toggle: true);
+      c.follow(4);
+      expect(c.selectedPositions, [0, 2]);
+      c.clearMultiSelection();
+      c.follow(4);
+      expect(c.selected, 4);
+    });
+
+    test('多选时 Enter 切换已校对不生效', () async {
+      final c = await _speakerController()
+        ..selectWith(0)
+        ..selectWith(1, extend: true);
+      c.toggleReviewed();
+      expect(c.canUndo, isFalse);
+    });
+  });
+
   group('未配对行', () {
     Future<EditorController> unpaired() async {
       final c = await _controller();

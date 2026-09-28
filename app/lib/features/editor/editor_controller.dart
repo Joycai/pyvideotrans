@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import '../../domain/cue.dart';
+import '../../domain/cue_selection.dart';
 import '../../domain/file_stamp.dart';
 import '../../domain/language.dart';
 import '../../domain/line_wrap.dart';
@@ -189,9 +190,23 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   /// 说话人筛选，可多选。空集表示不按说话人筛；集合里的 null 表示「无说话人」。
   Set<int?> speakerFilter = {};
 
-  /// 当前选中条在**完整文档**里的下标。
+  /// 选区：焦点、选中集合与 Shift 锚点，位置都是**完整文档**里的下标。
+  /// 只有这一个字段存选中状态，改焦点一律经 [_focusOn] 或 [selectWith]。
+  CueSelection _selection = const CueSelection.single(0);
+
+  /// 焦点条在**完整文档**里的下标：检视面板编辑、播放跟随、单条操作的那一条。
   @override
-  int selected = 0;
+  int get selected => _selection.focus;
+
+  /// 选中了不止一条：检视面板换成批量形态。
+  bool get multiSelected => _selection.isMultiple;
+
+  int get selectionCount => _selection.length;
+
+  bool isSelected(int indexInDocument) => _selection.contains(indexInDocument);
+
+  /// 选中各条按文档顺序的下标。
+  List<int> get selectedPositions => _selection.positions.toList()..sort();
 
   /// 正在重新翻译的条目下标，用来在界面上禁用按钮。
   final Set<int> translating = {};
@@ -326,6 +341,25 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     }).toList();
   }
 
+  /// 可见行按显示顺序的文档下标，Shift 扩选只在这些行里取区间。
+  List<int> get visiblePositions {
+    final at = {
+      for (final (i, cue) in document.cues.indexed) cue.index: i,
+    };
+    return [for (final cue in visibleCues) at[cue.index]!];
+  }
+
+  /// 选中各条共同的说话人（都没有则为 null）；各不相同时看
+  /// [selectionMixedSpeakers]。
+  int? get selectionSpeaker => current?.speaker;
+
+  bool get selectionMixedSpeakers {
+    final first = current?.speaker;
+    return _selection.positions.any(
+      (p) => p < document.cues.length && document.cues[p].speaker != first,
+    );
+  }
+
   @override
   Cue? get current => selected >= 0 && selected < document.cues.length
       ? document.cues[selected]
@@ -379,18 +413,24 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     notifyListeners();
   }
 
+  // 筛选或搜索一变就回到单选：否则选区里会藏着看不见的行，批量修改
+  // 改到用户看不见的字幕。
+
   void setFilter(CueFilter f) {
     filter = f;
+    _collapse();
     notifyListeners();
   }
 
   void setSearch(String s) {
+    if (s != search) _collapse();
     search = s;
     notifyListeners();
   }
 
   void setSpeakerFilter(Set<int?> speakers) {
     speakerFilter = {...speakers};
+    _collapse();
     notifyListeners();
   }
 
@@ -398,15 +438,60 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     final next = {...speakerFilter};
     if (!next.remove(speaker)) next.add(speaker);
     speakerFilter = next;
+    _collapse();
     notifyListeners();
   }
 
-  @override
+  /// 单选 [indexInDocument]。
   void select(int indexInDocument) {
-    selected = document.cues.isEmpty
-        ? 0
-        : indexInDocument.clamp(0, document.cues.length - 1);
+    _focusOn(indexInDocument);
     notifyListeners();
+  }
+
+  /// 点击表格行：[extend] 为 Shift（扩选到这一行），[toggle] 为 ⌘/Ctrl
+  /// （切换这一行），都没有就是单选。
+  void selectWith(
+    int indexInDocument, {
+    bool extend = false,
+    bool toggle = false,
+  }) {
+    if (indexInDocument < 0 || indexInDocument >= document.cues.length) return;
+    if (extend) {
+      _selection = _selection.extendTo(indexInDocument, visiblePositions);
+    } else if (toggle) {
+      _selection = _selection.toggle(indexInDocument, visiblePositions);
+    } else {
+      _selection = CueSelection.single(indexInDocument);
+    }
+    notifyListeners();
+  }
+
+  /// 播放头进入另一条时跟过去。多选时不动 —— 边听边 ⌘+点击挑出同一个人
+  /// 的台词正是多选最常见的用法，播放不能把选区冲掉。
+  @override
+  void follow(int indexInDocument) {
+    if (multiSelected) return;
+    select(indexInDocument);
+  }
+
+  /// Esc 与「取消多选」：回到单选，焦点不变。
+  void clearMultiSelection() {
+    if (!multiSelected) return;
+    _collapse();
+    notifyListeners();
+  }
+
+  /// 焦点移到 [indexInDocument]（夹到合法范围）并回到单选。
+  void _focusOn(int indexInDocument) {
+    _selection = CueSelection.single(
+      document.cues.isEmpty
+          ? 0
+          : indexInDocument.clamp(0, document.cues.length - 1),
+    );
+  }
+
+  void _collapse() {
+    if (multiSelected) _focusOn(selected);
   }
 
   /// J/K 在**当前可见列表**里移动，而不是整份文档 —— 过滤成「待校对」后
@@ -420,7 +505,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
         : visible.indexWhere((c) => c.index == currentCue.index);
     position = (position + delta).clamp(0, visible.length - 1);
     final target = visible[position];
-    selected = document.cues.indexWhere((c) => c.index == target.index);
+    _focusOn(document.cues.indexWhere((c) => c.index == target.index));
     notifyListeners();
   }
 
@@ -451,7 +536,10 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   void _commit(SubtitleDocument next) {
     if (locked || identical(next, document)) return;
     _push();
+    final resized = next.cues.length != document.cues.length;
     session.document = next;
+    // 拆分、合并、删行后下标整体挪位，旧选区对不上号了。
+    if (resized) _focusOn(selected);
     _changed();
   }
 
@@ -479,9 +567,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     session.document = _undo.removeLast();
     if (session.pendingEdits > 0) session.pendingEdits--;
     _coalesceKey = null;
-    selected = document.cues.isEmpty
-        ? 0
-        : selected.clamp(0, document.cues.length - 1);
+    _focusOn(selected);
     _changed();
   }
 
@@ -531,7 +617,8 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
 
   void toggleReviewed() {
     final cue = current;
-    if (cue == null) return;
+    // 多选时不做：检视面板看不到单条，改了一条看起来却像批量操作。
+    if (cue == null || multiSelected) return;
     _replaceCurrent(cue.copyWith(reviewed: !cue.reviewed));
   }
 
@@ -550,7 +637,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   /// 并入上一条 —— 未配对的译文行最常用。
   void mergeWithPrevious() {
     if (selected <= 0 || selected >= document.cues.length) return;
-    selected--;
+    _focusOn(selected - 1);
     mergeWithNext();
   }
 
@@ -587,13 +674,17 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
 
   /// 把当前条改给 [speaker]（null 为清除）。[run] 为真时改的是当前条所在的
   /// 同一人连续段 —— 识别在换人处切歪时往往一连错好几条。
+  /// 多选时改的是选中的全部，[run] 不起作用。一次提交，一步撤销。
   void assignSpeaker(int? speaker, {bool run = false}) {
     if (current == null) return;
     final range = run
         ? document.speakerRun(selected)
         : (start: selected, end: selected);
+    final targets = multiSelected
+        ? selectedPositions
+        : [for (var i = range.start; i <= range.end; i++) i];
     final positions = [
-      for (var i = range.start; i <= range.end; i++)
+      for (final i in targets)
         if (document.cues[i].speaker != speaker) i,
     ];
     if (positions.isEmpty) return;
@@ -611,9 +702,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     if (session is! FileSession) return;
     if (!document.cues.any((c) => c.hasTranslation)) return;
     _commit(document.withoutTranslations());
-    selected = document.cues.isEmpty
-        ? 0
-        : selected.clamp(0, document.cues.length - 1);
+    _focusOn(selected);
   }
 
   /// 把文档写进字幕文件，返回写了哪些路径。
@@ -858,9 +947,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     _saved = session.pendingEdits == 0 ? document : null;
     _baseline = document;
     _baselineKeys = null;
-    selected = document.cues.isEmpty
-        ? 0
-        : selected.clamp(0, document.cues.length - 1);
+    _focusOn(selected);
     notifyListeners();
   }
 

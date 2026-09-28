@@ -19,7 +19,8 @@ abstract interface class PlaybackCues implements Listenable {
 
   Cue? get current;
 
-  void select(int indexInDocument);
+  /// 播放头进入第 [indexInDocument] 条时调用，由实现方决定跟不跟。
+  void follow(int indexInDocument);
 }
 
 /// 检视面板的预览播放：把播放器与编辑器的选中条绑在一起。
@@ -147,7 +148,7 @@ class PreviewPlayback extends ChangeNotifier {
       if (index != null && index != cues.selected) {
         _syncing = true;
         try {
-          cues.select(index);
+          cues.follow(index);
         } finally {
           _syncing = false;
         }

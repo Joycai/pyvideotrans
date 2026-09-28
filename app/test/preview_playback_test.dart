@@ -27,7 +27,7 @@ class _Cues extends ChangeNotifier implements PlaybackCues {
   Cue? get current => null;
 
   @override
-  void select(int indexInDocument) {}
+  void follow(int indexInDocument) {}
 }
 
 void main() {
