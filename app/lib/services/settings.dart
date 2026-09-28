@@ -59,7 +59,7 @@ enum SettingsGroup { appearance, asr, translation, language, defaults, output }
 /// 应用设置。用 ChangeNotifier 让设置页与状态栏都跟着变。
 ///
 /// 密钥目前存在 shared_preferences 里（明文）。生产环境应当换成系统钥匙串
-/// （macOS Keychain / Windows Credential Manager），见 README 的「已知限制」。
+/// （macOS Keychain / Windows Credential Manager），见 README 的「第一期没做的事」。
 class AppSettings extends ChangeNotifier {
   AppSettings._(this._prefs);
 

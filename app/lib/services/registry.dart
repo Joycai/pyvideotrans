@@ -56,8 +56,9 @@ abstract final class Registry {
       defaultBaseUrl: 'http://127.0.0.1:8765/v1',
       defaultModel: 'whisper-large-v3',
     ),
-    // 阿里百炼的识别接口不是 OpenAI 兼容形态（多模态 generation + base64 音频，
-    // 且不返回时间戳）：走单独的实现类，先按静音切句再逐段识别。
+    // 阿里百炼的识别接口不是 OpenAI 兼容形态，走单独的实现类。同步模型
+    // （多模态 generation + base64 音频）不返回时间戳，只能先按静音切句再
+    // 逐段识别；「-filetrans」模型是异步整文件转写，自带时间戳，不切片。
     ProviderInfo(
       id: 'dashscope_qwen_asr',
       name: '阿里百炼 · Qwen3-ASR',
