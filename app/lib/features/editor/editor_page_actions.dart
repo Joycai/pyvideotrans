@@ -5,6 +5,7 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import 'editor_controller.dart';
+import 'editor_keys.dart';
 import 'editor_widgets.dart';
 
 /// 顶栏右侧：视图切换 + 翻译未译 + 保存 + 导出…。
@@ -143,7 +144,7 @@ class _SaveButton extends StatelessWidget {
     final e = context.elevation;
     final enabled = onPressed != null;
     return Tooltip(
-      message: '写入字幕文件 ⌘S',
+      message: '写入字幕文件 ${EditorKeys.save.label()}',
       waitDuration: const Duration(milliseconds: 600),
       child: Container(
         height: 36,

@@ -13,13 +13,11 @@ class CueTableToolbar extends StatelessWidget {
     super.key,
     required this.controller,
     required this.speakers,
-    required this.showHint,
     required this.onManageSpeakers,
   });
 
   final EditorController controller;
   final bool speakers;
-  final bool showHint;
   final VoidCallback? onManageSpeakers;
 
   @override
@@ -100,22 +98,7 @@ class CueTableToolbar extends StatelessWidget {
             _SpeakerFilterChip(
               controller: controller,
               onManageSpeakers: onManageSpeakers,
-            )
-          else if (showHint) ...[
-            Icon(
-              Symbols.keyboard,
-              size: 16,
-              weight: 400,
-              color: cs.onSurfaceVariant,
             ),
-            const SizedBox(width: AppSpacing.s1 + 2),
-            Text(
-              'J/K 上下条 · Enter 标记已校对 · ⌘Z 撤销',
-              style: context.texts.bodySmall?.copyWith(
-                color: cs.onSurfaceVariant,
-              ),
-            ),
-          ],
         ],
       ),
     );

@@ -214,6 +214,10 @@ ThemeData _readable(ThemeData theme) => theme.copyWith(
   primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'Noto Sans SC'),
 );
 
+/// 编辑器的截图按 macOS 渲染：设计稿是 macOS 上的，快捷键文案按平台生成
+/// （⌘S / Ctrl+S），测试默认的平台会写成 Ctrl。
+final _macOS = TargetPlatformVariant.only(TargetPlatform.macOS);
+
 void main() {
   setUpAll(_loadCjkFont);
 
@@ -353,13 +357,15 @@ void main() {
       ),
     );
     await tester.pump(const Duration(seconds: 1));
+    // 字幕表第一帧后才拿到焦点，描边的淡入要再走完一段。
+    await tester.pump(const Duration(milliseconds: 300));
 
     await expectLater(find.byType(AppShell), matchesGoldenFile('$file.png'));
   }
 
   testWidgets('编辑器 · 浅色', (tester) async {
     await pumpEditor(tester, brightness: Brightness.light, file: 'editor_light');
-  });
+  }, variant: _macOS);
 
   testWidgets('编辑器 · 任务运行中只读', (tester) async {
     await pumpEditor(
@@ -368,7 +374,7 @@ void main() {
       file: 'editor_running_light',
       running: true,
     );
-  });
+  }, variant: _macOS);
 
   testWidgets('任务页 · 浅色', (tester) async {
     await pumpTasks(tester, brightness: Brightness.light, file: 'tasks_light');
@@ -471,6 +477,8 @@ void main() {
         onMountTranslation: withTranslation ? null : () {},
       ),
     );
+    // 字幕表第一帧后才拿到焦点，描边的淡入要再走完一段。
+    await tester.pump(const Duration(milliseconds: 300));
     if (speakerManager) {
       pageKey.currentState!.manageSpeakers();
       await tester.pumpAndSettle();
@@ -483,7 +491,7 @@ void main() {
 
   testWidgets('编辑器 · 本地会话 · 浅色', (tester) async {
     await pumpLocal(tester, brightness: Brightness.light, file: 'editor_local_light');
-  });
+  }, variant: _macOS);
 
   testWidgets('编辑器 · 本地会话 · 深色', (tester) async {
     await pumpLocal(
@@ -492,7 +500,7 @@ void main() {
       file: 'editor_local_dark',
       review: [4, 7],
     );
-  });
+  }, variant: _macOS);
 
   testWidgets('编辑器 · 说话人名单 · 深色', (tester) async {
     await pumpLocal(
@@ -502,7 +510,7 @@ void main() {
       review: [4, 7],
       speakerManager: true,
     );
-  });
+  }, variant: _macOS);
 
   testWidgets('编辑器 · 本地会话 · 窄窗口', (tester) async {
     await pumpLocal(
@@ -511,7 +519,7 @@ void main() {
       file: 'editor_local_narrow',
       size: const Size(1080, 760),
     );
-  });
+  }, variant: _macOS);
 
   testWidgets('编辑器 · 多选批量改说话人 · 浅色', (tester) async {
     await pumpLocal(
@@ -521,7 +529,7 @@ void main() {
       review: [4],
       multi: [2, 3, 4, 5, 8],
     );
-  });
+  }, variant: _macOS);
 
   testWidgets('编辑器 · 只有原文', (tester) async {
     await pumpLocal(
@@ -530,7 +538,7 @@ void main() {
       file: 'editor_single_light',
       withTranslation: false,
     );
-  });
+  }, variant: _macOS);
 
   testWidgets('编辑器入口页 · 两份文件', (tester) async {
     editorClock = () => DateTime(2026, 9, 13, 22);
@@ -575,5 +583,5 @@ void main() {
       find.byType(AppShell),
       matchesGoldenFile('editor_open_light.png'),
     );
-  });
+  }, variant: _macOS);
 }

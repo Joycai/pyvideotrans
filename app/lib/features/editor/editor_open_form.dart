@@ -9,6 +9,7 @@ import '../../domain/srt.dart';
 import '../../domain/subtitle_pairing.dart';
 import '../../domain/task_options.dart';
 import '../../services/file_io.dart';
+import 'editor_keys.dart';
 import 'editor_session.dart';
 
 /// 入口页上的两个位置。
@@ -84,7 +85,7 @@ class EditorOpenForm extends ChangeNotifier {
       return (text: '时间轴基本对不上，先切到「按序号」再打开', error: true, empty: false);
     }
     return (
-      text: '将打开 ${grouped(cueCount)} 条；⌘S 保存会写回这 $fileCount 个文件',
+      text: '将打开 ${grouped(cueCount)} 条；${EditorKeys.save.label()} 保存会写回这 $fileCount 个文件',
       error: false,
       empty: false,
     );

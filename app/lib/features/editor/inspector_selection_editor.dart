@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/shortcuts/app_shortcut.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import 'editor_controller.dart';
+import 'editor_keys.dart';
 import 'inspector_speaker_field.dart';
 
 /// 多选时的检视面板：只剩能批量做的事 —— 目前是改说话人。
@@ -67,8 +69,11 @@ class InspectorSelectionEditor extends StatelessWidget {
             onManageSpeakers: onManageSpeakers,
           ),
           Text(
-            'Shift+点击选连续范围，⌘/Ctrl+点击加选或取消；'
-            '数字键 1–9 直接指派，Esc 退出多选',
+            'Shift+点击或 '
+            '${EditorKeys.extendPrevious.label()} ${EditorKeys.extendNext.label()} '
+            '选连续范围，${primaryModifierLabel()}+点击加选或取消；'
+            '数字键 1–9 直接指派，'
+            '${EditorKeys.exitMultiSelect.label()} 退出多选',
             style: context.texts.bodySmall?.copyWith(
               color: cs.onSurfaceVariant,
             ),

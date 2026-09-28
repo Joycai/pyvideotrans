@@ -1124,7 +1124,7 @@ void main() {
       expect(find.text('字幕文件'), findsOneWidget);
       expect(find.text('demo.zh.srt'), findsOneWidget);
       expect(find.text('撤销到上次写入'), findsOneWidget);
-      await tester.tap(find.text('写入文件 ⌘S'));
+      await tester.tap(find.text('写入文件'));
       await tester.pumpAndSettle();
       expect(saved, 1);
     });

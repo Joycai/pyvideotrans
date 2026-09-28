@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/shortcuts/app_shortcut.dart';
 import '../../core/theme/app_extensions.dart';
@@ -57,11 +58,13 @@ class CueTable extends StatelessWidget {
         ? _compactSpeakerColumns
         : _speakerColumns;
 
-    return Container(
+    final radius = BorderRadius.circular(AppRadius.lg);
+    // 列表有焦点时描一圈主色：单键快捷键此刻生效。画在前景上，不挤内容。
+    final table = Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        borderRadius: radius,
         border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(
@@ -69,7 +72,6 @@ class CueTable extends StatelessWidget {
           CueTableToolbar(
             controller: controller,
             speakers: speakers,
-            showHint: !isFile && !speakers,
             onManageSpeakers: onManageSpeakers,
           ),
           CueTableHeader(
@@ -108,10 +110,26 @@ class CueTable extends StatelessWidget {
           _Footer(
             controller: controller,
             visibleCount: visible.length,
-            showHint: isFile || speakers,
+            tableFocus: focusNode,
           ),
         ],
       ),
+    );
+    return ListenableBuilder(
+      listenable: focusNode,
+      builder: (context, child) => AnimatedContainer(
+        duration: AppDuration.short,
+        curve: AppEasing.standard,
+        foregroundDecoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(
+            color: focusNode.hasFocus ? cs.primary : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: child,
+      ),
+      child: table,
     );
   }
 }
@@ -239,12 +257,14 @@ class _Footer extends StatelessWidget {
   const _Footer({
     required this.controller,
     required this.visibleCount,
-    required this.showHint,
+    required this.tableFocus,
   });
 
   final EditorController controller;
   final int visibleCount;
-  final bool showHint;
+
+  /// 提示跟着列表有没有焦点变，自己听它，不靠上层重建。
+  final FocusNode tableFocus;
 
   @override
   Widget build(BuildContext context) {
@@ -264,10 +284,7 @@ class _Footer extends StatelessWidget {
           unpaired++;
       }
     }
-    final hint = showHint
-        // 两种会话都能 ⌘S：写的是字幕文件，编辑进度本来就在自动存。
-        ? ' · J/K 上下条 · Enter 校对 · ⌘S 保存到文件'
-        : '';
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.s4,
@@ -280,11 +297,27 @@ class _Footer extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              '显示 $visibleCount / ${doc.cues.length}$hint',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: context.texts.bodySmall?.copyWith(
+            child: ListenableBuilder(
+              listenable: tableFocus,
+              builder: (context, _) => Text(
+                '显示 $visibleCount / ${doc.cues.length} · '
+                '${editorFooterHint(controller, tableFocused: tableFocus.hasFocus)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.texts.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+          Tooltip(
+            message: editorShortcutSheet(),
+            child: Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.s3),
+              child: Icon(
+                Symbols.keyboard,
+                size: 16,
+                weight: 400,
                 color: cs.onSurfaceVariant,
               ),
             ),

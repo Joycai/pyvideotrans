@@ -4,72 +4,52 @@ import 'package:flutter/widgets.dart';
 import '../../core/shortcuts/app_shortcut.dart';
 import '../../core/widgets/text_focus.dart';
 import 'editor_controller.dart';
+import 'editor_keys.dart';
 
-/// 编辑器的快捷键登记表。键位、作用范围与界面提示都从这里来。
-///
-/// 两个作用范围，用焦点树表达，而不是在一个处理函数里猜焦点在哪：
-/// - 字幕表范围（[CueTableShortcuts]）：单键，只挂在字幕列表自己的焦点上。
-///   焦点在输入框、按钮、浮层里时按键根本到不了这里，不用判断「是不是在
-///   打字」。
-/// - 编辑页范围（[EditorPageShortcuts]）：带主修饰键的组合，焦点在编辑页
-///   任何地方都生效，打字时也能指派说话人、标记已校对、保存。
-abstract final class EditorKeys {
-  // —— 字幕表范围 ——
-  static const next = [
-    AppShortcut(LogicalKeyboardKey.keyJ, repeats: true),
-    AppShortcut(LogicalKeyboardKey.arrowDown, repeats: true),
+/// 页脚那一行提示。列表有焦点时列常用单键（用不上的不列），没焦点时说清
+/// 怎么让单键生效 —— 焦点在别处时单键本来就不响应，列出来反而像坏了。
+String editorFooterHint(EditorController c, {required bool tableFocused}) {
+  if (!tableFocused) {
+    return '按 ${keyName(LogicalKeyboardKey.escape)} 或点表格使用单键快捷键';
+  }
+  return shortcutHints([
+    ('J/K', '上下条'),
+    if (c.speakers.isNotEmpty) ('1–9', '说话人'),
+    (EditorKeys.toggleReviewed.label(), '校对'),
+    if (c.media.playback != null) (EditorKeys.playPause.label(), '播放'),
+    (EditorKeys.save.label(), '保存'),
+  ]);
+}
+
+/// 完整快捷键表，给页脚键盘图标的悬停提示用。
+String editorShortcutSheet() {
+  String both(AppShortcut a, AppShortcut b) => '${a.label()} / ${b.label()}';
+  final table = [
+    ('J / K、${both(EditorKeys.next[1], EditorKeys.previous[1])}', '下一条 / 上一条'),
+    (both(EditorKeys.extendNext, EditorKeys.extendPrevious), '扩选到下一条 / 上一条'),
+    ('1–9', '指派第 N 位说话人'),
+    (
+      '${const AppShortcut(LogicalKeyboardKey.digit1, shift: true).label()}–9',
+      '按连续段指派',
+    ),
+    (EditorKeys.toggleReviewed.label(), '标记已校对'),
+    (EditorKeys.playPause.label(), '播放 / 暂停'),
+    (both(EditorKeys.back, EditorKeys.forward), '快退 / 快进 1 秒'),
+    (EditorKeys.exitMultiSelect.label(), '退出多选'),
   ];
-  static const previous = [
-    AppShortcut(LogicalKeyboardKey.keyK, repeats: true),
-    AppShortcut(LogicalKeyboardKey.arrowUp, repeats: true),
+  final page = [
+    (EditorKeys.save.label(), '保存到字幕文件'),
+    (EditorKeys.undo.label(), '撤销'),
+    (
+      '${const AppShortcut(LogicalKeyboardKey.digit1, primary: true).label()}–9',
+      '指派说话人',
+    ),
+    (EditorKeys.toggleReviewedAnywhere.label(), '标记已校对'),
+    (EditorKeys.backToTable.label(), '回到字幕表'),
   ];
-  static const extendNext = AppShortcut(
-    LogicalKeyboardKey.arrowDown,
-    shift: true,
-    repeats: true,
-  );
-  static const extendPrevious = AppShortcut(
-    LogicalKeyboardKey.arrowUp,
-    shift: true,
-    repeats: true,
-  );
-
-  /// 数字 1–9：指派名单里的第 N 位说话人。一次性操作，不连发。
-  static const digits = [
-    LogicalKeyboardKey.digit1,
-    LogicalKeyboardKey.digit2,
-    LogicalKeyboardKey.digit3,
-    LogicalKeyboardKey.digit4,
-    LogicalKeyboardKey.digit5,
-    LogicalKeyboardKey.digit6,
-    LogicalKeyboardKey.digit7,
-    LogicalKeyboardKey.digit8,
-    LogicalKeyboardKey.digit9,
-  ];
-  static const toggleReviewed = AppShortcut(LogicalKeyboardKey.enter);
-  static const playPause = AppShortcut(LogicalKeyboardKey.space);
-  static const back = AppShortcut(LogicalKeyboardKey.arrowLeft, repeats: true);
-  static const forward = AppShortcut(
-    LogicalKeyboardKey.arrowRight,
-    repeats: true,
-  );
-  static const exitMultiSelect = AppShortcut(LogicalKeyboardKey.escape);
-
-  // —— 编辑页范围 ——
-  static const save = AppShortcut(LogicalKeyboardKey.keyS, primary: true);
-  static const undo = AppShortcut(
-    LogicalKeyboardKey.keyZ,
-    primary: true,
-    repeats: true,
-  );
-  static const toggleReviewedAnywhere = AppShortcut(
-    LogicalKeyboardKey.enter,
-    primary: true,
-  );
-  static const backToTable = AppShortcut(LogicalKeyboardKey.escape);
-
-  /// 快退快进一次挪多少。
-  static const nudge = Duration(seconds: 1);
+  String lines(List<(String, String)> rows) =>
+      rows.map((r) => '${r.$1}　${r.$2}').join('\n');
+  return '字幕表里\n${lines(table)}\n\n编辑页任意处\n${lines(page)}';
 }
 
 /// 字幕表范围：包住字幕列表区域（不含工具栏 —— 工具栏上的筛选浮层挂在

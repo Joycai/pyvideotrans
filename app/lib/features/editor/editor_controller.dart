@@ -17,6 +17,7 @@ import '../../services/file_io.dart';
 import '../../services/provider_api.dart';
 import '../../services/registry.dart';
 import '../../services/settings.dart';
+import 'editor_keys.dart';
 import 'editor_media.dart';
 import 'editor_prompts.dart';
 import 'editor_session.dart';
@@ -1162,8 +1163,8 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     // 拼、选出来的目录在 Windows 上是 `\`，按统一分隔符后再比。
     final own = session.targetPaths.map(sameSeparators).toSet();
     if (fields.map(pathOf).map(sameSeparators).any(own.contains)) {
-      throw const TargetRejected(
-        '这个目录里就是字幕文件本身，想更新它们请用「保存」（⌘S）；导出请换一个目录',
+      throw TargetRejected(
+        '这个目录里就是字幕文件本身，想更新它们请用「保存」（${EditorKeys.save.label()}）；导出请换一个目录',
       );
     }
     await ensureDir(dir);

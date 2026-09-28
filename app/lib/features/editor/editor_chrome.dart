@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/paths.dart';
 import '../shared/page_chrome.dart';
 import 'editor_controller.dart';
+import 'editor_keys.dart';
 import 'editor_open_page.dart';
 import 'editor_page_actions.dart';
 import 'editor_session.dart';
@@ -63,11 +64,11 @@ String? editorStatusNote(EditorController controller) => controller.locked
     ? '任务跑完后会写出字幕文件'
     : switch (controller.sync) {
         SyncState.synced => null,
-        SyncState.dirty => '字幕文件落后 ${controller.unsavedEdits} 处修改 · ⌘S 写入',
+        SyncState.dirty => '字幕文件落后 ${controller.unsavedEdits} 处修改 · ${EditorKeys.save.label()} 写入',
         SyncState.writing => '正在写入…',
         SyncState.written =>
           '已写入 ${controller.justWritten.map(baseName).join('、')}',
         SyncState.failed => '修改仍在编辑进度里，没有丢',
         SyncState.conflict => '保存前会先问怎么处理',
-        SyncState.noOutput => '任务没有跑完，字幕文件还没生成 · ⌘S 生成',
+        SyncState.noOutput => '任务没有跑完，字幕文件还没生成 · ${EditorKeys.save.label()} 生成',
       };
