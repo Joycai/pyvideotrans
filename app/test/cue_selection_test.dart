@@ -107,6 +107,12 @@ void main() {
       expect(r.extendTo(6, [2, 3, 4, 6]).positions, {4, 6});
     });
 
+    test('单选时锚点被筛掉也换成焦点', () {
+      final s = const CueSelection.single(1).toggle(4, all).toggle(4, all);
+      expect((s.focus, s.anchor), (1, 4));
+      expect(s.restrictTo({0, 1, 2}), const CueSelection.single(1));
+    });
+
     test('全都看得见时原样返回', () {
       final s = const CueSelection.single(1).extendTo(4, all);
       expect(identical(s.restrictTo(all.toSet()), s), isTrue);
@@ -138,10 +144,9 @@ void main() {
         final r = s.restrictTo(order.toSet());
         expect(r.positions, contains(r.focus));
         expect(r.focus, s.focus);
-        if (r.isMultiple) {
-          expect(order, containsAll(r.positions));
-          expect(order, contains(r.anchor));
-        }
+        if (r.isMultiple) expect(order, containsAll(r.positions));
+        // 焦点看得见时锚点一定看得见，Shift 扩选总有起点。
+        if (order.contains(r.focus)) expect(order, contains(r.anchor));
 
         expect(s.positions, isNotEmpty);
         expect(s.positions, contains(s.focus));

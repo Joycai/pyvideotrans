@@ -513,6 +513,18 @@ void main() {
       expect(c.selectedPositions, [4, 5]);
     });
 
+    test('⌘ 取消回到单选后，起点那行被筛掉：Shift 扩选从焦点起算', () async {
+      final c = await _speakerController()
+        ..selectWith(0)
+        ..selectWith(3, toggle: true)
+        ..selectWith(3, toggle: true); // 回到只选下标 0，锚点留在下标 3
+      c
+        ..toggleSpeakerFilter(0)
+        ..toggleSpeakerFilter(1) // 下标 3（说话人3）被筛掉
+        ..selectWith(4, extend: true);
+      expect(c.selectedPositions, [0, 1, 2, 4]);
+    });
+
     test('J/K、Esc 回到单选', () async {
       final c = await _speakerController();
       void multi() => c
