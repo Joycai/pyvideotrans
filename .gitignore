@@ -72,3 +72,5 @@ app/.flutter-plugins-dependencies
 
 # 本地构建配置（Debug/Release.build.xml）
 /.build/
+
+.claude/tasks/
