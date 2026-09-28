@@ -185,7 +185,7 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('Shift 扩选、⌘ 与 Ctrl 切换，检视面板换成批量形态', (tester) async {
+    testWidgets('Shift 扩选、主修饰键切换，检视面板换成批量形态', (tester) async {
       final c = await _controller();
       await _pump(tester, c);
       await click(tester, 0);
@@ -196,7 +196,7 @@ void main() {
       expect(c.selectedPositions, [0, 1, 2]);
       await click(tester, 4, LogicalKeyboardKey.controlLeft);
       expect(c.selectedPositions, [0, 1, 2, 4]);
-      await click(tester, 1, LogicalKeyboardKey.metaLeft);
+      await click(tester, 1, LogicalKeyboardKey.controlLeft);
       expect(c.selectedPositions, [0, 2, 4]);
       expect(find.text('已选 3 条字幕'), findsOneWidget);
       expect(find.text('001、003、005'), findsOneWidget);
@@ -205,7 +205,17 @@ void main() {
       await click(tester, 3);
       expect(c.selectedPositions, [3]);
       expect(find.textContaining('已选'), findsNothing);
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+    testWidgets('macOS 上 ⌘+点击切换，Ctrl+点击不算（留给系统右键）', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      await click(tester, 2, LogicalKeyboardKey.metaLeft);
+      expect(c.selectedPositions, [0, 2]);
+      await click(tester, 4, LogicalKeyboardKey.controlLeft);
+      expect(c.selectedPositions, [4]);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets('Esc 退出多选，焦点不变', (tester) async {
       final c = await _controller();
@@ -430,11 +440,15 @@ void main() {
         ),
       );
       await tester.pump();
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+      // 主修饰键按平台：macOS 上 ⌘S，Ctrl+S 不算。
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       expect(saved, 1);
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets('切走分区不释放预览：媒体跟着 controller 走', (tester) async {
       final c = await _controller();

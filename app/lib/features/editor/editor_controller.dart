@@ -545,6 +545,17 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     _focusOn(visible[position]);
     notifyListeners();
   }
+  /// Shift+↑/↓：焦点在可见行里挪一格，选区从锚点扩到那一格。焦点被筛掉时
+  /// 没有可扩的，退成普通移动。
+  void extendStep(int delta) {
+    final visible = visiblePositions;
+    final at = visible.indexOf(selected);
+    if (at < 0) return step(delta);
+    final target = visible[(at + delta).clamp(0, visible.length - 1)];
+    _selection = _effective.extendTo(target, visible);
+    notifyListeners();
+  }
+
 
   void _push() {
     _undo.add(document);

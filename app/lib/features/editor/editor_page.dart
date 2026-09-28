@@ -2,10 +2,8 @@ import 'dart:async';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../core/theme/tokens.dart';
-import '../../core/widgets/text_focus.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/srt.dart';
 import '../../domain/task_control.dart';
@@ -15,6 +13,7 @@ import 'editor_banners.dart';
 import 'editor_controller.dart';
 import 'editor_drop_zone.dart';
 import 'editor_open_form.dart';
+import 'editor_shortcuts.dart';
 import 'editor_widgets.dart';
 import 'inspector.dart';
 import 'speaker_manager.dart';
@@ -50,7 +49,8 @@ class EditorPage extends StatefulWidget {
 }
 
 class EditorPageState extends State<EditorPage> {
-  final _focus = FocusNode();
+  /// 字幕列表的焦点：单键快捷键只在它有焦点时生效。
+  final _tableFocus = FocusNode(debugLabel: 'CueTable');
 
   EditorController get controller => widget.controller;
 
@@ -58,8 +58,10 @@ class EditorPageState extends State<EditorPage> {
   void initState() {
     super.initState();
     _listen(controller);
-    // 进页面就接管键盘，J/K 不用先点一下列表才生效。
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
+    // 进页面就让字幕列表拿焦点，J/K 不用先点一下列表才生效。
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _tableFocus.requestFocus(),
+    );
   }
 
   @override
@@ -76,7 +78,7 @@ class EditorPageState extends State<EditorPage> {
     _unlisten(controller);
     // 播放器随 controller 留着，页面收起时只暂停，回来还在原位置。
     unawaited(controller.media.pause());
-    _focus.dispose();
+    _tableFocus.dispose();
     super.dispose();
   }
 
@@ -157,78 +159,6 @@ class EditorPageState extends State<EditorPage> {
     if (!controller.locked) showSpeakerManager(context, controller);
   }
 
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-    final keyboard = HardwareKeyboard.instance;
-    final command = keyboard.isMetaPressed || keyboard.isControlPressed;
-    if (command && event.logicalKey == LogicalKeyboardKey.keyS) {
-      _save();
-      return KeyEventResult.handled;
-    }
-
-    // 输入框获得焦点时不抢 J/K 与数字，否则打不了字。
-    if (isEditingText()) return KeyEventResult.ignored;
-
-    final digit = _digits[event.logicalKey];
-    if (digit != null && !command) {
-      final speakers = controller.speakers;
-      if (digit > speakers.length) return KeyEventResult.ignored;
-      controller.assignSpeaker(
-        speakers[digit - 1].id,
-        run: keyboard.isShiftPressed,
-      );
-      return KeyEventResult.handled;
-    }
-
-    if (event.logicalKey == LogicalKeyboardKey.escape &&
-        controller.multiSelected) {
-      controller.clearMultiSelection();
-      return KeyEventResult.handled;
-    }
-
-    final playback = controller.media.playback;
-    switch (event.logicalKey) {
-      case LogicalKeyboardKey.keyJ:
-      case LogicalKeyboardKey.arrowDown:
-        controller.step(1);
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.keyK:
-      case LogicalKeyboardKey.arrowUp:
-        controller.step(-1);
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.enter:
-        controller.toggleReviewed();
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.keyZ when command:
-        controller.undo();
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.space when playback != null:
-        playback.toggle();
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.arrowLeft when playback != null:
-        playback.nudge(const Duration(seconds: -1));
-        return KeyEventResult.handled;
-      case LogicalKeyboardKey.arrowRight when playback != null:
-        playback.nudge(const Duration(seconds: 1));
-        return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  static final _digits = {
-    LogicalKeyboardKey.digit1: 1,
-    LogicalKeyboardKey.digit2: 2,
-    LogicalKeyboardKey.digit3: 3,
-    LogicalKeyboardKey.digit4: 4,
-    LogicalKeyboardKey.digit5: 5,
-    LogicalKeyboardKey.digit6: 6,
-    LogicalKeyboardKey.digit7: 7,
-    LogicalKeyboardKey.digit8: 8,
-    LogicalKeyboardKey.digit9: 9,
-  };
-
   @override
   Widget build(BuildContext context) {
     final table = Row(
@@ -237,6 +167,7 @@ class EditorPageState extends State<EditorPage> {
         Expanded(
           child: CueTable(
             controller: controller,
+            focusNode: _tableFocus,
             onManageSpeakers: controller.locked ? null : manageSpeakers,
             onMountTranslation: widget.onMountTranslation,
           ),
@@ -274,9 +205,10 @@ class EditorPageState extends State<EditorPage> {
           );
 
     final onDrop = widget.onDropFiles;
-    return Focus(
-      focusNode: _focus,
-      onKeyEvent: _onKey,
+    return EditorPageShortcuts(
+      controller: controller,
+      tableFocus: _tableFocus,
+      onSave: _save,
       child: onDrop == null
           ? page
           : EditorDropZone(

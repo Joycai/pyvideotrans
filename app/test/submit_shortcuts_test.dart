@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -67,7 +66,6 @@ void main() {
     });
 
     testWidgets('主修饰键+Enter 在哪都提交，按平台区分', (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       await pump(tester);
       await focus(tester, 'multi');
       await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
@@ -78,8 +76,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       expect(calls, ['submit']);
-      debugDefaultTargetPlatformOverride = null;
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
   });
 
   group('Esc', () {

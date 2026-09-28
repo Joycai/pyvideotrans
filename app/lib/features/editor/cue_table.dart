@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/shortcuts/app_shortcut.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/indicators.dart';
@@ -9,6 +10,7 @@ import 'cue_table_rows.dart';
 import 'cue_table_toolbar.dart';
 import 'editor_controller.dart';
 import 'editor_session.dart';
+import 'editor_shortcuts.dart';
 import 'editor_widgets.dart';
 
 /// 列宽与设计稿一致。null 为弹性列。
@@ -26,11 +28,15 @@ class CueTable extends StatelessWidget {
   const CueTable({
     super.key,
     required this.controller,
+    required this.focusNode,
     this.onManageSpeakers,
     this.onMountTranslation,
   });
 
   final EditorController controller;
+
+  /// 字幕列表的焦点。单键快捷键挂在它上面，见 [CueTableShortcuts]。
+  final FocusNode focusNode;
   final VoidCallback? onManageSpeakers;
 
   /// 只挂了原文时，译文表头上的「+ 挂载译文…」。
@@ -76,7 +82,10 @@ class CueTable extends StatelessWidget {
                 : null,
           ),
           Expanded(
-            child: visible.isEmpty
+            child: CueTableShortcuts(
+              controller: controller,
+              focusNode: focusNode,
+              child: visible.isEmpty
                 ? Center(
                     child: Text(
                       doc.cues.isEmpty ? '这份字幕还没有内容' : '没有符合条件的字幕',
@@ -87,12 +96,14 @@ class CueTable extends StatelessWidget {
                   )
                 : _CueList(
                     controller: controller,
+                    focusNode: focusNode,
                     visible: visible,
                     columns: columns,
                     speakers: speakers,
                     compact: compact,
                     translated: translated,
                   ),
+            ),
           ),
           _Footer(
             controller: controller,
@@ -110,6 +121,7 @@ class CueTable extends StatelessWidget {
 class _CueList extends StatefulWidget {
   const _CueList({
     required this.controller,
+    required this.focusNode,
     required this.visible,
     required this.columns,
     required this.speakers,
@@ -118,6 +130,8 @@ class _CueList extends StatefulWidget {
   });
 
   final EditorController controller;
+  final FocusNode focusNode;
+
   /// 看得见的行在文档里的下标，按显示顺序。
   final List<int> visible;
   final List<double?> columns;
@@ -205,12 +219,14 @@ class _CueListState extends State<_CueList> {
           selected: chosen.contains(position),
           focused: position == controller.selected,
           onTap: () {
-            // Shift 优先：⌘+Shift 与 Ctrl+Shift 都按扩选处理。
-            final keyboard = HardwareKeyboard.instance;
+            // 点行就让列表拿焦点：单键快捷键跟着生效。
+            widget.focusNode.requestFocus();
+            // Shift 优先：主修饰键 + Shift 也按扩选处理。主修饰键按平台区分，
+            // macOS 上的 Ctrl+点击是系统右键。
             controller.selectWith(
               position,
-              extend: keyboard.isShiftPressed,
-              toggle: keyboard.isMetaPressed || keyboard.isControlPressed,
+              extend: HardwareKeyboard.instance.isShiftPressed,
+              toggle: isPrimaryModifierPressed(),
             );
           },
         );
