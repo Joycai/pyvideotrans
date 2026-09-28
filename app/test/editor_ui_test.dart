@@ -15,6 +15,7 @@ import 'package:subtitle_studio/features/editor/editor_page.dart';
 import 'package:subtitle_studio/features/editor/editor_page_actions.dart';
 import 'package:subtitle_studio/features/editor/editor_prompts.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
+import 'package:subtitle_studio/features/editor/editor_shortcuts.dart';
 import 'package:subtitle_studio/features/editor/editor_widgets.dart';
 import 'package:subtitle_studio/features/editor/inspector_selection_editor.dart';
 import 'package:subtitle_studio/features/editor/inspector_speaker_field.dart';
@@ -213,8 +214,9 @@ void main() {
       await click(tester, 0);
       await click(tester, 2, LogicalKeyboardKey.metaLeft);
       expect(c.selectedPositions, [0, 2]);
+      // Ctrl+点击什么都不动，已有的多选也不清。
       await click(tester, 4, LogicalKeyboardKey.controlLeft);
-      expect(c.selectedPositions, [4]);
+      expect(c.selectedPositions, [0, 2]);
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets('Esc 退出多选，焦点不变', (tester) async {
@@ -431,11 +433,22 @@ void main() {
         ..physicalSize = const Size(1440, 900)
         ..devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
+      // ⌘S 挂在编辑器分区范围（main.dart 里包住整个外壳），交给同一个
+      // 上层保存流程。
+      final page = GlobalKey<EditorPageState>();
       await tester.pumpWidget(
         MaterialApp(
           theme: lightTheme,
-          home: Scaffold(
-            body: EditorPage(controller: c, onSave: () async => saved++),
+          home: EditorShortcuts(
+            target: () => page.currentState?.shortcutTarget,
+            onSave: () => saved++,
+            child: Scaffold(
+              body: EditorPage(
+                key: page,
+                controller: c,
+                onSave: () async => saved++,
+              ),
+            ),
           ),
         ),
       );

@@ -15,6 +15,7 @@ import 'features/editor/editor_open_form.dart';
 import 'features/editor/editor_open_page.dart';
 import 'features/editor/editor_page.dart';
 import 'features/editor/editor_prompts.dart';
+import 'features/editor/editor_shortcuts.dart';
 import 'features/editor/editor_workspace.dart';
 import 'features/settings/settings_page.dart';
 import 'features/shared/page_chrome.dart';
@@ -273,13 +274,21 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: _themeMode,
-      home: AppShell(
-        section: _section,
-        onSectionChanged: _go,
-        chrome: () => _chrome,
-        status: () => _status,
-        live: _live,
-        child: _body,
+      // 编辑器的组合键包住整个外壳：顶栏的浮层开着时焦点在顶栏底下，挂在
+      // 编辑页里就收不到。不在编辑器分区时动作不启用，按键照常外传。
+      home: EditorShortcuts(
+        target: () => _section == AppSection.editor
+            ? _editorKey.currentState?.shortcutTarget
+            : null,
+        onSave: () => _workspace.save(),
+        child: AppShell(
+          section: _section,
+          onSectionChanged: _go,
+          chrome: () => _chrome,
+          status: () => _status,
+          live: _live,
+          child: _body,
+        ),
       ),
     );
   }

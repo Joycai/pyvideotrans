@@ -237,8 +237,12 @@ class _CueListState extends State<_CueList> {
           selected: chosen.contains(position),
           focused: position == controller.selected,
           onTap: () {
-            // Shift 优先：主修饰键 + Shift 也按扩选处理。主修饰键按平台区分，
-            // macOS 上的 Ctrl+点击是系统右键。
+            // macOS 上 Ctrl+点击按惯例是右键。Flutter 报成带 Ctrl 的普通点击，
+            // 照普通点击处理会把已有的多选清掉；这里没有右键菜单，干脆不动。
+            if (usesCommandKey() && HardwareKeyboard.instance.isControlPressed) {
+              return;
+            }
+            // Shift 优先：主修饰键 + Shift 也按扩选处理。主修饰键按平台区分。
             controller.selectWith(
               position,
               extend: HardwareKeyboard.instance.isShiftPressed,

@@ -88,9 +88,11 @@ class _SubmitAction extends Action<_SubmitIntent> {
   _SubmitAction(this.onSubmit);
   final VoidCallback onSubmit;
 
+  // 输入法组字时 Enter 是选定候选：用拼音打文件后缀、模型名时，按回车
+  // 选字不能顺手把任务提交出去。
   @override
   bool isEnabled(_SubmitIntent intent) =>
-      intent.force || !focusedControlTakesEnter();
+      !isComposingText() && (intent.force || !focusedControlTakesEnter());
 
   @override
   void invoke(_SubmitIntent intent) => onSubmit();
@@ -101,8 +103,10 @@ class _DismissAction extends Action<_DismissIntent> {
   final VoidCallback? onDismiss;
   final FocusNode home;
 
+  // 组字时 Esc 是取消候选。
   @override
-  bool isEnabled(_DismissIntent intent) => isEditingText() || onDismiss != null;
+  bool isEnabled(_DismissIntent intent) =>
+      !isComposingText() && (isEditingText() || onDismiss != null);
 
   @override
   void invoke(_DismissIntent intent) {

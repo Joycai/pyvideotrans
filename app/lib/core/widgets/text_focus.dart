@@ -19,3 +19,15 @@ bool isEditingText({bool multiline = false}) {
   if (editable == null) return false;
   return !multiline || editable.maxLines != 1;
 }
+
+/// 焦点所在的输入框正在用输入法组字（拼音、假名还没选定）。这时 Enter 是
+/// 选定候选、Esc 是取消候选，页面快捷键都得让出去。
+bool isComposingText() {
+  final context = FocusManager.instance.primaryFocus?.context;
+  if (context == null) return false;
+  final widget = context.widget;
+  final editable = widget is EditableText
+      ? widget
+      : context.findAncestorWidgetOfExactType<EditableText>();
+  return editable?.controller.value.composing.isValid ?? false;
+}

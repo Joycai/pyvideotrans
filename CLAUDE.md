@@ -113,9 +113,10 @@ Python 后端都说 OpenAI 兼容协议，于是共用 `OpenAiCompatibleAsrProvi
   - 不写死「⌘S」。
 - 编辑器的单键（J/K、数字、Enter、空格……）只挂在字幕列表自己的 `Focus` 上（`CueTableShortcuts`），不包工具栏。焦点在输入框、按钮、浮层里时按键到不了这里。
   - 新加单键时放进这个范围，不要回到「一个全局处理函数 + isEditingText」的写法。
-- ⌘ 组合挂在整个编辑页（`EditorPageShortcuts`）。页面级绑定比输入框自带的快捷键先拿到按键，所以和输入框撞键的（⌘Z）要在 Action 的 `isEnabled` 里让出去。
+- ⌘ 组合挂在编辑器分区（`EditorShortcuts`，`main.dart` 里包住整个应用外壳，顶栏浮层开着时也收得到）。这一层比输入框自带的快捷键先拿到按键，所以和输入框撞键的（⌘Z）要在 Action 的 `isEnabled` 里让出去；输入法组字时（`isComposingText`）Enter、Esc 也要让。
 - 条件不满足的动作返回「未启用」而不是吞掉按键，按键才会继续传给真正该处理它的控件。
 - Esc 由最里层先处理：浮层 → 对话框 → 输入框 → 字幕表。
+- macOS 上不用 Ctrl+点击（系统右键）和 ⌘⇧3/4/5（系统截屏）。
 
 ### 持久化与外部依赖
 

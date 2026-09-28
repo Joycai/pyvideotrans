@@ -11,8 +11,9 @@ import '../../core/shortcuts/app_shortcut.dart';
 /// - 字幕表范围（`CueTableShortcuts`）：单键，只挂在字幕列表自己的焦点上。
 ///   焦点在输入框、按钮、浮层里时按键根本到不了这里，不用判断「是不是在
 ///   打字」。
-/// - 编辑页范围（`EditorPageShortcuts`）：带主修饰键的组合，焦点在编辑页
-///   任何地方都生效，打字时也能指派说话人、标记已校对、保存。
+/// - 编辑器分区范围（`EditorShortcuts`，挂在应用外壳外面，连顶栏一起包住）：
+///   带主修饰键的组合，焦点在编辑器任何地方都生效，打字时也能指派说话人、
+///   标记已校对、保存。
 abstract final class EditorKeys {
   // —— 字幕表范围 ——
   static const next = [
@@ -55,7 +56,7 @@ abstract final class EditorKeys {
   );
   static const exitMultiSelect = AppShortcut(LogicalKeyboardKey.escape);
 
-  // —— 编辑页范围 ——
+  // —— 编辑器分区范围 ——
   static const save = AppShortcut(LogicalKeyboardKey.keyS, primary: true);
   static const undo = AppShortcut(
     LogicalKeyboardKey.keyZ,

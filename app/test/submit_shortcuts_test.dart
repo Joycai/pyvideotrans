@@ -79,6 +79,22 @@ void main() {
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
   });
 
+  testWidgets('输入法组字时 Enter 是选定候选、Esc 是取消候选，都不当快捷键', (tester) async {
+    await pump(tester);
+    await focus(tester, 'single');
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'ni',
+        selection: TextSelection.collapsed(offset: 2),
+        composing: TextRange(start: 0, end: 2),
+      ),
+    );
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    expect(calls, isEmpty);
+  });
+
   group('Esc', () {
     testWidgets('打字时只失焦，再按一次才关闭', (tester) async {
       await pump(tester);

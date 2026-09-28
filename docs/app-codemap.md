@@ -89,7 +89,7 @@ core/       domain/ ←──── services/
   `SingleLineField` 是所有单行输入（设置页、密钥、模型名、转码后缀 / 额外参数）的唯一实现，
   外部值变化且无焦点时同步进框。
 - `form_layout.dart`：整行可点、链接文字、单选行、两列与平铺段。
-- `text_focus.dart`：`isEditingText`，焦点在不在输入框里。只剩两处用：`SubmitShortcuts`（打字时 Esc 先失焦、多行框里让回车），以及编辑页的 ⌘Z 在打字时让给输入框。编辑器的单键靠焦点范围隔开，不用它。
+- `text_focus.dart`：`isEditingText`，焦点在不在输入框里。只剩两处用：`SubmitShortcuts`（打字时 Esc 先失焦、多行框里让回车），以及编辑器的 ⌘Z 在打字时让给输入框。同文件的 `isComposingText` 判断输入法是否在组字，组字时 Enter、Esc 都让给输入法。编辑器的单键靠焦点范围隔开，不用它们。
 - `glass_panel.dart`：玻璃卡片与内容面板。
 - `indicators.dart`：状态标签、状态胶囊（`StateChip`，文件表状态列与编码器卡片）、时间码、渐变进度条、状态点。
 - `note_bar.dart`：36px 中性提示条（拖放拒收、忽略了音视频），右侧可带动作或关闭。
@@ -110,7 +110,7 @@ core/       domain/ ←──── services/
 | `srt.dart` | SRT / VTT 解析与序列化、时长格式（`formatDuration`，可固定写出小时位）、说话人标签检测、导出字段 |
 | `line_wrap.dart` | 导出时折行；CJK 与拉丁文字使用不同上限 |
 | `segmenter.dart` | 识别结果的重叠修正、短句合并、长句拆分 |
-| `cue_selection.dart` | 字幕表选区 `CueSelection`：焦点、选中集合与 Shift 锚点；⌘/Ctrl 切换、Shift 只在可见行里扩选 |
+| `cue_selection.dart` | 字幕表选区 `CueSelection`：焦点、选中集合与 Shift 锚点；主修饰键切换、Shift 只在可见行里扩选 |
 | `subtitle_pairing.dart` | 本地原文与译文字幕的配对模式、统计与合并 |
 | `speech_segments.dart` | 静音区间 → 可逐段识别的语音区间 |
 | `recognition_checkpoint.dart` | 段级识别检查点，支持失败、取消和重启后的续跑 |
@@ -272,7 +272,7 @@ core/       domain/ ←──── services/
 
 ### 编辑页
 
-- `editor_page.dart`：快捷键、生命周期、页面组合。不读写文件、不持有播放器：预览从 `controller.media` 拿，⌘S 交给上层的 `onSave`。
+- `editor_page.dart`：页面组合、焦点作用域与字幕表焦点（焦点落到作用域本身时转给列表）、生命周期。不读写文件、不持有播放器：预览从 `controller.media` 拿，保存交给上层的 `onSave`。键位与动作在 `editor_shortcuts.dart`。
 - `editor_drop_zone.dart`：拖文件到编辑页的左右两块落区。
 - `editor_banners.dart`：只读横幅与恢复横幅。
 - `editor_chrome.dart`：编辑器分区的顶栏内容、副标题与状态栏文案。
@@ -308,7 +308,7 @@ core/       domain/ ←──── services/
 - `editor_keys.dart`：`EditorKeys` 登记表，只有键位，不依赖控制器，控制器与各处文案也引用它。
 - `editor_shortcuts.dart`：两个作用范围。
   - `CueTableShortcuts`：单键，只包住列表区域，焦点在列表时才生效。
-  - `EditorPageShortcuts`：⌘ 组合，包住整个编辑页。
+  - `EditorShortcuts`：⌘ 组合与「Esc 回到字幕表」，由 `main.dart` 挂在应用外壳外面，连顶栏一起包住；不在编辑器分区时动作不启用。
   - 另有页脚提示与完整快捷键表的生成。
 
 其余：`editor_widgets.dart`（编辑器专用小件；`AnchoredPopover` 打开时焦点进浮层自己的作用域，Esc 关闭，关闭后焦点还回去）、`speaker_badge.dart`、`speaker_manager.dart`。

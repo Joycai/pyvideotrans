@@ -126,55 +126,77 @@ class CueTableShortcuts extends StatelessWidget {
   }
 }
 
-/// 编辑页范围：包住整个编辑页。
-class EditorPageShortcuts extends StatelessWidget {
-  const EditorPageShortcuts({
+/// 编辑器分区范围的快捷键要作用的对象：当前会话与它的字幕列表焦点。
+typedef EditorShortcutTarget = ({
+  EditorController controller,
+  FocusNode tableFocus,
+});
+
+/// 编辑器分区范围：带主修饰键的组合与「Esc 回到字幕表」。
+///
+/// 挂在应用外壳外面，而不是编辑页里：顶栏（同步状态、来源、视图的浮层）
+/// 不在编辑页的子树里，浮层开着时焦点在顶栏底下，挂在编辑页上的 ⌘S 就收
+/// 不到了 —— 偏偏同步浮层正写着「按 ⌘S 才会更新」。
+///
+/// [target] 不在编辑器分区、或还没有会话时返回 null：所有动作不启用，按键
+/// 照常外传，别的分区不受影响。
+class EditorShortcuts extends StatelessWidget {
+  const EditorShortcuts({
     super.key,
-    required this.controller,
-    required this.tableFocus,
+    required this.target,
     required this.onSave,
     required this.child,
   });
 
-  final EditorController controller;
-
-  /// 字幕列表的焦点：Esc 把焦点还给它。
-  final FocusNode tableFocus;
+  final EditorShortcutTarget? Function() target;
   final VoidCallback onSave;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final c = controller;
     return Shortcuts(
       shortcuts: {
         EditorKeys.save.activator(): const _SaveIntent(),
         EditorKeys.undo.activator(): const _UndoIntent(),
-        for (final (i, key) in EditorKeys.digits.indexed) ...{
+        // 只有 ⌘数字，没有 ⌘⇧数字：macOS 上 ⌘⇧3/4/5 是系统截屏键，应用收不到。
+        // 按连续段指派用字幕表里的 Shift+数字。
+        for (final (i, key) in EditorKeys.digits.indexed)
           AppShortcut(key, primary: true).activator(): _AssignIntent(i + 1),
-          AppShortcut(key, primary: true, shift: true).activator():
-              _AssignIntent(i + 1, run: true),
-        },
         EditorKeys.toggleReviewedAnywhere.activator():
             const _ToggleReviewedIntent(),
         EditorKeys.backToTable.activator(): const _BackToTableIntent(),
       },
       child: Actions(
         actions: {
-          _SaveIntent: _Act<_SaveIntent>((_) => onSave()),
-          // 页面级绑定比输入框自带的 ⌘Z 离焦点更近，会先拿到按键。打字时
+          _SaveIntent: _Act<_SaveIntent>(
+            (_) => onSave(),
+            enabled: (_) => target() != null,
+          ),
+          // 编辑器级绑定比输入框自带的 ⌘Z 离焦点更近，会先拿到按键。打字时
           // 让出去：输入框里的 ⌘Z 撤销的是刚打的字，不是整份文档。
           _UndoIntent: _Act<_UndoIntent>(
-            (_) => c.undo(),
-            enabled: (_) => !isEditingText(),
+            (_) => target()!.controller.undo(),
+            enabled: (_) => target() != null && !isEditingText(),
           ),
-          _AssignIntent: _assignAction(c),
+          _AssignIntent: _Act<_AssignIntent>(
+            (i) => _assign(target()!.controller, i),
+            enabled: (i) =>
+                i.n <= (target()?.controller.speakers.length ?? 0),
+          ),
           _ToggleReviewedIntent: _Act<_ToggleReviewedIntent>(
-            (_) => c.toggleReviewed(),
+            (_) => target()!.controller.toggleReviewed(),
+            enabled: (_) => target() != null,
           ),
+          // 输入法组字时 Esc 是取消候选，不能被抢走。
           _BackToTableIntent: _Act<_BackToTableIntent>(
-            (_) => tableFocus.requestFocus(),
-            enabled: (_) => !tableFocus.hasFocus && tableFocus.context != null,
+            (_) => target()!.tableFocus.requestFocus(),
+            enabled: (_) {
+              final focus = target()?.tableFocus;
+              return focus != null &&
+                  !focus.hasFocus &&
+                  focus.context != null &&
+                  !isComposingText();
+            },
           ),
         },
         child: child,
@@ -185,9 +207,12 @@ class EditorPageShortcuts extends StatelessWidget {
 
 /// 名单里没有第 N 位时不启用，按键照常外传。
 _Act<_AssignIntent> _assignAction(EditorController c) => _Act<_AssignIntent>(
-  (i) => c.assignSpeaker(c.speakers[i.n - 1].id, run: i.run),
+  (i) => _assign(c, i),
   enabled: (i) => i.n <= c.speakers.length,
 );
+
+void _assign(EditorController c, _AssignIntent i) =>
+    c.assignSpeaker(c.speakers[i.n - 1].id, run: i.run);
 
 class _StepIntent extends Intent {
   const _StepIntent(this.delta, {this.extend = false});

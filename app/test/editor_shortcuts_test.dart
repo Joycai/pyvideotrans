@@ -10,6 +10,7 @@ import 'package:subtitle_studio/features/editor/cue_table_rows.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_page.dart';
 import 'package:subtitle_studio/features/editor/editor_shortcuts.dart';
+import 'package:subtitle_studio/features/editor/editor_widgets.dart';
 import 'package:subtitle_studio/features/editor/speaker_manager.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
@@ -32,14 +33,45 @@ void main() {
       ..physicalSize = const Size(1440, 900)
       ..devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
+    final page = GlobalKey<EditorPageState>();
     await tester.pumpWidget(
       MaterialApp(
         theme: lightTheme,
-        home: Scaffold(
-          body: SizedBox(
-            width: 1332,
-            height: 800,
-            child: EditorPage(controller: c, onSave: () async => saved++),
+        // 与 main.dart 一样：组合键包住整个外壳，顶栏也在它底下。
+        home: EditorShortcuts(
+          target: () => page.currentState?.shortcutTarget,
+          onSave: () => saved++,
+          child: Scaffold(
+            body: Column(
+              children: [
+                // 模拟顶栏：在编辑页的子树之外，有自己的浮层和按钮。
+                SizedBox(
+                  height: 40,
+                  child: Row(
+                    children: [
+                      AnchoredPopover(
+                        width: 200,
+                        anchor: (context, toggle, open) => TextButton(
+                          onPressed: toggle,
+                          child: const Text('顶栏浮层'),
+                        ),
+                        popover: (context, close) => const Text('浮层内容'),
+                      ),
+                      TextButton(onPressed: () {}, child: const Text('顶栏按钮')),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  width: 1332,
+                  height: 800,
+                  child: EditorPage(
+                    key: page,
+                    controller: c,
+                    onSave: () async => saved++,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -226,6 +258,65 @@ void main() {
         TargetPlatform.windows,
       }),
     );
+  });
+
+  group('编辑器分区范围', () {
+    testWidgets('顶栏浮层开着时 ⌘S 照样保存', (tester) async {
+      await pump(tester);
+      await tester.tap(find.text('顶栏浮层'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('浮层内容'), findsOneWidget);
+      await press(tester, LogicalKeyboardKey.keyS, command: true);
+      expect(saved, 1);
+    }, variant: mac);
+
+    testWidgets('没有 ⌘⇧数字（macOS 截屏键）', (tester) async {
+      final c = await pump(tester);
+      c.select(0);
+      await tester.pump();
+      await focusSourceField(tester);
+      final before = c.document;
+      await press(
+        tester,
+        LogicalKeyboardKey.digit3,
+        command: true,
+        shift: true,
+      );
+      expect(identical(c.document, before), isTrue);
+    }, variant: mac);
+
+    testWidgets('Tab 走得出编辑页', (tester) async {
+      await pump(tester);
+      var escaped = false;
+      for (var i = 0; i < 80 && !escaped; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+        final label = FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<TextButton>();
+        escaped =
+            label != null &&
+            (label.child as Text?)?.data?.startsWith('顶栏') == true;
+      }
+      expect(escaped, isTrue);
+    }, variant: mac);
+
+    testWidgets('输入法组字时 Esc 让给输入法', (tester) async {
+      final c = await pump(tester);
+      c.select(0);
+      await tester.pump();
+      await focusSourceField(tester);
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'ni',
+          selection: TextSelection.collapsed(offset: 2),
+          composing: TextRange(start: 0, end: 2),
+        ),
+      );
+      await tester.pump();
+      await press(tester, LogicalKeyboardKey.escape);
+      expect(tableHasFocus(), isFalse);
+    }, variant: mac);
   });
 
   group('焦点在输入框', () {

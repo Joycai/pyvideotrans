@@ -55,7 +55,17 @@ class EditorPageState extends State<EditorPage> {
   /// 编辑页自己的焦点作用域。输入框点外面会 unfocus，焦点落到最近的作用域
   /// 上：没有这一层就落到路由上，在编辑页的快捷键之外，⌘S、Esc 全都收不到。
   /// 焦点落到作用域本身时转给字幕列表。
-  final _pageScope = FocusScopeNode(debugLabel: 'EditorPage');
+  ///
+  /// Tab 走到头时交给外层，否则编辑页成了一个出不去的圈，键盘走不到顶栏
+  /// 和导航栏。
+  final _pageScope = FocusScopeNode(
+    debugLabel: 'EditorPage',
+    traversalEdgeBehavior: TraversalEdgeBehavior.parentScope,
+  );
+
+  /// 给编辑器分区的快捷键（`EditorShortcuts`，挂在应用外壳外面）用。
+  EditorShortcutTarget get shortcutTarget =>
+      (controller: controller, tableFocus: _tableFocus);
 
   EditorController get controller => widget.controller;
 
@@ -218,20 +228,15 @@ class EditorPageState extends State<EditorPage> {
           );
 
     final onDrop = widget.onDropFiles;
-    return EditorPageShortcuts(
-      controller: controller,
-      tableFocus: _tableFocus,
-      onSave: _save,
-      child: FocusScope(
-        node: _pageScope,
-        child: onDrop == null
-            ? page
-            : EditorDropZone(
-                hasTranslation: controller.hasTranslations,
-                onDrop: onDrop,
-                child: page,
-              ),
-      ),
+    return FocusScope(
+      node: _pageScope,
+      child: onDrop == null
+          ? page
+          : EditorDropZone(
+              hasTranslation: controller.hasTranslations,
+              onDrop: onDrop,
+              child: page,
+            ),
     );
   }
 }
