@@ -9,6 +9,7 @@ import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/features/editor/cue_table_rows.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_page.dart';
+import 'package:subtitle_studio/features/editor/editor_shortcuts.dart';
 import 'package:subtitle_studio/features/editor/speaker_manager.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
@@ -194,6 +195,37 @@ void main() {
       expect(c.document.cues[0].speaker, target.id);
       expect(c.session.pendingEdits, before + 1);
     }, variant: mac);
+  });
+
+  group('提示文案', () {
+    testWidgets('页脚跟着列表有没有焦点变', (tester) async {
+      final c = await pump(tester);
+      c.select(0);
+      await tester.pump();
+      expect(find.textContaining('J/K 上下条'), findsOneWidget);
+      expect(find.textContaining('⌘S 保存'), findsOneWidget);
+      await focusSourceField(tester);
+      expect(find.textContaining('按 Esc 或点表格使用单键快捷键'), findsOneWidget);
+      expect(find.textContaining('J/K 上下条'), findsNothing);
+    }, variant: mac);
+
+    testWidgets(
+      '完整快捷键表按平台写修饰键，两个范围都列出',
+      (tester) async {
+        final sheet = editorShortcutSheet();
+        final mac = defaultTargetPlatform == TargetPlatform.macOS;
+        expect(sheet, startsWith('字幕表里'));
+        expect(sheet, contains('编辑页任意处'));
+        expect(sheet, contains(mac ? '⌘S　保存到字幕文件' : 'Ctrl+S　保存到字幕文件'));
+        expect(sheet, contains(mac ? '⇧↓ / ⇧↑' : 'Shift+↓ / Shift+↑'));
+        expect(sheet, contains('Esc　退出多选'));
+        expect(sheet, contains('Esc　回到字幕表'));
+      },
+      variant: const TargetPlatformVariant({
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+      }),
+    );
   });
 
   group('焦点在输入框', () {
