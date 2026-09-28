@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
@@ -272,6 +273,23 @@ void main() {
       await tester.tap(find.text('取消'));
       await tester.pumpAndSettle();
       expect(result, isNull);
+    });
+  });
+  group('键盘', () {
+    testWidgets('Enter 开始：接到对话框的提交上', (tester) async {
+      await open(tester, paths: ['/s/a.srt']);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(result, isNotNull);
+      expect(find.text('开始翻译'), findsNothing);
+    });
+
+    testWidgets('Esc 关闭对话框，不入队', (tester) async {
+      await open(tester, paths: ['/s/a.srt']);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(result, isNull);
+      expect(find.text('开始翻译'), findsNothing);
     });
   });
 }

@@ -7,7 +7,7 @@ import '../../core/widgets/text_focus.dart';
 /// 建任务入口（工作台页与两个对话框）共用的键盘约定：
 ///
 /// - Enter：提交。焦点所在的控件自己要用 Enter 时让给它 —— 多行输入框里
-///   是换行，按钮、下拉框上是按下它，不能被抢成提交。
+///   是换行，按钮（登记了「激活」动作的控件）上是按下它，不能被抢成提交。
 /// - ⌘Enter / Ctrl+Enter：无论焦点在哪都提交。
 /// - Esc：正在输入框里打字时只让输入框失焦；否则交给 [onDismiss]（对话框
 ///   关闭）。打字时按一下 Esc 就丢掉整个对话框，填的东西全没了。失焦时焦点
@@ -16,6 +16,9 @@ import '../../core/widgets/text_focus.dart';
 ///
 /// 条件不满足时动作是「未启用」而不是吃掉按键：按键继续往外传，交给真正
 /// 该处理它的地方。
+///
+/// 根节点 autofocus：同一作用域里先挂上的 autofocus 赢，所以子孙按钮再设
+/// autofocus 不会生效。要让某个按钮打开就有焦点，得在打开后显式请求。
 class SubmitShortcuts extends StatefulWidget {
   const SubmitShortcuts({
     super.key,
@@ -111,8 +114,8 @@ class _DismissAction extends Action<_DismissIntent> {
   }
 }
 
-/// 焦点所在的控件自己会处理 Enter：多行输入框（换行），或者按钮、下拉框
-/// 这类登记了「激活」动作的控件。
+/// 焦点所在的控件自己会处理 Enter：多行输入框（换行），或者按钮这类登记了
+/// 「激活」动作的控件。
 bool focusedControlTakesEnter() {
   if (isEditingText(multiline: true)) return true;
   final context = FocusManager.instance.primaryFocus?.context;
