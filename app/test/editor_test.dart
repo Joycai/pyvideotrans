@@ -306,7 +306,8 @@ void main() {
 
   group('多选', () {
     test('单击单选，Shift 扩选，⌘/Ctrl 切换', () async {
-      final c = await _speakerController()..selectWith(1);
+      final c = await _speakerController()
+        ..selectWith(1);
       expect(c.multiSelected, isFalse);
       c.selectWith(3, extend: true);
       expect(c.selectedPositions, [1, 2, 3]);
@@ -323,7 +324,8 @@ void main() {
 
     test('Shift 扩选只覆盖筛选后看得见的行', () async {
       // 周老师：第 3、5、6 条（下标 2、4、5）。
-      final c = await _speakerController()..setSpeakerFilter({1});
+      final c = await _speakerController()
+        ..setSpeakerFilter({1});
       c
         ..selectWith(2)
         ..selectWith(5, extend: true);
@@ -406,7 +408,8 @@ void main() {
     });
 
     test('条数变了回到单选：撤销一次拆分', () async {
-      final c = await _speakerController()..select(2);
+      final c = await _speakerController()
+        ..select(2);
       c.split();
       c
         ..selectWith(0)
@@ -416,15 +419,55 @@ void main() {
       expect(c.selected, lessThan(c.document.cues.length));
     });
 
-    test('播放跟随：多选时不动选区，单选时跟过去', () async {
+    test('撤销时条数没变，选区保留', () async {
       final c = await _speakerController()
         ..selectWith(0)
-        ..selectWith(2, toggle: true);
-      c.follow(4);
-      expect(c.selectedPositions, [0, 2]);
-      c.clearMultiSelection();
-      c.follow(4);
-      expect(c.selected, 4);
+        ..selectWith(2, extend: true);
+      c
+        ..assignSpeaker(2)
+        ..undo();
+      expect(c.selectedPositions, [0, 1, 2]);
+    });
+
+    test('多选下拆分、合并：回到单选，焦点在范围内', () async {
+      final c = await _speakerController()
+        ..selectWith(0)
+        ..selectWith(1, toggle: true);
+      c.mergeWithNext(); // 焦点下标 1 并入下标 2
+      expect(c.document.cues, hasLength(5));
+      expect(c.multiSelected, isFalse);
+
+      c
+        ..selectWith(4)
+        ..selectWith(1, toggle: true); // 焦点落在「欢迎谢谢邀请」
+      c.split();
+      expect(c.document.cues, hasLength(6));
+      expect(c.multiSelected, isFalse);
+      expect(c.selected, lessThan(c.document.cues.length));
+    });
+
+    test('提交后选中行被筛掉：回到单选，不会接着改到看不见的行', () async {
+      // 只看周老师（下标 2、4、5），多选后把它们改给 Mia。
+      final c = await _speakerController()
+        ..setSpeakerFilter({1});
+      c
+        ..selectWith(4)
+        ..selectWith(5, extend: true)
+        ..assignSpeaker(0);
+      expect(c.multiSelected, isFalse);
+    });
+
+    test('只读时多选改说话人不做任何事', () async {
+      final c = await _speakerController()
+        ..selectWith(5)
+        ..selectWith(0, extend: true); // 焦点在下标 0，缩短后仍在范围内
+      (c.session as TaskSession).task.status = TaskStatus.running;
+      // 流水线换了一份更短的文档，选区还没跟上。
+      c.session.document = SubtitleDocument(
+        cues: c.document.cues.take(2).toList(),
+      );
+      expect(() => c.assignSpeaker(1), returnsNormally);
+      expect(c.document.cues.map((x) => x.speaker), [0, 0]);
     });
 
     test('多选时 Enter 切换已校对不生效', () async {

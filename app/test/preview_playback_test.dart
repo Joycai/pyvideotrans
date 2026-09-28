@@ -18,7 +18,7 @@ Cue _cue(int index, int start, int end) =>
 /// 播放器跟着走的字幕表；这里的播放器是假的，用不到它的内容。
 class _Cues extends ChangeNotifier implements PlaybackCues {
   @override
-  SubtitleDocument get document => SubtitleDocument.empty;
+  SubtitleDocument document = SubtitleDocument.empty;
 
   @override
   int selected = 0;
@@ -27,7 +27,10 @@ class _Cues extends ChangeNotifier implements PlaybackCues {
   Cue? get current => null;
 
   @override
-  void follow(int indexInDocument) {}
+  void select(int indexInDocument) {}
+
+  @override
+  bool multiSelected = false;
 }
 
 void main() {
@@ -48,6 +51,30 @@ void main() {
       // 选中条不含播放头时不影响结果。
       expect(cueIndexAt(cues, 200, preferred: 2), 0);
       expect(cueIndexAt(cues, 200, preferred: 99), 0);
+    });
+  });
+
+  group('播放与选区的联动', () {
+    _Cues cues() => _Cues()
+      ..document = SubtitleDocument(
+        cues: [_cue(1, 0, 1000), _cue(2, 1000, 2000), _cue(3, 2000, 3000)],
+      );
+
+    test('播放中进入另一条就跟过去；暂停或已在这条时不动', () {
+      final c = cues();
+      expect(followTarget(c, 1500, playing: true), 1);
+      expect(followTarget(c, 1500, playing: false), isNull);
+      expect(followTarget(c, 500, playing: true), isNull);
+    });
+
+    test('多选时播放头不带动选区，播放中点选也不拽播放头', () {
+      final c = cues()..multiSelected = true;
+      expect(followTarget(c, 1500, playing: true), isNull);
+      expect(seeksOnSelect(c, playing: true), isFalse);
+      // 暂停时点选照常跳过去，画面停在那一条。
+      expect(seeksOnSelect(c, playing: false), isTrue);
+      c.multiSelected = false;
+      expect(seeksOnSelect(c, playing: true), isTrue);
     });
   });
 

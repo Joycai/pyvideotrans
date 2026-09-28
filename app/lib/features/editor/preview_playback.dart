@@ -19,8 +19,11 @@ abstract interface class PlaybackCues implements Listenable {
 
   Cue? get current;
 
-  /// 播放头进入第 [indexInDocument] 条时调用，由实现方决定跟不跟。
-  void follow(int indexInDocument);
+  void select(int indexInDocument);
+
+  /// 多选时播放与选区脱钩：边听边 ⌘+点击挑出同一个人的台词是多选最常见
+  /// 的用法，播放头不能冲掉选区，点选也不能把正在播的画面拽回去。
+  bool get multiSelected;
 }
 
 /// 检视面板的预览播放：把播放器与编辑器的选中条绑在一起。
@@ -28,6 +31,7 @@ abstract interface class PlaybackCues implements Listenable {
 /// - 选中条变了（点表格、J/K、翻译跳转）→ 播放头跳到那一条的开始，
 ///   正在播放的话继续播。
 /// - 播放中播放头进入另一条 → 选中那一条，表格跟着走。
+/// - 多选时两个方向都脱钩，见 [PlaybackCues.multiSelected]。
 ///
 /// 两个方向会互相触发，用 [_syncing] 挡住回声。播放器本身只在这里创建，
 /// 没有音视频的会话不会碰 media_kit。
@@ -131,7 +135,7 @@ class PreviewPlayback extends ChangeNotifier {
   void _onEditorChanged() {
     if (_disposed || cues.selected == _selected) return;
     _selected = cues.selected;
-    if (_syncing) return;
+    if (_syncing || !seeksOnSelect(cues, playing: playing)) return;
     final cue = cues.current;
     if (cue != null) seekTo(cue.startMs);
   }
@@ -139,19 +143,13 @@ class PreviewPlayback extends ChangeNotifier {
   void _onPosition(Duration p) {
     if (_disposed) return;
     position = p;
-    if (playing) {
-      final index = cueIndexAt(
-        cues.document.cues,
-        p.inMilliseconds,
-        preferred: cues.selected,
-      );
-      if (index != null && index != cues.selected) {
-        _syncing = true;
-        try {
-          cues.follow(index);
-        } finally {
-          _syncing = false;
-        }
+    final index = followTarget(cues, p.inMilliseconds, playing: playing);
+    if (index != null) {
+      _syncing = true;
+      try {
+        cues.select(index);
+      } finally {
+        _syncing = false;
       }
     }
     notifyListeners();
@@ -168,3 +166,15 @@ class PreviewPlayback extends ChangeNotifier {
     super.dispose();
   }
 }
+
+/// 播放头走到 [ms] 时选中该跟到哪一条；不用动时为 null。只在播放中跟，
+/// 多选时不跟。
+int? followTarget(PlaybackCues cues, int ms, {required bool playing}) {
+  if (!playing || cues.multiSelected) return null;
+  final index = cueIndexAt(cues.document.cues, ms, preferred: cues.selected);
+  return index == cues.selected ? null : index;
+}
+
+/// 选中条变了要不要把播放头拽过去：多选且正在播放时不拽。
+bool seeksOnSelect(PlaybackCues cues, {required bool playing}) =>
+    !(playing && cues.multiSelected);
