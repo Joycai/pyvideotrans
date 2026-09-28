@@ -502,8 +502,9 @@ class MergeFormController extends ChangeNotifier {
   /// 字幕 [subtitle] 是不是视频 [video] 的同名字幕：文件名去扩展名一样，
   /// 或去掉语言后缀（`.zh`、`.en-US`、`.zh-Hans`）后一样。
   ///
-  /// 后缀限定成语言代码的样子：上次合并旁挂的 `a.merged.srt`、`ep1.old.srt`
-  /// 不是 `a.mp4` / `ep1.mp4` 的字幕，挂上去会把整份时间轴压到第 1 段上。
+  /// 后缀限定成语言代码的样子：上次合并旁挂的 `a.merged.srt` 不是 `a.mp4` 的
+  /// 字幕，挂上去会把整份时间轴压到第 1 段上。局限：三个字母的普通词（`old`）
+  /// 与 ISO 639-2 代码形状相同，分不开，`ep1.old.srt` 仍会配给 `ep1.mp4`。
   static bool _matches(String subtitle, String video) {
     final stem = stemOf(baseName(video));
     final sub = stemOf(baseName(subtitle));

@@ -397,11 +397,18 @@ void main() {
     expect(job.outputPath, '${dir.path}/out.mp4');
   });
 
+  test('产物或旁挂位置被同名目录占着时也避让，不白跑一遍 ffmpeg', () async {
+    final a = file('a.srt', srt([(1, 2, '甲')]));
+    Directory('${dir.path}/out.srt').createSync();
+    final t = await run(task(options(subs: [a, null], sidecar: true)));
+    expect(t.status, TaskStatus.done, reason: t.error?.title);
+    expect((t.media! as MergeJob).outputPath, '${dir.path}/out-2.mp4');
+  });
+
   test('旁挂字幕写不出时不留下成片：续跑不会另写一份 -2', () async {
     final a = file('a.srt', srt([(1, 2, '甲')]));
-    // 旁挂位置被一个同名目录占着，写 SRT 时改名失败。File.existsSync 对
-    // 目录为假，所以避让规则看不见它。
-    Directory('${dir.path}/out.srt').createSync();
+    // 原子写的临时文件位置被一个目录占着，写旁挂时失败（避让只看最终路径）。
+    Directory('${dir.path}/out.srt.tmp').createSync();
     final t = await run(task(options(subs: [a, null], sidecar: true)));
     expect(t.status, TaskStatus.failed);
     expect(t.stage, TaskStage.merge);

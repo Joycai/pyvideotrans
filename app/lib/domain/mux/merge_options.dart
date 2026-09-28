@@ -95,7 +95,11 @@ class MergeOptions {
     if (!containers.contains(container)) return '合并不支持 ${container.label}';
     final stem = outputStem.trim();
     if (stem.isEmpty) return '文件名不能为空';
-    if (stem.contains(RegExp(r'[/\\]'))) return '文件名里不能有 / 或 \\';
+    // Windows 的文件名不收这些字符：放过去要到合并阶段改名时才失败，续跑也
+    // 过不去。各平台一样拦，规则只有一份。
+    if (stem.contains(RegExp(r'[/\\:*?"<>|]'))) {
+      return '文件名里不能有 / \\ : * ? " < > |';
+    }
     if (outputLocation == OutputLocation.custom &&
         (outputDir?.trim().isEmpty ?? true)) {
       return '还没有选择输出目录';

@@ -128,7 +128,10 @@ class MergeTaskPipeline {
     // 续跑沿用上次定下的路径：失败 / 取消时 .part 已删，完成阶段判为不能用的
     // 产物也删了，那里不会有我们自己的文件。若已经有文件，就是期间别的任务或
     // 别人放的，不能盖掉，重新避让。
-    bool taken(String p) => File(p).existsSync();
+    // 同名目录也算占着：File.existsSync 看不见目录，那样要白跑完一遍 ffmpeg
+    // 才在改名时失败，续跑还是一样。
+    bool taken(String p) =>
+        FileSystemEntity.typeSync(p) != FileSystemEntityType.notFound;
     final previous = job.outputPath;
     if (previous == null ||
         taken(previous) ||

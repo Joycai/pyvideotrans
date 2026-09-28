@@ -531,6 +531,8 @@ void main() {
       final two = MergeOptions(segments: [_seg('/a.mp4'), _seg('/b.mp4')]);
       expect(two.problem, '文件名不能为空');
       expect(two.copyWith(outputStem: 'x/y').problem, contains('不能有'));
+      expect(two.copyWith(outputStem: 'a:b').problem, contains('不能有'));
+      expect(two.copyWith(outputStem: '第 1 集？').problem, isNull);
       expect(two.copyWith(outputStem: 'ok').problem, isNull);
       expect(
         two
