@@ -2,10 +2,9 @@ import 'dart:async';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../core/theme/tokens.dart';
-import '../../core/widgets/text_focus.dart';
+import 'submit_shortcuts.dart';
 
 /// 三个建任务工作台页（新建转写 / 翻译 / 转码）共用的页面状态。
 ///
@@ -83,55 +82,40 @@ abstract class NewTaskPageState<W extends StatefulWidget> extends State<W> {
     if (mounted) setState(() => _enqueued = null);
   }
 
-  /// 多行输入框里的回车是换行，不该把任务提交出去。
-  bool get _editingText => isEditingText(multiline: true);
-
   @override
   Widget build(BuildContext context) {
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.enter): () {
-          if (!_editingText) start();
-        },
-        const SingleActivator(LogicalKeyboardKey.enter, meta: true): start,
-        const SingleActivator(LogicalKeyboardKey.enter, control: true): start,
-        // Esc 只清除焦点，不清空页面 —— 这里没有「关闭」可言。
-        const SingleActivator(LogicalKeyboardKey.escape): () =>
-            FocusManager.instance.primaryFocus?.unfocus(),
-      },
-      child: Focus(
-        autofocus: true,
-        child: DropTarget(
-          onDragEntered: (_) => setState(() => _dragging = true),
-          onDragExited: (_) => setState(() => _dragging = false),
-          onDragDone: (d) => handleDrop(d.files.map((f) => f.path).toList()),
-          child: ListenableBuilder(
-            listenable: form,
-            builder: (context, _) => LayoutBuilder(
-              builder: (context, constraints) {
-                final w = constraints.maxWidth;
-                final files = buildFilePanel(context);
-                final params = buildParamPanel(context);
-                if (w < 960) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: files),
-                      const SizedBox(height: AppSpacing.s3),
-                      Expanded(child: params),
-                    ],
-                  );
-                }
-                return Row(
+    return SubmitShortcuts(
+      onSubmit: start,
+      child: DropTarget(
+        onDragEntered: (_) => setState(() => _dragging = true),
+        onDragExited: (_) => setState(() => _dragging = false),
+        onDragDone: (d) => handleDrop(d.files.map((f) => f.path).toList()),
+        child: ListenableBuilder(
+          listenable: form,
+          builder: (context, _) => LayoutBuilder(
+            builder: (context, constraints) {
+              final w = constraints.maxWidth;
+              final files = buildFilePanel(context);
+              final params = buildParamPanel(context);
+              if (w < 960) {
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(child: files),
-                    const SizedBox(width: AppSpacing.s3),
-                    SizedBox(width: w < 1100 ? 360 : 400, child: params),
+                    const SizedBox(height: AppSpacing.s3),
+                    Expanded(child: params),
                   ],
                 );
-              },
-            ),
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: files),
+                  const SizedBox(width: AppSpacing.s3),
+                  SizedBox(width: w < 1100 ? 360 : 400, child: params),
+                ],
+              );
+            },
           ),
         ),
       ),
