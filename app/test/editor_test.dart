@@ -468,6 +468,9 @@ void main() {
       );
       expect(() => c.assignSpeaker(1), returnsNormally);
       expect(c.document.cues.map((x) => x.speaker), [0, 0]);
+      // 界面在选区跟上之前重建也只拿到范围内的下标。
+      expect(c.selectedPositions, [0, 1]);
+      expect(() => c.selectionMixedSpeakers, returnsNormally);
     });
 
     test('多选时 Enter 切换已校对不生效', () async {

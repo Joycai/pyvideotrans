@@ -17,6 +17,7 @@ import 'package:subtitle_studio/features/editor/editor_prompts.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/editor_widgets.dart';
 import 'package:subtitle_studio/features/editor/inspector_selection_editor.dart';
+import 'package:subtitle_studio/features/editor/inspector_speaker_field.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 import 'editor_fixtures.dart';
@@ -223,11 +224,9 @@ void main() {
       await click(tester, 0);
       await click(tester, 3, LogicalKeyboardKey.shiftLeft);
       final target = c.speakers.last;
-
-      final anchor = c.selectionMixedSpeakers
-          ? find.text('多个说话人')
-          : find.text('4 条');
-      await tester.tap(anchor);
+      // 夹具前四条里有 Mia 也有周老师。
+      expect(c.selectionMixedSpeakers, isTrue);
+      await tester.tap(find.text('多个说话人'));
       await tester.pump();
       expect(find.text('应用到已选 4 条'), findsOneWidget);
       await tester.tap(
@@ -243,6 +242,36 @@ void main() {
       );
       c.undo();
       expect(c.canUndo, isFalse);
+    });
+
+    testWidgets('「取消多选」按钮回到单选', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      await click(tester, 2, LogicalKeyboardKey.shiftLeft);
+      await tester.tap(find.text('取消多选'));
+      await tester.pump();
+      expect(c.multiSelected, isFalse);
+      expect(c.selected, 2);
+      expect(find.textContaining('已选'), findsNothing);
+    });
+
+    testWidgets('单选时说话人菜单照旧：应用范围分段与单条清除', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      final speaker = c.document.speakerName(c.current!.speaker!);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(InspectorSpeakerField),
+          matching: find.text(speaker),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('应用范围'), findsOneWidget);
+      expect(find.text('这一条'), findsOneWidget);
+      expect(find.textContaining('应用到已选'), findsNothing);
+      expect(find.text('清除这一条的说话人'), findsOneWidget);
     });
 
     testWidgets('多选时数字键批量指派', (tester) async {

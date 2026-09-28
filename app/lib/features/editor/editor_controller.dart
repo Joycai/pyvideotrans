@@ -206,8 +206,12 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
 
   bool isSelected(int indexInDocument) => _selection.contains(indexInDocument);
 
-  /// 选中各条按文档顺序的下标。
-  List<int> get selectedPositions => _selection.positions.toList()..sort();
+  /// 选中各条按文档顺序的下标。只给范围内的：流水线整份换掉文档到
+  /// 选区跟上之间隔着一次队列通知，这期间界面可能先重建一帧。
+  List<int> get selectedPositions => [
+    for (final p in _selection.positions)
+      if (p < document.cues.length) p,
+  ]..sort();
 
   /// 正在重新翻译的条目下标，用来在界面上禁用按钮。
   final Set<int> translating = {};
@@ -361,9 +365,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
 
   bool get selectionMixedSpeakers {
     final first = current?.speaker;
-    return _selection.positions.any(
-      (p) => p < document.cues.length && document.cues[p].speaker != first,
-    );
+    return selectedPositions.any((p) => document.cues[p].speaker != first);
   }
 
   @override
