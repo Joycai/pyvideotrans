@@ -45,6 +45,18 @@ Future<String> readSubtitleText(String path) async {
   return utf8.decode(bytes);
 }
 
+/// 目录里的文件（不含子目录），读不了时为空。合并页据此找视频旁的同名字幕。
+Future<List<String>> listFiles(String dir) async {
+  try {
+    return [
+      await for (final e in Directory(dir).list())
+        if (e is File) e.path,
+    ];
+  } on FileSystemException {
+    return const [];
+  }
+}
+
 Future<void> ensureDir(String path) async {
   await Directory(path).create(recursive: true);
 }
