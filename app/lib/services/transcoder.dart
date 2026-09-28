@@ -253,7 +253,7 @@ class Transcoder extends ChangeNotifier {
         '-v', 'error',
         '-show_entries',
         'format=duration:stream=index,codec_type,codec_name,width,height,'
-            'avg_frame_rate,r_frame_rate,pix_fmt,channels:'
+            'avg_frame_rate,r_frame_rate,pix_fmt,profile,channels,sample_rate:'
             'stream_disposition=attached_pic',
         '-of', 'json',
         path,

@@ -8,6 +8,7 @@ class VideoStreamInfo {
     this.height,
     this.fps,
     this.pixFmt,
+    this.profile,
   });
 
   final String codec;
@@ -15,6 +16,9 @@ class VideoStreamInfo {
   final int? height;
   final double? fps;
   final String? pixFmt;
+
+  /// 「High」「Main 10」。转码不看它；合并时 profile 不同的两段拼起来多半花屏。
+  final String? profile;
 
   /// 「3840×2160 · 60p」。
   String get shape => [
@@ -24,10 +28,21 @@ class VideoStreamInfo {
 }
 
 class AudioStreamInfo {
-  const AudioStreamInfo({required this.codec, this.channels});
+  const AudioStreamInfo({
+    required this.codec,
+    this.channels,
+    this.sampleRate,
+    this.profile,
+  });
 
   final String codec;
   final int? channels;
+
+  /// Hz。ffprobe 给的是字符串「48000」。
+  final int? sampleRate;
+
+  /// 「LC」「HE-AAC」。
+  final String? profile;
 }
 
 /// ffprobe 读出的流信息。附图（封面）不算视频流。
@@ -68,11 +83,17 @@ class MediaProbe {
               height: s['height'] as int?,
               fps: _rate(s['avg_frame_rate']) ?? _rate(s['r_frame_rate']),
               pixFmt: s['pix_fmt'] as String?,
+              profile: s['profile'] as String?,
             ),
           );
         case 'audio':
           audio.add(
-            AudioStreamInfo(codec: codec, channels: s['channels'] as int?),
+            AudioStreamInfo(
+              codec: codec,
+              channels: s['channels'] as int?,
+              sampleRate: int.tryParse('${s['sample_rate'] ?? ''}'),
+              profile: s['profile'] as String?,
+            ),
           );
         case 'subtitle':
           subs++;
