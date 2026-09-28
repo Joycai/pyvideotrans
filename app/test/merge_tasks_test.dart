@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
+import 'package:subtitle_studio/domain/media_job.dart';
+import 'package:subtitle_studio/domain/mux/merge_options.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/task_filter.dart';
+import 'package:subtitle_studio/features/tasks/task_detail_chapters.dart';
 import 'package:subtitle_studio/features/tasks/task_table.dart';
 import 'package:subtitle_studio/features/tasks/tasks_board.dart';
 import 'package:subtitle_studio/services/reveal.dart';
@@ -82,5 +85,33 @@ void main() {
     expect(find.text('—'), findsWidgets);
     expect(find.text('lecture_week3_a.mp4 等 2 段'), findsWidgets);
     expect(find.text('2 个章节'), findsNothing);
+  });
+
+  testWidgets('准备之前：挂了字幕写「有字幕」，两个字幕开关都关时写「无字幕」', (tester) async {
+    MergeJob pending({required bool subtitles}) => MergeJob(
+      options: MergeOptions(
+        segments: const [
+          MergeSegment(
+            videoPath: '/v/a.mp4',
+            subtitlePath: '/v/a.srt',
+            chapterTitle: 'a',
+          ),
+          MergeSegment(videoPath: '/v/b.mp4', chapterTitle: 'b'),
+        ],
+        embedSubtitles: subtitles,
+        outputStem: 'a.merged',
+      ),
+    );
+    Future<void> show(MergeJob job) => tester.pumpWidget(
+      MaterialApp(
+        theme: lightTheme,
+        home: Scaffold(body: TaskMergeChapters(job: job)),
+      ),
+    );
+    await show(pending(subtitles: true));
+    expect(find.text('有字幕'), findsOneWidget);
+    await show(pending(subtitles: false));
+    expect(find.text('有字幕'), findsNothing);
+    expect(find.text('无字幕'), findsNWidgets(2));
   });
 }

@@ -24,6 +24,8 @@ class TaskMergeChapters extends StatelessWidget {
     final durations = job.segmentDurations;
     final starts = durations == null ? null : offsets(durations);
     final cues = job.segmentCues;
+    final usesSubtitles =
+        job.options.embedSubtitles || job.options.sidecarSubtitles;
     final mono = AppTextStyles.timecode.copyWith(
       fontSize: 12,
       fontWeight: FontWeight.w400,
@@ -61,7 +63,13 @@ class TaskMergeChapters extends StatelessWidget {
                 Text(
                   switch (cues?[i]) {
                     final n? => '字幕 $n 条',
-                    null when s.subtitlePath != null && cues == null => '有字幕',
+                    // 准备阶段读完字幕之前只知道挂没挂；两个字幕开关都关时字幕
+                    // 用不上，流水线也不读，直接算没有。
+                    null
+                        when s.subtitlePath != null &&
+                            cues == null &&
+                            usesSubtitles =>
+                      '有字幕',
                     null => '无字幕',
                   },
                   style: context.texts.bodySmall?.copyWith(
