@@ -2,11 +2,16 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/media_job.dart';
 import 'package:subtitle_studio/domain/mux/merge_options.dart';
 import 'package:subtitle_studio/domain/mux/merge_rules.dart';
+import 'package:subtitle_studio/domain/mux/mux_plan.dart';
+import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/domain/transcode/codecs.dart';
 import 'package:subtitle_studio/domain/transcode/probe.dart';
+
+import 'helpers.dart';
 
 MediaProbe _probe({
   Duration? duration = const Duration(minutes: 1),
@@ -473,6 +478,148 @@ void main() {
       expect(back.chapters, isTrue);
       expect(back.outputLocation, OutputLocation.besideSource);
       expect(back.outputStem, 'a.merged');
+    });
+  });
+
+  group('MuxPlan', () {
+    String argsOf({
+      String? chapters,
+      String? subtitles,
+      bool progress = false,
+    }) => MuxPlan.merge(
+      concatList: 'list.txt',
+      chapters: chapters,
+      subtitles: subtitles,
+      container: OutputContainer.mp4,
+    ).args('out.mp4', progress: progress).join(' ');
+
+    test('章节 + 内嵌字幕：与设计文档的示例逐项一致', () {
+      expect(
+        argsOf(chapters: 'chapters.txt', subtitles: 'merged.srt'),
+        '-hide_banner -nostdin -y '
+        '-f concat -safe 0 -i list.txt -i chapters.txt -i merged.srt '
+        '-map 0:V? -map 0:a? -map 2:s '
+        '-map_metadata 1 -map_chapters 1 '
+        '-c copy -c:s mov_text -f mp4 out.mp4',
+      );
+    });
+
+    test('只有章节：不带字幕输入与字幕编码', () {
+      expect(
+        argsOf(chapters: 'chapters.txt'),
+        '-hide_banner -nostdin -y '
+        '-f concat -safe 0 -i list.txt -i chapters.txt '
+        '-map 0:V? -map 0:a? '
+        '-map_metadata 1 -map_chapters 1 '
+        '-c copy -f mp4 out.mp4',
+      );
+    });
+
+    test('只有字幕：字幕是输入 1，并去掉第 1 段自带的章节', () {
+      expect(
+        argsOf(subtitles: 'merged.srt'),
+        '-hide_banner -nostdin -y '
+        '-f concat -safe 0 -i list.txt -i merged.srt '
+        '-map 0:V? -map 0:a? -map 1:s '
+        '-map_chapters -1 '
+        '-c copy -c:s mov_text -f mp4 out.mp4',
+      );
+    });
+
+    test('都不要：只拼音视频', () {
+      expect(
+        argsOf(),
+        '-hide_banner -nostdin -y -f concat -safe 0 -i list.txt '
+        '-map 0:V? -map 0:a? -map_chapters -1 -c copy -f mp4 out.mp4',
+      );
+    });
+
+    test('进度输出只在执行时加；mov 的 -f 与字幕编码', () {
+      expect(
+        argsOf(progress: true),
+        contains('-v error -progress pipe:1 -nostats'),
+      );
+      expect(argsOf(), isNot(contains('-progress')));
+      final mov = MuxPlan.merge(
+        concatList: 'l',
+        subtitles: 's',
+        container: OutputContainer.mov,
+      ).args('o.part');
+      expect(mov.join(' '), endsWith('-c copy -c:s mov_text -f mov o.part'));
+    });
+  });
+
+  group('MergeJob', () {
+    final options = MergeOptions(
+      segments: [
+        _seg('/v/a.mp4', sub: '/v/a.srt'),
+        _seg('/v/b.mp4'),
+        _seg('/v/c.mp4'),
+      ],
+      outputStem: 'a.merged',
+    );
+
+    test('摘要与名字：产物定下前叫「a.mp4 等 3 段」', () {
+      final job = MergeJob(options: options);
+      expect(job.summary, '3 段 → MP4');
+      expect(job.title, 'a.mp4 等 3 段');
+      expect(job.outputLabel, '视频 · MP4');
+      expect(job.workStage, TaskStage.merge);
+      job.outputPath = '/v/a.merged.mp4';
+      expect(job.title, 'a.merged.mp4');
+    });
+
+    test('存进任务 JSON 的 merge 键，读回仍是 MergeJob', () {
+      final task = SubtitleTask(
+        id: 'm1',
+        sourcePath: '/v/a.mp4',
+        kind: TaskKind.transcribe,
+        options: testOptions(),
+        media: MergeJob(
+          options: options,
+          segmentDurations: const [
+            Duration(seconds: 10),
+            Duration(seconds: 20),
+            Duration(milliseconds: 30500),
+          ],
+          segmentCues: const [12, null, null],
+          outputPath: '/v/a.merged.mp4',
+          sidecarPath: '/v/a.merged.srt',
+          command: 'ffmpeg …',
+          outputBytes: 99,
+        ),
+      );
+      final json = (jsonDecode(jsonEncode(task.toJson())) as Map)
+          .cast<String, Object?>();
+      expect(json.keys, contains('merge'));
+      expect(json.keys, isNot(contains('transcode')));
+      final back = SubtitleTask.fromJson(json, fallbackOptions: testOptions());
+      final job = back.media! as MergeJob;
+      expect(job.options.toJson(), options.toJson());
+      expect(job.segmentDurations, const [
+        Duration(seconds: 10),
+        Duration(seconds: 20),
+        Duration(milliseconds: 30500),
+      ]);
+      expect(job.segmentCues, [12, null, null]);
+      expect(
+        (job.outputPath, job.sidecarPath, job.command, job.outputBytes),
+        ('/v/a.merged.mp4', '/v/a.merged.srt', 'ffmpeg …', 99),
+      );
+      expect(back.fileName, 'a.merged.mp4');
+    });
+
+    test('缺项回落；与段数对不上的缓存值作废', () {
+      final job = MergeJob.fromJson({
+        'options': options.toJson(),
+        'segmentDurationsMs': [1000, 2000],
+        'segmentCues': 'bad',
+      });
+      expect(job.options.segments, hasLength(3));
+      expect(job.segmentDurations, isNull);
+      expect(job.segmentCues, isNull);
+      expect(job.outputPath, isNull);
+      expect(MergeJob.fromJson(const {}).options.segments, isEmpty);
     });
   });
 }

@@ -9,6 +9,7 @@ enum TaskStage {
   segment('断句'),
   translate('翻译'),
   transcode('转码'),
+  merge('合并'),
   finish('完成');
 
   const TaskStage(this.label);

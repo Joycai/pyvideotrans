@@ -97,6 +97,11 @@ class TaskDetailHeader extends StatelessWidget {
                   },
                   tone: TagTone.service,
                 ),
+                MergeJob() => const StatusTag(
+                  label: '无转码 · stream copy',
+                  icon: Symbols.content_copy,
+                  tone: TagTone.service,
+                ),
                 null => StatusTag(
                   label: runsLocally ? '本地' : '云端',
                   icon: runsLocally ? Symbols.computer : Symbols.cloud,

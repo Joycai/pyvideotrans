@@ -1,3 +1,5 @@
+import 'mux/merge_options.dart';
+import 'paths.dart';
 import 'task_kind.dart';
 import 'transcode/codecs.dart';
 import 'transcode/encoder_params.dart';
@@ -42,12 +44,16 @@ sealed class MediaJob {
   /// 降级回旧版本也能读回转码任务。
   String get jsonKey => switch (this) {
     TranscodeJob() => 'transcode',
+    MergeJob() => 'merge',
   };
 
   /// 从任务 JSON 里读回：哪个键在就是哪种。都不在时是字幕任务。
   static MediaJob? fromTaskJson(Map<String, Object?> task) {
     if (task['transcode'] case final Map m) {
       return TranscodeJob.fromJson(m.cast<String, Object?>());
+    }
+    if (task['merge'] case final Map m) {
+      return MergeJob.fromJson(m.cast<String, Object?>());
     }
     return null;
   }
@@ -127,4 +133,102 @@ final class TranscodeJob extends MediaJob {
     command: json['command'] as String?,
     outputBytes: json['outputBytes'] as int?,
   );
+}
+
+/// 挂在合并任务上的状态：入队时定死的参数，准备阶段读出的各段时长与字幕条数，
+/// 定下来的产物路径与命令。
+final class MergeJob extends MediaJob {
+  MergeJob({
+    required this.options,
+    this.segmentDurations,
+    this.segmentCues,
+    this.outputPath,
+    this.sidecarPath,
+    this.command,
+    this.outputBytes,
+  });
+
+  final MergeOptions options;
+
+  /// 各段时长，准备阶段探测填；续跑时重新探测（入队后文件可能被换）。
+  List<Duration>? segmentDurations;
+
+  /// 各段字幕条数，没挂字幕的段为 null。准备阶段读字幕时填。
+  List<int?>? segmentCues;
+
+  @override
+  String? outputPath;
+
+  /// 开了旁挂 SRT 且有字幕时的字幕产物路径，与 [outputPath] 一起定下。
+  String? sidecarPath;
+
+  @override
+  String? command;
+
+  @override
+  int? outputBytes;
+
+  @override
+  double? speed;
+
+  int get segmentCount => options.segments.length;
+
+  /// 「3 段 → MP4」。
+  @override
+  String get summary => '$segmentCount 段 → ${options.container.label}';
+
+  /// 产物定下前叫「a.mp4 等 3 段」，之后就是产物文件名。
+  @override
+  String get title => switch (outputPath) {
+    final path? => baseName(path),
+    null when options.segments.isEmpty => '合并',
+    null =>
+      '${baseName(options.segments.first.videoPath)} 等 $segmentCount 段',
+  };
+
+  @override
+  String get outputLabel => '视频 · ${options.container.label}';
+
+  @override
+  TaskStage get workStage => TaskStage.merge;
+
+  @override
+  Map<String, Object?> toJson() => {
+    'options': options.toJson(),
+    if (segmentDurations case final d?)
+      'segmentDurationsMs': [for (final x in d) x.inMilliseconds],
+    'segmentCues': ?segmentCues,
+    'outputPath': outputPath,
+    'sidecarPath': sidecarPath,
+    'command': command,
+    'outputBytes': outputBytes,
+  };
+
+  factory MergeJob.fromJson(Map<String, Object?> json) {
+    final options = MergeOptions.fromJson(
+      (json['options'] as Map? ?? const {}).cast<String, Object?>(),
+    );
+    final n = options.segments.length;
+    // 段数对不上的缓存值作废，准备阶段会重新填。
+    final durations = switch (json['segmentDurationsMs']) {
+      final List l when l.length == n && l.every((x) => x is int) => [
+        for (final x in l) Duration(milliseconds: x as int),
+      ],
+      _ => null,
+    };
+    final cues = switch (json['segmentCues']) {
+      final List l when l.length == n && l.every((x) => x == null || x is int) =>
+        l.cast<int?>(),
+      _ => null,
+    };
+    return MergeJob(
+      options: options,
+      segmentDurations: durations,
+      segmentCues: cues,
+      outputPath: json['outputPath'] as String?,
+      sidecarPath: json['sidecarPath'] as String?,
+      command: json['command'] as String?,
+      outputBytes: json['outputBytes'] as int?,
+    );
+  }
 }

@@ -124,6 +124,8 @@ class TaskRunner {
           await _transcodePipeline.prepare(task, onChange);
           await _transcodePipeline.run(task, token, onChange);
           await _transcodePipeline.finish(task, onChange);
+        case MergeJob():
+          throw const ActionableException('合并流水线尚未接上');
         case null:
           // 存档残缺（媒体任务丢了参数）时别落进字幕流水线去调付费识别。
           if (task.kind.isMedia) {

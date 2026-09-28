@@ -294,7 +294,14 @@ class _ServiceCell extends StatelessWidget {
     final cs = context.colors;
     switch (task.media) {
       case final TranscodeJob job:
-        return _TranscodeServiceCell(job: job);
+        return _MediaServiceCell.transcode(job);
+      case final MergeJob job:
+        final n = job.segmentCount;
+        return _MediaServiceCell(
+          icon: Symbols.content_copy,
+          title: '$n 段 · 无转码',
+          detail: job.options.chapters ? '-c copy · $n 个章节' : '-c copy',
+        );
       case null:
     }
     final asr = Registry.asrInfo(task.asrProviderId);
@@ -346,16 +353,16 @@ class _ServiceCell extends StatelessWidget {
 }
 
 /// 转码任务的「服务 / 模型」列：谁在编码（CPU / 哪家硬件），用的哪个编码器。
-class _TranscodeServiceCell extends StatelessWidget {
-  const _TranscodeServiceCell({required this.job});
+/// 媒体任务的「服务」列：做法（编码器 / 无转码）与一行等宽的细节。
+class _MediaServiceCell extends StatelessWidget {
+  const _MediaServiceCell({
+    required this.icon,
+    required this.title,
+    required this.detail,
+  });
 
-  final TranscodeJob job;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = context.colors;
-    final encoder = job.encoder;
-    final (icon, title, detail) = switch (encoder) {
+  factory _MediaServiceCell.transcode(TranscodeJob job) {
+    final (icon, title, detail) = switch (job.encoder) {
       null => (
         Symbols.content_copy,
         job.options.remux ? '仅重混流' : '复制视频流',
@@ -367,6 +374,16 @@ class _TranscodeServiceCell extends StatelessWidget {
         e.id,
       ),
     };
+    return _MediaServiceCell(icon: icon, title: title, detail: detail);
+  }
+
+  final IconData icon;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = context.colors;
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
