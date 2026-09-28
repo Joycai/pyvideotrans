@@ -5,6 +5,7 @@
 1. **音视频语音生成字幕** —— 抽音 → 识别 → 断句
 2. **字幕翻译** —— 大模型按批翻译，条数严格一一对应
 3. **视频转码** —— FFmpeg 的图形外壳，任务同样进任务队列
+4. **视频合并** —— 几段视频无转码首尾相接，每段一个章节，字幕按起点平移后拼成一份
 
 ## 视频转码
 
@@ -28,6 +29,24 @@
 
 硬件编码的端到端测试（`test/transcode_ffmpeg_test.dart`）在本机没有 ffmpeg 时跳过，
 VideoToolbox 用例只在 macOS 上跑。
+
+## 视频合并
+
+导航栏「转码」下面的「合并」页，一次建一个任务。
+
+- N 段（至少 2 段）有序视频，可拖动或点箭头排序；同一个文件可以加两次。
+  添加时 ffprobe 逐段读参数，**各段与第 1 段不一致就不让开始**，并指出哪段哪一项：
+  流路数、视频编码 / profile / 分辨率 / 像素格式 / 画面方向 / 帧率（相对差 1% 以内算一致）、
+  音频编码 / profile / 采样率 / 声道，以及编码能不能原样放进所选容器。
+- 只做 `-c copy`（concat demuxer），不转码。容器 MP4、MOV。
+- 每段一个章节（FFMETADATA），标题默认文件名、可改；开关默认开。
+- 每段可挂一份 SRT / VTT；添加视频时旁边同名（或带语言后缀，如 `.zh`）的字幕自动挂上。
+  各段字幕按「前面各段时长之和」平移后拼成一份：内嵌软字幕轨（`mov_text`）、旁挂 SRT 两个独立开关。
+  字幕只收 UTF-8（或带 BOM 的 UTF-16），别的编码直接报错，不猜。
+- 产物默认 `<第 1 段文件名>.merged.mp4`，与旁挂 SRT 一起避让已有文件；先写 `.part`，成功后改名。
+- 已知限制：某段音频比视频短时，拼接后音画会逐段累积错位，目前不检查也不提示。
+
+端到端测试（`test/merge_ffmpeg_test.dart`）用 lavfi 现生成短片实跑，本机没有 ffmpeg 时跳过。
 
 UI 遵循 Claude Design 项目「桌面字幕工具 · 设计系统」。
 
@@ -75,10 +94,11 @@ lib/
   core/widgets/      无业务语义控件；fields.dart 是 dropdown / form_fields / form_layout 的公共入口
   domain/            纯数据与纯规则，不碰网络 / 外部进程
   domain/transcode/  编解码枚举、编码器目录、参数、探测结果、ffmpeg 命令
+  domain/mux/        合并的参数与纯规则（一致性、偏移、章节、concat 列表、字幕平移）、MuxPlan
   services/          provider、ffmpeg / ffprobe、设置与持久化
-  pipeline/          串行队列、任务编排、阶段壳、字幕写出、转码执行
-  features/shared/   跨 feature 共用的服务字段、命令块、入队横幅与步骤说明
-  features/          shell / tasks / transcribe / translate / transcode / editor / settings
+  pipeline/          串行队列、任务编排、阶段壳、字幕写出、转码与合并执行
+  features/shared/   跨 feature 共用的服务字段、命令块、参数分区、入队横幅与步骤说明
+  features/          shell / tasks / transcribe / translate / transcode / merge / editor / settings
 ```
 
 逐文件的职责、按功能反查、测试对照见 [`../docs/app-codemap.md`](../docs/app-codemap.md)。
@@ -102,6 +122,22 @@ Ollama 和 LM Studio 说的也是这套协议，所以**现在就能在本机跑
 运行时才去读全局设置，前面排着的任务就会被后面的改动影响，这类 bug 事后
 极难复现。全局设置只作为新建任务时的默认值。
 
+### 媒体任务挂在一个 sealed 的 `MediaJob` 上
+
+转码、合并这类「产出一个媒体文件、不产字幕」的任务，状态挂在
+`SubtitleTask.media`（[`MediaJob`](lib/domain/media_job.dart)）上：`TranscodeJob`、`MergeJob`
+是它的子类。产物路径、命令、倍速、「在访达中显示」这些通用信息走接口；任务行的
+「服务」列、详情头标签这类按种类画的地方写 `switch (task.media)`。
+
+原来是一个类型专用的可空字段 `task.transcode`，「是不是转码任务」在十来处各自判断，
+加合并就得每处再补一个分支，漏一处（比如定位产物）就出错。现在加新种类（重混流、mkv）
+只加一个子类，编译器会在每个 sealed switch 处提示补分支。存档的键名沿用
+`'transcode'` / `'merge'`，旧任务文件不用迁移。
+
+合并命令由声明式的 [`MuxPlan`](lib/domain/mux/mux_plan.dart) 拼出（输入、`-map`、章节来源、
+字幕封装编码）：页面命令预览与流水线执行共用它，只差临时文件的路径；以后的重混流产出同一个结构。
+concat 列表的 `duration`、章节起点、字幕平移用 `offsets` 算出的**同一份偏移**，三者不可能对不上。
+
 ### 折行发生在导出时，不在文档里
 
 单行字数上限（中日韩 15、其他 40，沿用原 Python 实现的默认值）在写出产物时
@@ -123,7 +159,8 @@ Ollama 和 LM Studio 说的也是这套协议，所以**现在就能在本机跑
 
 ### 断点续跑
 
-任务分六个阶段：排队 / 准备 / 识别 / 断句 / 翻译 / 完成。失败或取消时，
+字幕任务分六个阶段：排队 / 准备 / 识别 / 断句 / 翻译 / 完成（转码、合并只走排队 / 准备 /
+转码或合并 / 完成）。失败或取消时，
 **已完成阶段的结果全部保留**，重试从中断处继续。翻译阶段以「这一条有没有译文」
 为断点，续跑只翻剩下的，不会重复花钱。
 
