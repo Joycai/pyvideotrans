@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../core/shortcuts/app_shortcut.dart';
+import '../../core/shortcuts/shortcut_action.dart';
 import '../../core/widgets/text_focus.dart';
 import 'editor_controller.dart';
 import 'editor_keys.dart';
@@ -94,23 +95,23 @@ class CueTableShortcuts extends StatelessWidget {
       },
       child: Actions(
         actions: {
-          _StepIntent: _Act<_StepIntent>(
+          _StepIntent: ShortcutAction<_StepIntent>(
             (i) => i.extend ? c.extendStep(i.delta) : c.step(i.delta),
           ),
           _AssignIntent: _assignAction(c),
-          _ToggleReviewedIntent: _Act<_ToggleReviewedIntent>(
+          _ToggleReviewedIntent: ShortcutAction<_ToggleReviewedIntent>(
             (_) => c.toggleReviewed(),
           ),
-          _PlayPauseIntent: _Act<_PlayPauseIntent>(
+          _PlayPauseIntent: ShortcutAction<_PlayPauseIntent>(
             (_) => c.media.playback?.toggle(),
             enabled: (_) => c.media.playback != null,
           ),
           // 没有预览时也把 ←/→ 吃掉：放出去会变成 App 层的方向键焦点导航，
           // 焦点被带出列表，J/K 就失灵了。
-          _NudgeIntent: _Act<_NudgeIntent>(
+          _NudgeIntent: ShortcutAction<_NudgeIntent>(
             (i) => c.media.playback?.nudge(EditorKeys.nudge * i.direction),
           ),
-          _ExitMultiIntent: _Act<_ExitMultiIntent>(
+          _ExitMultiIntent: ShortcutAction<_ExitMultiIntent>(
             (_) => c.clearMultiSelection(),
             enabled: (_) => c.multiSelected,
           ),
@@ -168,34 +169,30 @@ class EditorShortcuts extends StatelessWidget {
       },
       child: Actions(
         actions: {
-          _SaveIntent: _Act<_SaveIntent>(
+          _SaveIntent: ShortcutAction<_SaveIntent>(
             (_) => onSave(),
             enabled: (_) => target() != null,
           ),
           // 编辑器级绑定比输入框自带的 ⌘Z 离焦点更近，会先拿到按键。打字时
           // 让出去：输入框里的 ⌘Z 撤销的是刚打的字，不是整份文档。
-          _UndoIntent: _Act<_UndoIntent>(
+          _UndoIntent: ShortcutAction<_UndoIntent>(
             (_) => target()!.controller.undo(),
             enabled: (_) => target() != null && !isEditingText(),
           ),
-          _AssignIntent: _Act<_AssignIntent>(
+          _AssignIntent: ShortcutAction<_AssignIntent>(
             (i) => _assign(target()!.controller, i),
             enabled: (i) =>
                 i.n <= (target()?.controller.speakers.length ?? 0),
           ),
-          _ToggleReviewedIntent: _Act<_ToggleReviewedIntent>(
+          _ToggleReviewedIntent: ShortcutAction<_ToggleReviewedIntent>(
             (_) => target()!.controller.toggleReviewed(),
             enabled: (_) => target() != null,
           ),
-          // 输入法组字时 Esc 是取消候选，不能被抢走。
-          _BackToTableIntent: _Act<_BackToTableIntent>(
+          _BackToTableIntent: ShortcutAction<_BackToTableIntent>(
             (_) => target()!.tableFocus.requestFocus(),
             enabled: (_) {
               final focus = target()?.tableFocus;
-              return focus != null &&
-                  !focus.hasFocus &&
-                  focus.context != null &&
-                  !isComposingText();
+              return focus != null && !focus.hasFocus && focus.context != null;
             },
           ),
         },
@@ -206,10 +203,11 @@ class EditorShortcuts extends StatelessWidget {
 }
 
 /// 名单里没有第 N 位时不启用，按键照常外传。
-_Act<_AssignIntent> _assignAction(EditorController c) => _Act<_AssignIntent>(
-  (i) => _assign(c, i),
-  enabled: (i) => i.n <= c.speakers.length,
-);
+ShortcutAction<_AssignIntent> _assignAction(EditorController c) =>
+    ShortcutAction<_AssignIntent>(
+      (i) => _assign(c, i),
+      enabled: (i) => i.n <= c.speakers.length,
+    );
 
 void _assign(EditorController c, _AssignIntent i) =>
     c.assignSpeaker(c.speakers[i.n - 1].id, run: i.run);
@@ -253,18 +251,4 @@ class _UndoIntent extends Intent {
 
 class _BackToTableIntent extends Intent {
   const _BackToTableIntent();
-}
-
-/// 带启用条件的动作。未启用时按键不算处理过，继续往外传。
-class _Act<T extends Intent> extends Action<T> {
-  _Act(this.run, {this.enabled});
-
-  final void Function(T intent) run;
-  final bool Function(T intent)? enabled;
-
-  @override
-  bool isEnabled(T intent) => enabled?.call(intent) ?? true;
-
-  @override
-  void invoke(T intent) => run(intent);
 }

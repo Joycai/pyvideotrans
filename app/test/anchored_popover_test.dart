@@ -107,4 +107,35 @@ void main() {
     expect(find.text('菜单'), findsNothing);
     expect(outside.hasFocus, isTrue);
   });
+
+  testWidgets('输入法组字时 Esc 是取消候选，不关浮层', (tester) async {
+    await pump(tester);
+    await open(tester);
+    await tester.tap(find.text('新增…'));
+    await tester.pump();
+    await tester.pump();
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'ni',
+        selection: TextSelection.collapsed(offset: 2),
+        composing: TextRange(start: 0, end: 2),
+      ),
+    );
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(find.text('菜单'), findsOneWidget);
+
+    // 选定之后再按 Esc 照常关闭。
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: '你',
+        selection: TextSelection.collapsed(offset: 1),
+      ),
+    );
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(find.text('菜单'), findsNothing);
+  });
 }

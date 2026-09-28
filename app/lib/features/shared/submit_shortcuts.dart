@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../core/shortcuts/app_shortcut.dart';
+import '../../core/shortcuts/shortcut_action.dart';
 import '../../core/widgets/text_focus.dart';
 
 /// 建任务入口（工作台页与两个对话框）共用的键盘约定：
@@ -15,7 +16,8 @@ import '../../core/widgets/text_focus.dart';
 ///   外面，第二下 Esc 就到不了这里。
 ///
 /// 条件不满足时动作是「未启用」而不是吃掉按键：按键继续往外传，交给真正
-/// 该处理它的地方。
+/// 该处理它的地方。输入法组字时 Enter、Esc 让给输入法（[ShortcutAction]），
+/// 用拼音打文件后缀、模型名时按回车选字不会顺手把任务提交出去。
 ///
 /// 根节点 autofocus：同一作用域里先挂上的 autofocus 赢，所以子孙按钮再设
 /// autofocus 不会生效。要让某个按钮打开就有焦点，得在打开后显式请求。
@@ -66,8 +68,16 @@ class _SubmitShortcutsState extends State<SubmitShortcuts> {
       },
       child: Actions(
         actions: {
-          _SubmitIntent: _SubmitAction(widget.onSubmit),
-          _DismissIntent: _DismissAction(widget.onDismiss, _home),
+          _SubmitIntent: ShortcutAction<_SubmitIntent>(
+            (_) => widget.onSubmit(),
+            enabled: (i) => i.force || !focusedControlTakesEnter(),
+          ),
+          _DismissIntent: ShortcutAction<_DismissIntent>(
+            (_) => isEditingText()
+                ? _home.requestFocus()
+                : widget.onDismiss?.call(),
+            enabled: (_) => isEditingText() || widget.onDismiss != null,
+          ),
         },
         child: Focus(focusNode: _home, autofocus: true, child: widget.child),
       ),
@@ -82,40 +92,6 @@ class _SubmitIntent extends Intent {
 
 class _DismissIntent extends Intent {
   const _DismissIntent();
-}
-
-class _SubmitAction extends Action<_SubmitIntent> {
-  _SubmitAction(this.onSubmit);
-  final VoidCallback onSubmit;
-
-  // 输入法组字时 Enter 是选定候选：用拼音打文件后缀、模型名时，按回车
-  // 选字不能顺手把任务提交出去。
-  @override
-  bool isEnabled(_SubmitIntent intent) =>
-      !isComposingText() && (intent.force || !focusedControlTakesEnter());
-
-  @override
-  void invoke(_SubmitIntent intent) => onSubmit();
-}
-
-class _DismissAction extends Action<_DismissIntent> {
-  _DismissAction(this.onDismiss, this.home);
-  final VoidCallback? onDismiss;
-  final FocusNode home;
-
-  // 组字时 Esc 是取消候选。
-  @override
-  bool isEnabled(_DismissIntent intent) =>
-      !isComposingText() && (isEditingText() || onDismiss != null);
-
-  @override
-  void invoke(_DismissIntent intent) {
-    if (isEditingText()) {
-      home.requestFocus();
-    } else {
-      onDismiss?.call();
-    }
-  }
 }
 
 /// 焦点所在的控件自己会处理 Enter：多行输入框（换行），或者按钮这类登记了

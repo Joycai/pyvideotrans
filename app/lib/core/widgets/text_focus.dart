@@ -21,7 +21,8 @@ bool isEditingText({bool multiline = false}) {
 }
 
 /// 焦点所在的输入框正在用输入法组字（拼音、假名还没选定）。这时 Enter 是
-/// 选定候选、Esc 是取消候选，页面快捷键都得让出去。
+/// 选定候选、Esc 是取消候选，页面快捷键都得让出去 —— 由 `ShortcutAction`
+/// 统一判断，别在各处动作里再写一遍。
 bool isComposingText() {
   final context = FocusManager.instance.primaryFocus?.context;
   if (context == null) return false;

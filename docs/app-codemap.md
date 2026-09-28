@@ -76,6 +76,7 @@ core/       domain/ ←──── services/
 ### `core/shortcuts/`
 
 - `app_shortcut.dart`：`AppShortcut`，一条快捷键（主键 + 修饰键 + 是否连发）生成 `SingleActivator` 与界面文案。
+- `shortcut_action.dart`：`ShortcutAction`，全应用快捷键动作的基类。条件不满足时不启用、按键外传；输入法组字时一律不启用。
   主修饰键按平台区分：macOS 是 ⌘，Windows 与 Linux 是 Ctrl。鼠标操作用 `isPrimaryModifierPressed`。
   全应用的键盘绑定与快捷键提示都从这里生成，不再手查 `HardwareKeyboard` 或写死「⌘S」。
 
@@ -89,7 +90,7 @@ core/       domain/ ←──── services/
   `SingleLineField` 是所有单行输入（设置页、密钥、模型名、转码后缀 / 额外参数）的唯一实现，
   外部值变化且无焦点时同步进框。
 - `form_layout.dart`：整行可点、链接文字、单选行、两列与平铺段。
-- `text_focus.dart`：`isEditingText`，焦点在不在输入框里。只剩两处用：`SubmitShortcuts`（打字时 Esc 先失焦、多行框里让回车），以及编辑器的 ⌘Z 在打字时让给输入框。同文件的 `isComposingText` 判断输入法是否在组字，组字时 Enter、Esc 都让给输入法。编辑器的单键靠焦点范围隔开，不用它们。
+- `text_focus.dart`：`isEditingText`，焦点在不在输入框里。只剩两处用：`SubmitShortcuts`（打字时 Esc 先失焦、多行框里让回车），以及编辑器的 ⌘Z 在打字时让给输入框。同文件的 `isComposingText` 判断输入法是否在组字，只由 `ShortcutAction` 调用。编辑器的单键靠焦点范围隔开，不用它们。
 - `glass_panel.dart`：玻璃卡片与内容面板。
 - `indicators.dart`：状态标签、状态胶囊（`StateChip`，文件表状态列与编码器卡片）、时间码、渐变进度条、状态点。
 - `note_bar.dart`：36px 中性提示条（拖放拒收、忽略了音视频），右侧可带动作或关闭。
@@ -363,7 +364,7 @@ core/       domain/ ←──── services/
 | 导航项 | `features/shell/nav_rail.dart` + `main.dart` 的页面 switch |
 | 顶栏内容 | 各页的 `xxxChrome()` + `features/shared/page_chrome.dart` |
 | 建任务页的拖放、横幅、快捷键、两栏断点 | `features/shared/new_task_page.dart` + `submit_shortcuts.dart` |
-| 快捷键（键位、作用范围、提示文案） | `core/shortcuts/app_shortcut.dart` + `features/editor/editor_keys.dart` / `editor_shortcuts.dart` |
+| 快捷键（键位、作用范围、提示文案） | `core/shortcuts/app_shortcut.dart` / `shortcut_action.dart` + `features/editor/editor_keys.dart` / `editor_shortcuts.dart` |
 | 建任务页的面板外框、空态、页脚文案、「上次参数」 | `features/shared/new_task_panels.dart` |
 | 建任务页的文件表、追加落区 | `features/shared/new_task_file_table.dart` |
 | 三个建任务表单共有的状态（参数、文件列表、输出位置、「上次参数」） | `features/shared/new_task_form.dart` |
@@ -388,7 +389,7 @@ flutter test --tags golden --run-skipped
   `test/editor_save_test.dart` 的「写入流程」组覆盖离开前写草稿、覆盖 / 另存为 / 取消与目标被拒的提示；
   `test/preview_playback_test.dart` 的 `EditorMedia` 组覆盖只找一次、手动关联优先与记住关联；
   `test/text_focus_test.dart` 钉死「焦点在输入框里」的判断（单行 / 多行）；
-  `test/app_shortcut_test.dart` 钉死三个平台的修饰键与文案，`editor_shortcuts_test.dart` 覆盖单键只在列表有焦点时生效、⌘ 组合在输入框里生效、Esc 分层、长按不连发，`submit_shortcuts_test.dart` 与 `anchored_popover_test.dart` 覆盖建任务入口与浮层的键盘行为；
+  `test/app_shortcut_test.dart` 钉死三个平台的修饰键与文案，`shortcut_action_test.dart` 钉死组字时不启用，`editor_shortcuts_test.dart` 覆盖单键只在列表有焦点时生效、⌘ 组合在输入框里生效、Esc 分层、长按不连发，`submit_shortcuts_test.dart` 与 `anchored_popover_test.dart` 覆盖建任务入口与浮层的键盘行为；
   `test/cue_selection_test.dart` 用随机操作序列检查选区不变量，`editor_test.dart` 与 `editor_ui_test.dart` 的「多选」组覆盖点选、筛选下扩选、批量指派与撤销，并用随机操作序列检查「批量只改看得见的选中行」；
   `preview_playback_test.dart` 的「播放与选区的联动」组覆盖多选时的脱钩。
 - `test/status_snapshot_test.dart` 钉死状态栏快照的服务文案（未选择 / 未配置 / 已配置）与任务计数。
