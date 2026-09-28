@@ -228,7 +228,9 @@ class _FileCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    final icon = MediaKinds.isSubtitle(task.sourcePath)
+    final icon = task.media is MergeJob
+        ? Symbols.merge
+        : MediaKinds.isSubtitle(task.sourcePath)
         ? Symbols.subtitles
         : MediaKinds.isAudio(task.sourcePath)
         ? Symbols.audio_file

@@ -108,6 +108,16 @@ class TaskDetailHeader extends StatelessWidget {
                   tone: TagTone.service,
                 ),
               },
+              // 合并任务多两个标签：章节数与字幕去向。
+              if (job case final MergeJob merge) ...[
+                if (merge.options.chapters)
+                  StatusTag(
+                    label: '${merge.segmentCount} 个章节',
+                    icon: Symbols.bookmarks,
+                  ),
+                if (_subtitleTag(merge) case final tag?)
+                  StatusTag(label: tag, icon: Symbols.subtitles),
+              ],
               if (task.kind == TaskKind.transcribeAndTranslate)
                 StatusTag(
                   label: '${mt?.name ?? ''} 翻译',
@@ -125,5 +135,17 @@ class TaskDetailHeader extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// 合并任务的字幕去向；没有可用字幕（或还没读）时不显示。
+  static String? _subtitleTag(MergeJob job) {
+    final n = job.segmentCues?.nonNulls.fold(0, (a, b) => a + b) ?? 0;
+    if (n == 0) return null;
+    return switch ((job.options.embedSubtitles, job.options.sidecarSubtitles)) {
+      (true, true) => '字幕内嵌并旁挂',
+      (true, false) => '字幕内嵌',
+      (false, true) => '字幕旁挂',
+      (false, false) => null,
+    };
   }
 }
