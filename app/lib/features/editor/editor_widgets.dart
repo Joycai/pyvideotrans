@@ -44,7 +44,10 @@ class AnchoredPopover extends StatefulWidget {
 class _AnchoredPopoverState extends State<AnchoredPopover> {
   final _portal = OverlayPortalController();
   final _anchorKey = GlobalKey();
-  final _focus = FocusNode(debugLabel: 'AnchoredPopover');
+  /// 浮层自己的焦点作用域。用作用域而不是普通焦点节点：autofocus 只在所在
+  /// 作用域还没有焦点时生效，浮层里后建出来的 autofocus 输入框（「新增说话人…」）
+  /// 要有一个空着的作用域才拿得到光标。
+  final _focus = FocusScopeNode(debugLabel: 'AnchoredPopover');
 
   /// 打开前焦点在哪，关闭时还回去。
   FocusNode? _returnTo;
@@ -124,8 +127,8 @@ class _AnchoredPopoverState extends State<AnchoredPopover> {
                     bindings: {
                       const SingleActivator(LogicalKeyboardKey.escape): close,
                     },
-                    child: Focus(
-                      focusNode: _focus,
+                    child: FocusScope(
+                      node: _focus,
                       child: widget.popover(overlayContext, close),
                     ),
                   ),

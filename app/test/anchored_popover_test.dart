@@ -6,8 +6,10 @@ import 'package:subtitle_studio/features/editor/editor_widgets.dart';
 void main() {
   late FocusNode outside;
   late List<String> outerKeys;
+  var adding = false;
 
   Future<void> pump(WidgetTester tester) async {
+    adding = false;
     outside = FocusNode(debugLabel: 'outside');
     addTearDown(outside.dispose);
     outerKeys = [];
@@ -29,12 +31,21 @@ void main() {
                     onPressed: toggle,
                     child: Text(open ? '收起' : '打开'),
                   ),
-                  popover: (context, close) => Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('菜单'),
-                      TextButton(onPressed: close, child: const Text('选这个')),
-                    ],
+                  popover: (context, close) => StatefulBuilder(
+                    builder: (context, setState) => Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('菜单'),
+                        TextButton(onPressed: close, child: const Text('选这个')),
+                        if (adding)
+                          const TextField(autofocus: true)
+                        else
+                          TextButton(
+                            onPressed: () => setState(() => adding = true),
+                            child: const Text('新增…'),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -73,6 +84,25 @@ void main() {
     await pump(tester);
     await open(tester);
     await tester.tap(find.text('选这个'));
+    await tester.pump();
+    expect(find.text('菜单'), findsNothing);
+    expect(outside.hasFocus, isTrue);
+  });
+
+  testWidgets('浮层里后建出来的 autofocus 输入框拿得到光标', (tester) async {
+    await pump(tester);
+    await open(tester);
+    await tester.tap(find.text('新增…'));
+    await tester.pump();
+    await tester.pump();
+    final focused = FocusManager.instance.primaryFocus?.context;
+    expect(
+      focused?.widget is EditableText ||
+          focused?.findAncestorWidgetOfExactType<EditableText>() != null,
+      isTrue,
+    );
+    // 输入框里按 Esc 也关浮层，焦点回到打开前的位置。
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(find.text('菜单'), findsNothing);
     expect(outside.hasFocus, isTrue);
