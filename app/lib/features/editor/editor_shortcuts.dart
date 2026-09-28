@@ -49,7 +49,7 @@ String editorShortcutSheet() {
   ];
   String lines(List<(String, String)> rows) =>
       rows.map((r) => '${r.$1}　${r.$2}').join('\n');
-  return '字幕表里\n${lines(table)}\n\n编辑页任意处\n${lines(page)}';
+  return '字幕表里\n${lines(table)}\n\n编辑器任意处\n${lines(page)}';
 }
 
 /// 字幕表范围：包住字幕列表区域（不含工具栏 —— 工具栏上的筛选浮层挂在

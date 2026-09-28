@@ -31,7 +31,8 @@ class EditorPage extends StatefulWidget {
 
   final EditorController controller;
 
-  /// ⌘S 与恢复横幅「写入」：写字幕文件的流程（冲突询问、另存为）在上层。
+  /// 恢复横幅「写入」：写字幕文件的流程（冲突询问、另存为）在上层。⌘S 不走
+  /// 这里，由 main.dart 的 `EditorShortcuts` 直接调同一个流程。
   final Future<void> Function()? onSave;
 
   /// 只挂了原文时「挂载译文」：由上层带去入口页配对。

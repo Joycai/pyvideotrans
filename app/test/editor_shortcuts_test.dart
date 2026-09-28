@@ -17,7 +17,7 @@ import 'package:subtitle_studio/services/settings.dart';
 import 'editor_fixtures.dart';
 
 /// 编辑器快捷键按焦点分范围：单键只在字幕列表有焦点时生效，带主修饰键的
-/// 组合在编辑页任何地方都生效。测试平台固定为 macOS（主修饰键 ⌘）。
+/// 组合在编辑器分区任何地方都生效（连顶栏一起）。测试平台固定为 macOS（主修饰键 ⌘）。
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final mac = TargetPlatformVariant.only(TargetPlatform.macOS);
@@ -247,7 +247,7 @@ void main() {
         final sheet = editorShortcutSheet();
         final mac = defaultTargetPlatform == TargetPlatform.macOS;
         expect(sheet, startsWith('字幕表里'));
-        expect(sheet, contains('编辑页任意处'));
+        expect(sheet, contains('编辑器任意处'));
         expect(sheet, contains(mac ? '⌘S　保存到字幕文件' : 'Ctrl+S　保存到字幕文件'));
         expect(sheet, contains(mac ? '⇧↓ / ⇧↑' : 'Shift+↓ / Shift+↑'));
         expect(sheet, contains('Esc　退出多选'));
