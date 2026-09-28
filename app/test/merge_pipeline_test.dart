@@ -20,6 +20,9 @@ class _FakeTranscoder extends Transcoder {
   _FakeTranscoder();
 
   final probes = <String, MediaProbe>{};
+
+  /// 完成阶段探测产物（out.*）时给的时长；默认等于两段默认时长之和。
+  Duration outputDuration = const Duration(seconds: 20);
   List<String>? lastArgs;
 
   /// 执行时 ffmpeg 读到的临时文件内容（执行完临时目录就删了，只能当场读）。
@@ -30,6 +33,9 @@ class _FakeTranscoder extends Transcoder {
   @override
   Future<MediaProbe> probe(String path) async =>
       probes[path] ??
+      (path.split('/').last.startsWith('out')
+          ? MediaProbe(duration: outputDuration)
+          : null) ??
       const MediaProbe(
         duration: Duration(seconds: 10),
         video: [
@@ -234,6 +240,14 @@ void main() {
     await run(t);
     expect(t.status, TaskStatus.done);
     expect(job.outputPath, first);
+  });
+
+  test('产物明显短于各段之和（某段没拼进去）时完成阶段报错', () async {
+    transcoder.outputDuration = const Duration(seconds: 10);
+    final t = await run(task(options()));
+    expect(t.status, TaskStatus.failed);
+    expect(t.stage, TaskStage.finish);
+    expect(t.error?.title, '合并结果比各段加起来短，可能有一段没拼进去');
   });
 
   test('ffmpeg 失败时标题写「合并失败」而不是「转码失败」', () {

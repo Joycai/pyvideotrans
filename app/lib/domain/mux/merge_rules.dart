@@ -80,84 +80,99 @@ MergeIssue? _issue(MediaProbe p, MediaProbe? base, OutputContainer c) {
   }
   if (base == null) return null;
 
-  MergeIssue? differ(
+  // 比的是原始值，[show] 只管文案：pcm_s16le 与 pcm_s24le 都显示成「PCM」，
+  // 按文案比会判成一致，拼出来第二段是满幅噪音。
+  // [fixable] 为假的项（流路数、profile、方向…）转码页选不出来，页脚不提「转成 …」。
+  MergeIssue? differ<T extends Object>(
     MergeIssueKind kind,
     String field,
-    Object? mine,
-    Object? theirs,
-  ) {
+    T? mine,
+    T? theirs, {
+    String Function(T)? show,
+    bool Function(T, T)? same,
+    bool fixable = true,
+  }) {
     // 任一边读不出来就不比：拦错一个能拼的文件比漏拦一个更伤人，
     // 漏拦的会在 ffmpeg 那里失败并带上原话。
-    if (mine == null || theirs == null || mine == theirs) return null;
+    if (mine == null || theirs == null) return null;
+    if (same?.call(mine, theirs) ?? mine == theirs) return null;
+    var m = show?.call(mine) ?? '$mine';
+    var t = show?.call(theirs) ?? '$theirs';
+    if (m == t) (m, t) = ('$mine', '$theirs');
     return MergeIssue(
       kind,
-      '$field $mine ≠ 第 1 段 $theirs',
+      '$field $m ≠ 第 1 段 $t',
       field: field,
-      expected: '$theirs',
+      expected: fixable ? t : null,
     );
   }
 
-  if (p.video.length != base.video.length) {
-    return differ(
-      MergeIssueKind.streams,
-      '视频流',
-      '${p.video.length} 路',
-      '${base.video.length} 路',
-    );
-  }
-  if (p.audio.length != base.audio.length) {
-    return differ(
-      MergeIssueKind.streams,
-      '音频流',
-      '${p.audio.length} 路',
-      '${base.audio.length} 路',
-    );
-  }
+  const streams = MergeIssueKind.streams;
+  final issue =
+      differ(
+        streams,
+        '视频流',
+        p.video.length,
+        base.video.length,
+        show: _ways,
+        fixable: false,
+      ) ??
+      differ(
+        streams,
+        '音频流',
+        p.audio.length,
+        base.audio.length,
+        show: _ways,
+        fixable: false,
+      );
+  if (issue != null) return issue;
+
   for (final (j, v) in p.video.indexed) {
     final b = base.video[j];
     const k = MergeIssueKind.video;
     final issue =
+        differ(k, '视频编码', v.codec, b.codec, show: MediaProbe.codecLabel) ??
+        differ(k, '视频 profile', v.profile, b.profile, fixable: false) ??
+        differ(k, '分辨率', _size(v), _size(b)) ??
+        differ(k, '像素格式', v.pixFmt, b.pixFmt, fixable: false) ??
         differ(
           k,
-          '视频编码',
-          MediaProbe.codecLabel(v.codec),
-          MediaProbe.codecLabel(b.codec),
+          '画面方向',
+          v.rotation,
+          b.rotation,
+          show: _rotation,
+          fixable: false,
         ) ??
-        differ(k, '视频 profile', v.profile, b.profile) ??
-        differ(k, '分辨率', _size(v), _size(b)) ??
-        differ(k, '像素格式', v.pixFmt, b.pixFmt) ??
-        (v.fps != null && b.fps != null && (v.fps! - b.fps!).abs() > 0.01
-            ? differ(k, '帧率', _fps(v.fps!), _fps(b.fps!))
-            : null);
+        differ(k, '帧率', v.fps, b.fps, show: _fps, same: _sameFps);
     if (issue != null) return issue;
   }
   for (final (j, a) in p.audio.indexed) {
     final b = base.audio[j];
     const k = MergeIssueKind.audio;
     final issue =
-        differ(
-          k,
-          '音频编码',
-          MediaProbe.codecLabel(a.codec),
-          MediaProbe.codecLabel(b.codec),
-        ) ??
-        differ(k, '音频 profile', a.profile, b.profile) ??
+        differ(k, '音频编码', a.codec, b.codec, show: MediaProbe.codecLabel) ??
+        differ(k, '音频 profile', a.profile, b.profile, fixable: false) ??
         differ(
           k,
           '采样率',
-          a.sampleRate == null ? null : sampleRateLabel(a.sampleRate!),
-          b.sampleRate == null ? null : sampleRateLabel(b.sampleRate!),
+          a.sampleRate,
+          b.sampleRate,
+          show: sampleRateLabel,
+          fixable: false,
         ) ??
-        differ(
-          k,
-          '声道',
-          a.channels == null ? null : '${a.channels}ch',
-          b.channels == null ? null : '${b.channels}ch',
-        );
+        differ(k, '声道', a.channels, b.channels, show: (c) => '${c}ch');
     if (issue != null) return issue;
   }
   return null;
 }
+
+String _ways(int n) => '$n 路';
+
+String _rotation(int deg) => deg == 0 ? '不旋转' : '旋转 $deg°';
+
+/// 帧率差在 1% 以内算一致：29.97 与 30、23.976 与 24 原样拼接没问题，
+/// 手机录的可变帧率片段 avg_frame_rate 每段都差一点，按绝对差会被误拦。
+bool _sameFps(double a, double b) => (a - b).abs() <= b * 0.01;
 
 String? _size(VideoStreamInfo v) =>
     v.width == null || v.height == null ? null : '${v.width}×${v.height}';
@@ -165,8 +180,9 @@ String? _size(VideoStreamInfo v) =>
 String _fps(double fps) =>
     '${fps % 1 == 0 ? fps.toInt() : fps.toStringAsFixed(2)}p';
 
-/// 「48 kHz」「44.1 kHz」。
+/// 「48 kHz」「44.1 kHz」；一位小数说不清的（44056）直接写 Hz。
 String sampleRateLabel(int hz) {
+  if (hz % 100 != 0) return '$hz Hz';
   final k = hz / 1000;
   return '${k % 1 == 0 ? k.toInt() : k.toStringAsFixed(1)} kHz';
 }
@@ -182,9 +198,23 @@ List<Duration> offsets(List<Duration> durations) {
   return out;
 }
 
+/// 合并出来的文件是不是少了段。
+///
+/// concat 列表里某段打不开时 ffmpeg 只报一句、照样以 0 退出，写出前面几段就算
+/// 「成功」。不用 `-xerror` 拦：它会把段与段接缝处常见、无害的「Non-monotonic
+/// DTS」也变成失败。少一段至少短一个最短段，所以短过它的一半就算缺段；
+/// 音频编码帧对齐带来的零点几秒出入不会误判。
+bool looksTruncated(Duration actual, List<Duration> segments) {
+  if (segments.isEmpty) return false;
+  final total = segments.fold(Duration.zero, (a, b) => a + b);
+  final shortest = segments.reduce((a, b) => a < b ? a : b);
+  return actual < total - shortest ~/ 2;
+}
+
 /// FFMETADATA 章节文件：每段一个章节，毫秒精度。
 ///
-/// 标题里的 `= ; # \` 与换行按 ffmpeg 的规则转义，界面不必限制输入。
+/// 标题里的 `= ; # \` 与换行（含 `\r`，ffmpeg 也把它当行尾）按 ffmpeg 的规则
+/// 转义，界面不必限制输入。
 String ffmetadata(List<String> titles, List<Duration> durations) {
   assert(titles.length == durations.length);
   final starts = offsets(durations);
@@ -202,7 +232,7 @@ String ffmetadata(List<String> titles, List<Duration> durations) {
 }
 
 String _escapeMetadata(String s) =>
-    s.replaceAllMapped(RegExp(r'[=;#\\\n]'), (m) => '\\${m[0]}');
+    s.replaceAllMapped(RegExp(r'[=;#\\\n\r]'), (m) => '\\${m[0]}');
 
 /// concat demuxer 的列表文件。每段写明 `duration`，让 ffmpeg 按我们算的
 /// 时长排下一段的时间戳 —— 与章节、字幕用的是同一份偏移。
@@ -268,8 +298,10 @@ List<Cue> concatCues(List<SegmentCues> segments) {
   };
   bool taken(String p) => inputs.contains(sameSeparators(p)) || exists(p);
 
+  // 根目录（`/`、`C:\`）本身带分隔符，别再拼一个。
+  final prefix = dir.endsWith('/') || dir.endsWith('\\') ? dir : '$dir$sep';
   for (var n = 1; ; n++) {
-    final base = '$dir$sep$stem${n == 1 ? '' : '-$n'}';
+    final base = '$prefix$stem${n == 1 ? '' : '-$n'}';
     final video = '$base.$ext';
     final sidecar = options.sidecarSubtitles ? '$base.srt' : null;
     if (taken(video) || (sidecar != null && taken(sidecar))) continue;

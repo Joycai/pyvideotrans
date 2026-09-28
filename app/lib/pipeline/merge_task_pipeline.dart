@@ -204,24 +204,39 @@ class MergeTaskPipeline {
     if (srt != null) task.note('字幕 ${cues.length} 条');
   });
 
-  Future<void> finish(SubtitleTask task, void Function() onChange) =>
-      stages.run(task, TaskStage.finish, onChange, () async {
-        final job = task.media! as MergeJob;
-        final file = File(job.outputPath!);
-        final size = file.existsSync() ? file.lengthSync() : 0;
-        if (size == 0) {
-          throw ActionableException(
-            '产物为空',
-            detail: job.outputPath,
-            hint: '从合并阶段继续重试一次；仍然为空时查看日志里 FFmpeg 的输出。',
-          );
-        }
-        job.outputBytes = size;
-        task.stages[TaskStage.finish] = task.stages[TaskStage.finish]!.copyWith(
-          note: MediaFileInfo(path: file.path, sizeBytes: size).sizeLabel,
-        );
-        task.note('已写出 ${job.outputPath}');
-      });
+  Future<void> finish(
+    SubtitleTask task,
+    void Function() onChange,
+  ) => stages.run(task, TaskStage.finish, onChange, () async {
+    final job = task.media! as MergeJob;
+    final file = File(job.outputPath!);
+    final size = file.existsSync() ? file.lengthSync() : 0;
+    if (size == 0) {
+      throw ActionableException(
+        '产物为空',
+        detail: job.outputPath,
+        hint: '从合并阶段继续重试一次；仍然为空时查看日志里 FFmpeg 的输出。',
+      );
+    }
+    final durations = job.segmentDurations;
+    final actual = (await transcoder.probe(file.path)).duration;
+    if (durations != null &&
+        actual != null &&
+        looksTruncated(actual, durations)) {
+      throw ActionableException(
+        '合并结果比各段加起来短，可能有一段没拼进去',
+        detail:
+            '产物 ${Srt.formatDuration(actual)}，'
+            '各段合计 ${Srt.formatDuration(task.mediaDuration!)}\n${job.outputPath}',
+        hint: '查看日志里 FFmpeg 的输出，确认各段文件都还能打开，然后从合并阶段继续。',
+      );
+    }
+    job.outputBytes = size;
+    task.stages[TaskStage.finish] = task.stages[TaskStage.finish]!.copyWith(
+      note: MediaFileInfo(path: file.path, sizeBytes: size).sizeLabel,
+    );
+    task.note('已写出 ${job.outputPath}');
+  });
 
   /// 这份参数对应的封装计划。[list] 等是三个临时文件的路径（或占位名）；
   /// 没有字幕可内嵌、没开章节时对应的输入不出现。

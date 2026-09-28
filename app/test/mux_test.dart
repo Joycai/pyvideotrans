@@ -166,14 +166,82 @@ void main() {
       expect(issue.expected, '1920×1080');
     });
 
-    test('帧率差不超过 0.01 算一致（29.97 的两种写法）', () {
-      expect(
-        check(
-          _probe(video: [_v(fps: 29.97)]),
-          first: _probe(video: [_v(fps: 29.971)]),
-        ),
-        [null, null],
+    test('帧率差在 1% 以内算一致（29.97 对 30、手机可变帧率）', () {
+      expect(check(_probe(video: [_v(fps: 29.97)])), [null, null]);
+      expect(check(_probe(video: [_v(fps: 29.98)])), [null, null]);
+      expect(check(_probe(video: [_v(fps: 29.5)])).last?.field, '帧率');
+    });
+
+    test('编码比原名不比显示名：PCM 位深不同要拦下，文案退回原名', () {
+      final base = _probe(audio: [_a(codec: 'pcm_s16le', profile: null)]);
+      final other = _probe(audio: [_a(codec: 'pcm_s24le', profile: null)]);
+      final issue = mergeIssues([base, other], OutputContainer.mov).last!;
+      expect(issue.message, '音频编码 pcm_s24le ≠ 第 1 段 pcm_s16le');
+    });
+
+    test('采样率比整数：44056 与 44100 不同，文案写 Hz', () {
+      final issue = check(_probe(audio: [_a(sampleRate: 44056)])).last!;
+      expect(issue.message, '采样率 44056 Hz ≠ 第 1 段 48 kHz');
+      expect(sampleRateLabel(44100), '44.1 kHz');
+      expect(sampleRateLabel(47952), '47952 Hz');
+    });
+
+    test('音频 profile 不同（LC 对 HE-AAC）', () {
+      final issue = check(_probe(audio: [_a(profile: 'HE-AAC')])).last!;
+      expect(issue.message, '音频 profile HE-AAC ≠ 第 1 段 LC');
+    });
+
+    test('横拍竖拍：尺寸一样、旋转不同也要拦下', () {
+      final rotated = _probe(
+        video: [
+          const VideoStreamInfo(
+            codec: 'h264',
+            profile: 'High',
+            width: 1920,
+            height: 1080,
+            fps: 30,
+            pixFmt: 'yuv420p',
+            rotation: 90,
+          ),
+        ],
       );
+      final issue = check(rotated).last!;
+      expect(issue.message, '画面方向 旋转 90° ≠ 第 1 段 不旋转');
+      expect(issue.expected, isNull);
+    });
+
+    test('ffprobe 的 Display Matrix 读成 0..359 的旋转角', () {
+      VideoStreamInfo parse(Object? sideData) => MediaProbe.fromJson({
+        'streams': [
+          {
+            'codec_type': 'video',
+            'codec_name': 'h264',
+            'side_data_list': ?sideData,
+          },
+        ],
+      }).video.single;
+      expect(parse(null).rotation, 0);
+      expect(
+        parse([
+          {'side_data_type': 'Display Matrix', 'rotation': -90},
+        ]).rotation,
+        270,
+      );
+      expect(
+        parse([
+          {'side_data_type': 'Display Matrix', 'rotation': 180},
+        ]).rotation,
+        180,
+      );
+    });
+
+    test('转码选不出来的项（流路数、profile）不给「转成 …」', () {
+      expect(check(_probe(audio: [])).last?.expected, isNull);
+      expect(
+        check(_probe(video: [_v(profile: 'Main')])).last?.expected,
+        isNull,
+      );
+      expect(check(_probe(audio: [_a(channels: 1)])).last?.expected, '2ch');
     });
 
     test('读不出的项不比，只报第一处问题', () {
@@ -243,6 +311,21 @@ void main() {
         ),
       );
       expect(text, contains('START=3406500\nEND=4112500\n'));
+      // ffmpeg 也把 \r 当行尾，不转义标题会被截断。
+      expect(
+        ffmetadata(['ab\rcd'], const [Duration(seconds: 1)]),
+        contains('title=ab\\\rcd\n'),
+      );
+    });
+
+    test('产物短过「总长减半个最短段」才算缺段', () {
+      const segs = [Duration(seconds: 10), Duration(seconds: 4)];
+      expect(
+        looksTruncated(const Duration(milliseconds: 13800), segs),
+        isFalse,
+      );
+      expect(looksTruncated(const Duration(seconds: 10), segs), isTrue);
+      expect(looksTruncated(Duration.zero, const []), isFalse);
     });
 
     test('concat 列表：绝对路径、单引号转义、中文路径、毫秒精度时长', () {
@@ -309,6 +392,17 @@ void main() {
       expect(out.single.index, 1);
     });
 
+    test('截到段尾后零长的字幕也丢掉', () {
+      final out = concatCues([
+        (
+          cues: [_cue(10000, 10000)],
+          offset: Duration.zero,
+          length: const Duration(seconds: 10),
+        ),
+      ]);
+      expect(out, isEmpty);
+    });
+
     test('全都没字幕时是空的', () {
       expect(
         concatCues([
@@ -359,6 +453,34 @@ void main() {
       expect(mergeOutputPath(options, exists: (_) => false), (
         video: '/v/a.merged.mp4',
         sidecar: null,
+      ));
+    });
+
+    test('源文件在根目录时不出现双分隔符', () {
+      final o = MergeOptions(
+        segments: [_seg('/a.mp4'), _seg('/b.mp4')],
+        outputStem: 'b',
+      );
+      expect(mergeOutputPath(o, exists: (_) => false).video, '/b-2.mp4');
+      final w = MergeOptions(
+        segments: [_seg(r'C:\a.mp4'), _seg(r'C:\b.mp4')],
+        outputStem: 'x',
+      );
+      expect(mergeOutputPath(w, exists: (_) => false).video, r'C:\x.mp4');
+    });
+
+    test('不写到某段的字幕身上', () {
+      final o = MergeOptions(
+        segments: [
+          _seg('/v/a.mp4', sub: '/v/out.srt'),
+          _seg('/v/b.mp4'),
+        ],
+        sidecarSubtitles: true,
+        outputStem: 'out',
+      );
+      expect(mergeOutputPath(o, exists: (_) => false), (
+        video: '/v/out-2.mp4',
+        sidecar: '/v/out-2.srt',
       ));
     });
 
