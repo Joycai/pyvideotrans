@@ -186,42 +186,45 @@ class FileDropEmptyState extends StatelessWidget {
               color: dragging ? cs.primary : cs.outline,
               radius: AppRadius.md,
             ),
-            child: SizedBox.expand(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    icon,
-                    size: 40,
-                    weight: 400,
-                    color: dragging ? cs.primary : cs.onSurfaceVariant,
-                  ),
-                  const SizedBox(height: AppSpacing.s3),
-                  Text(
-                    dragging ? '松开以添加文件' : title,
-                    style: context.texts.titleMedium,
-                  ),
-                  const SizedBox(height: AppSpacing.s2),
-                  Text(
-                    formats,
-                    textAlign: formatsAlign,
-                    style: context.texts.bodyMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
+            // 附加说明只在放得下时显示：窗口矮、上下堆叠时它是最先让出的一行。
+            child: LayoutBuilder(
+              builder: (context, c) => SizedBox.expand(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 40,
+                      weight: 400,
+                      color: dragging ? cs.primary : cs.onSurfaceVariant,
                     ),
-                  ),
-                  if (note != null) ...[
-                    const SizedBox(height: AppSpacing.s1),
+                    const SizedBox(height: AppSpacing.s3),
                     Text(
-                      note!,
-                      textAlign: TextAlign.center,
-                      style: context.texts.bodySmall?.copyWith(
+                      dragging ? '松开以添加文件' : title,
+                      style: context.texts.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.s2),
+                    Text(
+                      formats,
+                      textAlign: formatsAlign,
+                      style: context.texts.bodyMedium?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),
                     ),
+                    if (note != null && c.maxHeight >= 200) ...[
+                      const SizedBox(height: AppSpacing.s1),
+                      Text(
+                        note!,
+                        textAlign: TextAlign.center,
+                        style: context.texts.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.s5),
+                    ControlButton(label: '选择文件…', onPressed: onBrowse),
                   ],
-                  const SizedBox(height: AppSpacing.s5),
-                  ControlButton(label: '选择文件…', onPressed: onBrowse),
-                ],
+                ),
               ),
             ),
           ),

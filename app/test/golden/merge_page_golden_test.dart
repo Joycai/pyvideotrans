@@ -47,6 +47,7 @@ MediaProbe _probe(
   int seconds, {
   int width = 1920,
   int height = 1080,
+  int sampleRate = 48000,
 }) => MediaProbe(
   duration: Duration(minutes: minutes, seconds: seconds),
   video: [
@@ -58,16 +59,23 @@ MediaProbe _probe(
       pixFmt: 'yuv420p',
     ),
   ],
-  audio: const [AudioStreamInfo(codec: 'aac', channels: 2, sampleRate: 48000)],
+  audio: [AudioStreamInfo(codec: 'aac', channels: 2, sampleRate: sampleRate)],
 );
 
 /// 设计稿 M-Merge 的样例：采访三段，第 3 段在 [_slow] 时永远停在读取中，
 /// 在 [_mismatch] 时第 2 段是 720p。
 class _FakeTranscoder extends Transcoder {
-  _FakeTranscoder({this.slow = false, this.mismatch = false});
+  _FakeTranscoder({
+    this.slow = false,
+    this.mismatch = false,
+    this.audioMismatch = false,
+  });
 
   final bool slow;
   final bool mismatch;
+
+  /// 第 2 段采样率 44.1 kHz：窄行里音频写在第二行，要看它标红。
+  final bool audioMismatch;
 
   @override
   Future<MediaProbe> probe(String path) {
@@ -75,7 +83,9 @@ class _FakeTranscoder extends Transcoder {
     return switch (name) {
       'interview_ep12_part1.mp4' => Future.value(_probe(32, 10)),
       'interview_ep12_part2.mp4' => Future.value(
-        mismatch ? _probe(24, 36, width: 1280, height: 720) : _probe(24, 36),
+        mismatch
+            ? _probe(24, 36, width: 1280, height: 720)
+            : _probe(24, 36, sampleRate: audioMismatch ? 44100 : 48000),
       ),
       'interview_ep12_part3.mp4' when slow => Completer<MediaProbe>().future,
       _ => Future.value(_probe(11, 46)),
@@ -101,12 +111,17 @@ void main() {
     bool empty = false,
     bool slow = false,
     bool mismatch = false,
+    bool audioMismatch = false,
     bool advanced = false,
     double width = 1440,
   }) async {
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
-    final transcoder = _FakeTranscoder(slow: slow, mismatch: mismatch);
+    final transcoder = _FakeTranscoder(
+      slow: slow,
+      mismatch: mismatch,
+      audioMismatch: audioMismatch,
+    );
     final form = MergeFormController(
       settings: settings,
       transcoder: transcoder,
@@ -216,6 +231,16 @@ void main() {
       file: 'merge_page_narrow_light',
       brightness: Brightness.light,
       width: 1024,
+    );
+  });
+
+  testWidgets('合并页 · 窄行（列表宽不到 760）+ 第 2 段采样率不一致 · 浅色', (tester) async {
+    await shoot(
+      tester,
+      file: 'merge_page_narrow_rows_light',
+      brightness: Brightness.light,
+      audioMismatch: true,
+      width: 1200,
     );
   });
 }

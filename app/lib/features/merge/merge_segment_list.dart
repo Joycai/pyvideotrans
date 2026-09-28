@@ -147,12 +147,17 @@ class MergeSegmentList extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   itemCount: segments.length,
                   onReorderItem: form.reorder,
-                  proxyDecorator: (child, _, _) => DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerLowest,
-                      boxShadow: context.elevation.shadow2,
+                  // 拖起的行画在 Overlay 里，上面没有 Material，行内的输入框
+                  // 会断言失败；默认代理自带 Material，换成自定义时要补上。
+                  proxyDecorator: (child, _, _) => Material(
+                    type: MaterialType.transparency,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerLowest,
+                        boxShadow: context.elevation.shadow2,
+                      ),
+                      child: child,
                     ),
-                    child: child,
                   ),
                   itemBuilder: (context, i) => MergeSegmentRow(
                     key: ValueKey(segments[i].id),
@@ -334,18 +339,28 @@ class _MergeSegmentRowState extends State<MergeSegmentRow> {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  Text(
-                    widget.wide
-                        ? s.directory
-                        : [
-                            s.directory,
-                            if (s.duration != null) duration,
-                            if (s.audioCodecLabel != null)
-                              [
-                                s.audioCodecLabel,
-                                s.audioShape,
-                              ].nonNulls.join(' '),
-                          ].join(' · '),
+                  // 窄行收起了时长、音频两列，写在这一行；放在目录前面，
+                  // 截断时先丢的是目录（完整路径在 tooltip 里）。
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        if (!widget.wide) ...[
+                          TextSpan(text: '$duration · '),
+                          TextSpan(
+                            text:
+                                '${[s.audioCodecLabel ?? '—', s.audioShape].nonNulls.join(' ')} · ',
+                            style: switch (flag(MergeIssueKind.audio)) {
+                              final c? => TextStyle(
+                                color: c,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              null => null,
+                            },
+                          ),
+                        ],
+                        TextSpan(text: s.directory),
+                      ],
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: context.texts.bodySmall?.copyWith(
@@ -560,9 +575,11 @@ class _ChapterField extends StatelessWidget {
     final enabled = form.options.chapters;
     final s = form.segments[index];
     Widget field = SizedBox(
-      width: wide ? 232 : 160,
+      width: 232,
       height: 32,
       child: Focus(
+        // 只借它收「失焦」，自己不当 Tab 停靠点。
+        skipTraversal: true,
         onFocusChange: (focused) {
           if (!focused) form.commitChapterTitle(index);
         },
@@ -576,7 +593,9 @@ class _ChapterField extends StatelessWidget {
     if (!enabled) {
       field = Tooltip(
         message: '添加章节已关闭',
-        child: IgnorePointer(child: Opacity(opacity: 0.38, child: field)),
+        child: ExcludeFocus(
+          child: IgnorePointer(child: Opacity(opacity: 0.38, child: field)),
+        ),
       );
     }
     return Row(
@@ -769,6 +788,9 @@ class MergeTimelineStrip extends StatelessWidget {
                     width: widths?[i] ?? minBlock,
                     number: i + 1,
                     start: offsets[i],
+                    // 前面（含自己）还有段在读，起点才是「读取中」；
+                    // 否则是前面有段读不出，起点永远算不出来。
+                    pending: segments.take(i + 1).any((s) => s.probing),
                     segment: s,
                     bad: s.probeError != null || issues[i] != null,
                   ),
@@ -828,6 +850,7 @@ class MergeTimelineStrip extends StatelessWidget {
 class _Block extends StatelessWidget {
   const _Block({
     required this.width,
+    required this.pending,
     required this.number,
     required this.start,
     required this.segment,
@@ -835,6 +858,7 @@ class _Block extends StatelessWidget {
   });
 
   final double width;
+  final bool pending;
   final int number;
   final Duration? start;
   final StagedSegment segment;
@@ -845,6 +869,7 @@ class _Block extends StatelessWidget {
     final cs = context.colors;
     final probing = segment.probing;
     final unknown = probing || start == null;
+    final unknownLabel = pending ? '读取中' : '—';
     final content = Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s2),
       child: Row(
@@ -861,7 +886,7 @@ class _Block extends StatelessWidget {
           Expanded(
             child: unknown
                 ? Text(
-                    '读取中',
+                    unknownLabel,
                     maxLines: 1,
                     overflow: TextOverflow.clip,
                     style: context.texts.bodySmall,

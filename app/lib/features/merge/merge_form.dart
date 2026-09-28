@@ -284,9 +284,17 @@ class MergeFormController extends ChangeNotifier {
     if (_segments.isEmpty) return '把几段视频按顺序拼成一个文件，不转码，每段一个章节';
     final n = _segments.length;
     final issues = this.issues;
+    // 按种类说：第 1 段自己放不进容器时写「参数与第 1 段不一致」就自相矛盾了。
     final bad = [
       for (final (i, s) in _segments.indexed)
-        if (s.probeError != null || issues[i] != null) i + 1,
+        if (s.probeError != null)
+          '第 ${i + 1} 段读不出'
+        else if (issues[i] case final issue?)
+          switch (issue) {
+            MergeIssue(field: _?) => '第 ${i + 1} 段参数与第 1 段不一致',
+            MergeIssue(kind: MergeIssueKind.duration) => '第 ${i + 1} 段读不出时长',
+            MergeIssue(:final message) => '第 ${i + 1} 段：$message',
+          },
     ];
     final total = totalDuration;
     final probing = [
@@ -300,7 +308,7 @@ class MergeFormController extends ChangeNotifier {
       else if (total != null)
         '共 ${Srt.formatDuration(total)}',
       if (bad.isNotEmpty)
-        '第 ${bad.first} 段参数与第 1 段不一致'
+        bad.first
       else ...[
         ?baseSummary,
         '无转码 → ${_options.container.label}',
