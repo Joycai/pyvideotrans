@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 
-/// 参数面板里的一段：16px 内边距，段与段之间 1px 分隔线。
-class TranscodeSection extends StatelessWidget {
-  const TranscodeSection({
+/// 参数面板里的一段：16px 内边距，段与段之间 1px 分隔线。转码、合并页共用。
+class ParamSection extends StatelessWidget {
+  const ParamSection({
     super.key,
     required this.title,
     required this.children,
@@ -83,8 +83,9 @@ class TranscodeSection extends StatelessWidget {
   }
 }
 
-class TranscodeHint extends StatelessWidget {
-  const TranscodeHint(this.text, {super.key, this.error = false});
+/// 分段里的一行小字说明；[error] 时换成错误色。
+class ParamHint extends StatelessWidget {
+  const ParamHint(this.text, {super.key, this.error = false});
 
   final String text;
   final bool error;

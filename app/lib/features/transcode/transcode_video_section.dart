@@ -10,8 +10,8 @@ import '../../domain/transcode/codecs.dart';
 import '../../domain/transcode/encoder_params.dart';
 import '../../domain/transcode/options.dart';
 import '../../services/transcoder.dart';
+import '../shared/param_section.dart';
 import 'transcode_form.dart';
-import 'transcode_widgets.dart';
 
 class TranscodeVideoSection extends StatelessWidget {
   const TranscodeVideoSection({super.key, required this.form});
@@ -30,7 +30,7 @@ class TranscodeVideoSection extends StatelessWidget {
       VideoCodec.copy => '视频流原样复制，分辨率与帧率不能改',
       _ => null,
     };
-    return TranscodeSection(
+    return ParamSection(
       title: '视频',
       children: [
         LabeledField(
@@ -50,7 +50,7 @@ class TranscodeVideoSection extends StatelessWidget {
           ),
         ),
         if (codecHint != null)
-          TranscodeHint(codecHint, error: codec != VideoCodec.copy),
+          ParamHint(codecHint, error: codec != VideoCodec.copy),
         if (transcoding) ...[
           _EncoderList(form: form),
           if (encoder != null) _EncoderParams(form: form, encoder: encoder),
@@ -458,7 +458,7 @@ class _EncoderParamField extends StatelessWidget {
         LabeledField(label: param.label, child: control),
         if (hint != null) ...[
           const SizedBox(height: AppSpacing.s1),
-          TranscodeHint(hint),
+          ParamHint(hint),
         ],
       ],
     );

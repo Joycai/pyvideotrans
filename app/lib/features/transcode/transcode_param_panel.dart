@@ -11,9 +11,9 @@ import '../../domain/transcode/codecs.dart';
 import '../../domain/transcode/options.dart';
 import '../shared/command_block.dart';
 import '../shared/new_task_panels.dart';
+import '../shared/param_section.dart';
 import 'transcode_form.dart';
 import 'transcode_video_section.dart';
-import 'transcode_widgets.dart';
 
 class TranscodeParamPanel extends StatelessWidget {
   const TranscodeParamPanel({
@@ -33,10 +33,10 @@ class TranscodeParamPanel extends StatelessWidget {
       sections: [
         _OutputSection(form: form),
         if (o.remux)
-          const TranscodeSection(
+          const ParamSection(
             title: '音视频',
             children: [
-              TranscodeHint(
+              ParamHint(
                 '不重新编码，原样复制音视频流到新容器，速度快、画质无损；字幕轨不带入',
               ),
             ],
@@ -65,7 +65,7 @@ class _OutputSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final o = form.options;
-    return TranscodeSection(
+    return ParamSection(
       title: '输出',
       first: true,
       children: [
@@ -112,7 +112,7 @@ class _AudioSection extends StatelessWidget {
       _ when o.container == OutputContainer.mov => 'Opus 放不进 MOV，已禁用',
       _ => null,
     };
-    return TranscodeSection(
+    return ParamSection(
       title: '音频',
       children: [
         LabeledField(
@@ -132,7 +132,7 @@ class _AudioSection extends StatelessWidget {
           ),
         ),
         if (hint != null)
-          TranscodeHint(hint, error: !o.container.acceptsAudio(o.audioCodec)),
+          ParamHint(hint, error: !o.container.acceptsAudio(o.audioCodec)),
         if (o.audioCodec != AudioCodec.copy)
           Row(
             children: [
@@ -196,7 +196,7 @@ class _AdvancedSection extends StatelessWidget {
     final example = form.outputNameFor(
       form.files.firstOrNull?.fileName ?? 'interview_ep12.mkv',
     );
-    return TranscodeSection(
+    return ParamSection(
       title: '高级',
       leading: open ? Symbols.expand_more : Symbols.chevron_right,
       onTapTitle: () => form.advancedOpen = !open,
@@ -257,7 +257,7 @@ class _AdvancedSection extends StatelessWidget {
                   ),
                 ),
               ),
-              TranscodeHint('写成 $example；同名文件已存在时自动加序号'),
+              ParamHint('写成 $example；同名文件已存在时自动加序号'),
               Row(
                 children: [
                   Expanded(
@@ -265,7 +265,7 @@ class _AdvancedSection extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('快速启动（moov 前置）', style: context.texts.bodyMedium),
-                        const TranscodeHint('便于网页边下边播'),
+                        const ParamHint('便于网页边下边播'),
                       ],
                     ),
                   ),
@@ -290,7 +290,7 @@ class _AdvancedSection extends StatelessWidget {
                   onChanged: (v) => form.update((o) => o.copyWith(extraArgs: v)),
                 ),
               ),
-              const TranscodeHint('原样追加在输出文件前，参数错误会在任务日志里看到 FFmpeg 的报错'),
+              const ParamHint('原样追加在输出文件前，参数错误会在任务日志里看到 FFmpeg 的报错'),
               LabeledField(
                 label: '命令预览',
                 child: CommandBlock(

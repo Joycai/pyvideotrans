@@ -29,7 +29,15 @@ class NewTaskFilePanel extends StatelessWidget {
     required this.child,
     this.enqueued,
     this.header,
+    this.title = '文件',
+    this.browseLabel = '添加文件…',
   });
+
+  /// 标题行的名字；合并页叫「分段」。
+  final String title;
+
+  /// 标题行右侧添加按钮的文案。
+  final String browseLabel;
 
   /// 列表里的文件数，显示在标题旁；为 0 时不给「清空」「添加文件…」。
   final int count;
@@ -76,7 +84,7 @@ class NewTaskFilePanel extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s4),
               child: Row(
                 children: [
-                  Text('文件', style: context.texts.titleMedium),
+                  Text(title, style: context.texts.titleMedium),
                   const SizedBox(width: AppSpacing.s2),
                   Timecode('$count', color: cs.onSurfaceVariant),
                   const Spacer(),
@@ -84,7 +92,7 @@ class NewTaskFilePanel extends StatelessWidget {
                     QuietButton(label: '清空', onPressed: onClear),
                     const SizedBox(width: AppSpacing.s2),
                     ControlButton(
-                      label: '添加文件…',
+                      label: browseLabel,
                       icon: Symbols.add,
                       onPressed: onBrowse,
                     ),
@@ -142,6 +150,7 @@ class FileDropEmptyState extends StatelessWidget {
     required this.onBrowse,
     this.enqueued,
     this.formatsAlign,
+    this.note,
   });
 
   final IconData icon;
@@ -154,6 +163,9 @@ class FileDropEmptyState extends StatelessWidget {
 
   /// 格式说明折行时的对齐。转码页侧栏窄、格式多，会折成两行，要居中。
   final TextAlign? formatsAlign;
+
+  /// 格式说明下再加的一行小字（合并页讲同名字幕会自动挂上），没有就不占位。
+  final String? note;
 
   /// 三步说明的文案。
   final List<String> steps;
@@ -197,6 +209,16 @@ class FileDropEmptyState extends StatelessWidget {
                       color: cs.onSurfaceVariant,
                     ),
                   ),
+                  if (note != null) ...[
+                    const SizedBox(height: AppSpacing.s1),
+                    Text(
+                      note!,
+                      textAlign: TextAlign.center,
+                      style: context.texts.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.s5),
                   ControlButton(label: '选择文件…', onPressed: onBrowse),
                 ],
