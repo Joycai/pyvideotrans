@@ -279,6 +279,36 @@ class MergeFormController extends ChangeNotifier {
     return '${first!.videoCodecLabel} ${first.videoShape}';
   }
 
+  /// 顶栏副标题：没段时说这页做什么，有段时是段数、总长、第 1 段的参数与去向。
+  String get summary {
+    if (_segments.isEmpty) return '把几段视频按顺序拼成一个文件，不转码，每段一个章节';
+    final n = _segments.length;
+    final issues = this.issues;
+    final bad = [
+      for (final (i, s) in _segments.indexed)
+        if (s.probeError != null || issues[i] != null) i + 1,
+    ];
+    final total = totalDuration;
+    final probing = [
+      for (final (i, s) in _segments.indexed)
+        if (s.probing) i + 1,
+    ];
+    return [
+      '$n 段',
+      if (probing.isNotEmpty)
+        '第 ${probing.first} 段读取中'
+      else if (total != null)
+        '共 ${Srt.formatDuration(total)}',
+      if (bad.isNotEmpty)
+        '第 ${bad.first} 段参数与第 1 段不一致'
+      else ...[
+        ?baseSummary,
+        '无转码 → ${_options.container.label}',
+        if (_options.chapters && probing.isEmpty) '$n 个章节',
+      ],
+    ].join(' · ');
+  }
+
   String get outputFileName =>
       '${_options.outputStem.trim()}.${_options.container.extension}';
 
@@ -514,6 +544,12 @@ class MergeFormController extends ChangeNotifier {
     );
   }
 
+  void clearRejected() {
+    if (_rejected == null) return;
+    _rejected = null;
+    _notify();
+  }
+
   Future<void> browseSubtitle(int i) async {
     final dir = _segments[i].directory;
     final id = _segments[i].id;
@@ -546,9 +582,9 @@ class MergeFormController extends ChangeNotifier {
     _notify();
   }
 
-  /// 给 `ReorderableListView.onReorder`：[newIndex] 是按移走之前的列表算的。
+  /// 把第 [oldIndex] 段挪到第 [newIndex] 位（挪完之后的位置，与
+  /// `ReorderableListView.onReorderItem` 一致）。
   void reorder(int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) newIndex--;
     if (newIndex == oldIndex) return;
     _segments.insert(newIndex, _segments.removeAt(oldIndex));
     _followFirstSegment();
@@ -560,7 +596,7 @@ class MergeFormController extends ChangeNotifier {
   }
 
   void moveDown(int i) {
-    if (i < _segments.length - 1) reorder(i, i + 2);
+    if (i < _segments.length - 1) reorder(i, i + 1);
   }
 
   /// 输入即写回；清空时先留着空串，失焦后再回填默认（[commitChapterTitle]）。

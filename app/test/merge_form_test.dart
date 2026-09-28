@@ -148,7 +148,7 @@ void main() {
     expect([for (final i in form.issues) i != null], [false, true, true]);
     expect(form.options.outputStem, 'b.merged');
 
-    form.reorder(0, 3);
+    form.reorder(0, 2);
     expect(
       [for (final s in form.segments) s.fileName],
       ['a.mp4', 'c.mp4', 'b.mp4'],

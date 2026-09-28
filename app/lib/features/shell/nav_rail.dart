@@ -10,6 +10,7 @@ enum AppSection {
   newTranscribe(Symbols.mic, '新建转写'),
   newTranslate(Symbols.translate, '翻译'),
   transcode(Symbols.video_settings, '转码'),
+  merge(Symbols.merge, '合并'),
   editor(Symbols.edit_note, '编辑器'),
   settings(Symbols.settings, '设置');
 
@@ -19,7 +20,7 @@ enum AppSection {
   final String label;
 }
 
-/// 72px 宽的玻璃导航栏。设置固定在底部，与上面五项用弹性空间隔开。
+/// 72px 宽的玻璃导航栏。设置固定在底部，与上面六项用弹性空间隔开。
 class AppNavRail extends StatelessWidget {
   const AppNavRail({super.key, required this.current, required this.onSelect});
 
@@ -33,6 +34,7 @@ class AppNavRail extends StatelessWidget {
       AppSection.newTranscribe,
       AppSection.newTranslate,
       AppSection.transcode,
+      AppSection.merge,
       AppSection.editor,
     ];
     return GlassPanel(
