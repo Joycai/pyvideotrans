@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
@@ -6,7 +7,13 @@ import '../../core/widgets/glass_panel.dart';
 
 /// 锚在某个控件下方的浮层（来源浮层、说话人菜单、筛选菜单）。
 ///
-/// 点浮层外面任意处关闭。浮层内容由 [popover] 构建，拿到 `close` 回调。
+/// 点浮层外面任意处或按 Esc 关闭。浮层内容由 [popover] 构建，拿到 `close`
+/// 回调。
+///
+/// 打开时焦点移进浮层：Esc 先由浮层处理，不会穿到外面去（比如把编辑器的
+/// 多选一起退掉）。浮层在焦点树上仍挂在锚点底下，别的键照常往锚点的祖先
+/// 冒泡 —— 所以只挂在字幕列表上的单键碰不到这里的菜单。关闭时焦点还给打开
+/// 前的那个节点，字幕表的单键马上又能用。
 class AnchoredPopover extends StatefulWidget {
   const AnchoredPopover({
     super.key,
@@ -37,13 +44,39 @@ class AnchoredPopover extends StatefulWidget {
 class _AnchoredPopoverState extends State<AnchoredPopover> {
   final _portal = OverlayPortalController();
   final _anchorKey = GlobalKey();
+  final _focus = FocusNode(debugLabel: 'AnchoredPopover');
+
+  /// 打开前焦点在哪，关闭时还回去。
+  FocusNode? _returnTo;
 
   bool get isOpen => _portal.isShowing;
 
-  void open() => setState(_portal.show);
+  void open() {
+    _returnTo = FocusManager.instance.primaryFocus;
+    setState(_portal.show);
+    // autofocus 只在所在作用域还没有焦点时生效，这里外面通常已经有了，
+    // 得显式要一次。浮层下一帧才建出来。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _portal.isShowing) _focus.requestFocus();
+    });
+  }
 
   void close() {
-    if (_portal.isShowing) setState(_portal.hide);
+    if (!_portal.isShowing) return;
+    // 焦点已经被用户挪到别处（比如点了浮层外的输入框）就不抢回来。
+    final restore = _focus.hasFocus;
+    setState(_portal.hide);
+    final target = _returnTo;
+    _returnTo = null;
+    if (restore && target != null && target.context != null) {
+      target.requestFocus();
+    }
+  }
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
   }
 
   void toggle() => isOpen ? close() : open();
@@ -87,7 +120,15 @@ class _AnchoredPopoverState extends State<AnchoredPopover> {
                 width: width,
                 child: Material(
                   type: MaterialType.transparency,
-                  child: widget.popover(overlayContext, close),
+                  child: CallbackShortcuts(
+                    bindings: {
+                      const SingleActivator(LogicalKeyboardKey.escape): close,
+                    },
+                    child: Focus(
+                      focusNode: _focus,
+                      child: widget.popover(overlayContext, close),
+                    ),
+                  ),
                 ),
               ),
             ),
