@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/file_stamp.dart';
 import 'package:subtitle_studio/domain/subtitle_pairing.dart';
+import 'package:subtitle_studio/features/editor/cue_table_rows.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_leave_dialog.dart';
 import 'package:subtitle_studio/features/editor/editor_open_form.dart';
@@ -14,7 +15,10 @@ import 'package:subtitle_studio/features/editor/editor_page.dart';
 import 'package:subtitle_studio/features/editor/editor_page_actions.dart';
 import 'package:subtitle_studio/features/editor/editor_prompts.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
+import 'package:subtitle_studio/features/editor/editor_shortcuts.dart';
 import 'package:subtitle_studio/features/editor/editor_widgets.dart';
+import 'package:subtitle_studio/features/editor/inspector_selection_editor.dart';
+import 'package:subtitle_studio/features/editor/inspector_speaker_field.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 import 'editor_fixtures.dart';
@@ -170,6 +174,161 @@ void main() {
     });
   });
 
+  group('多选', () {
+    Future<void> click(
+      WidgetTester tester,
+      int row, [
+      LogicalKeyboardKey? modifier,
+    ]) async {
+      if (modifier != null) await tester.sendKeyDownEvent(modifier);
+      await tester.tap(find.byType(CueTableRow).at(row));
+      if (modifier != null) await tester.sendKeyUpEvent(modifier);
+      await tester.pump();
+    }
+
+    testWidgets('Shift 扩选、主修饰键切换，检视面板换成批量形态', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      expect(c.multiSelected, isFalse);
+      expect(find.textContaining('已选'), findsNothing);
+
+      await click(tester, 2, LogicalKeyboardKey.shiftLeft);
+      expect(c.selectedPositions, [0, 1, 2]);
+      await click(tester, 4, LogicalKeyboardKey.controlLeft);
+      expect(c.selectedPositions, [0, 1, 2, 4]);
+      await click(tester, 1, LogicalKeyboardKey.controlLeft);
+      expect(c.selectedPositions, [0, 2, 4]);
+      expect(find.text('已选 3 条字幕'), findsOneWidget);
+      expect(find.text('001、003、005'), findsOneWidget);
+
+      // 普通点击回到单选。
+      await click(tester, 3);
+      expect(c.selectedPositions, [3]);
+      expect(find.textContaining('已选'), findsNothing);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+
+    testWidgets('macOS 上 ⌘+点击切换，Ctrl+点击不算（留给系统右键）', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      await click(tester, 2, LogicalKeyboardKey.metaLeft);
+      expect(c.selectedPositions, [0, 2]);
+      // Ctrl+点击什么都不动，已有的多选也不清。
+      await click(tester, 4, LogicalKeyboardKey.controlLeft);
+      expect(c.selectedPositions, [0, 2]);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+    testWidgets('Esc 退出多选，焦点不变', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      await click(tester, 2, LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(c.multiSelected, isFalse);
+      expect(c.selected, 2);
+    });
+
+    testWidgets('从批量菜单选一个人，选中的都改过去', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      await click(tester, 3, LogicalKeyboardKey.shiftLeft);
+      final target = c.speakers.last;
+      // 夹具前四条里有 Mia 也有周老师。
+      expect(c.selectionMixedSpeakers, isTrue);
+      await tester.tap(find.text('多个说话人'));
+      await tester.pump();
+      expect(find.text('应用到已选 4 条'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(GlassMenu),
+          matching: find.text(target.name),
+        ),
+      );
+      await tester.pump();
+      expect(
+        c.document.cues.take(4).map((x) => x.speaker),
+        everyElement(target.id),
+      );
+      c.undo();
+      expect(c.canUndo, isFalse);
+    });
+
+    testWidgets('「取消多选」按钮回到单选', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      await click(tester, 2, LogicalKeyboardKey.shiftLeft);
+      await tester.tap(find.text('取消多选'));
+      await tester.pump();
+      expect(c.multiSelected, isFalse);
+      expect(c.selected, 2);
+      expect(find.textContaining('已选'), findsNothing);
+    });
+
+    testWidgets('单选时说话人菜单照旧：应用范围分段与单条清除', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      final speaker = c.document.speakerName(c.current!.speaker!);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(InspectorSpeakerField),
+          matching: find.text(speaker),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('应用范围'), findsOneWidget);
+      expect(find.text('这一条'), findsOneWidget);
+      expect(find.textContaining('应用到已选'), findsNothing);
+      expect(find.text('清除这一条的说话人'), findsOneWidget);
+    });
+
+    testWidgets('批量菜单里新增说话人：选中的都指派给新人', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      await click(tester, 2, LogicalKeyboardKey.shiftLeft);
+      final id = c.document.nextSpeakerId;
+      await tester.tap(find.text('多个说话人'));
+      await tester.pump();
+      await tester.tap(find.text('新增说话人…'));
+      await tester.pump();
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(GlassMenu),
+          matching: find.byType(EditableText),
+        ),
+        '小王',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(c.document.speakerName(id), '小王');
+      expect(c.document.cues.take(3).map((x) => x.speaker), everyElement(id));
+    });
+
+    testWidgets('多选时数字键批量指派', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 1);
+      await click(tester, 2, LogicalKeyboardKey.shiftLeft);
+      final first = c.speakers.first;
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
+      expect(
+        [c.document.cues[1].speaker, c.document.cues[2].speaker],
+        [first.id, first.id],
+      );
+    });
+  });
+
+  test('行号区间摘要', () {
+    expect(selectionRanges([1, 2, 3, 4, 9, 15, 16]), '001–004、009、015–016');
+    expect(selectionRanges([1, 3, 5], maxRuns: 2), '001、003 等');
+    expect(selectionRanges([]), '');
+  });
+
   group('离开编辑器前的询问', () {
     Future<bool?> ask(
       WidgetTester tester,
@@ -274,20 +433,35 @@ void main() {
         ..physicalSize = const Size(1440, 900)
         ..devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
+      // ⌘S 挂在编辑器分区范围（main.dart 里包住整个外壳），交给同一个
+      // 上层保存流程。
+      final page = GlobalKey<EditorPageState>();
       await tester.pumpWidget(
         MaterialApp(
           theme: lightTheme,
-          home: Scaffold(
-            body: EditorPage(controller: c, onSave: () async => saved++),
+          home: EditorShortcuts(
+            target: () => page.currentState?.shortcutTarget,
+            onSave: () => saved++,
+            child: Scaffold(
+              body: EditorPage(
+                key: page,
+                controller: c,
+                onSave: () async => saved++,
+              ),
+            ),
           ),
         ),
       );
       await tester.pump();
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+      // 主修饰键按平台：macOS 上 ⌘S，Ctrl+S 不算。
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       expect(saved, 1);
-    });
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets('切走分区不释放预览：媒体跟着 controller 走', (tester) async {
       final c = await _controller();

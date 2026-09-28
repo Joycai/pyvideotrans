@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
@@ -134,6 +135,18 @@ void main() {
     // 横幅 6 秒后自动收起。
     await tester.pump(const Duration(seconds: 7));
     expect(find.textContaining('已加入队列'), findsNothing);
+  });
+
+  testWidgets('Enter 开始：工作台页也接到提交上', (tester) async {
+    await pumpPage(tester);
+    state(tester).handleDrop(['/v/a.mp4']);
+    await tester.pump();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(queue.tasks.length, 1);
+    // 横幅 6 秒后自动收起，等它走完免得计时器残留。
+    await tester.pump(const Duration(seconds: 7));
   });
 
   testWidgets('表单挂在页面外面，页面重建后文件与参数还在', (tester) async {

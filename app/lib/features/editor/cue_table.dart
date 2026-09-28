@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
+import '../../core/shortcuts/app_shortcut.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/indicators.dart';
@@ -8,6 +11,7 @@ import 'cue_table_rows.dart';
 import 'cue_table_toolbar.dart';
 import 'editor_controller.dart';
 import 'editor_session.dart';
+import 'editor_shortcuts.dart';
 import 'editor_widgets.dart';
 
 /// 列宽与设计稿一致。null 为弹性列。
@@ -25,11 +29,15 @@ class CueTable extends StatelessWidget {
   const CueTable({
     super.key,
     required this.controller,
+    required this.focusNode,
     this.onManageSpeakers,
     this.onMountTranslation,
   });
 
   final EditorController controller;
+
+  /// 字幕列表的焦点。单键快捷键挂在它上面，见 [CueTableShortcuts]。
+  final FocusNode focusNode;
   final VoidCallback? onManageSpeakers;
 
   /// 只挂了原文时，译文表头上的「+ 挂载译文…」。
@@ -38,7 +46,7 @@ class CueTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    final visible = controller.visibleCues;
+    final visible = controller.visiblePositions;
     final doc = controller.document;
     final speakers = doc.hasSpeakers;
     final isFile = controller.session is FileSession;
@@ -50,11 +58,13 @@ class CueTable extends StatelessWidget {
         ? _compactSpeakerColumns
         : _speakerColumns;
 
-    return Container(
+    final radius = BorderRadius.circular(AppRadius.lg);
+    // 列表有焦点时描一圈主色：单键快捷键此刻生效。画在前景上，不挤内容。
+    final table = Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        borderRadius: radius,
         border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(
@@ -62,7 +72,6 @@ class CueTable extends StatelessWidget {
           CueTableToolbar(
             controller: controller,
             speakers: speakers,
-            showHint: !isFile && !speakers,
             onManageSpeakers: onManageSpeakers,
           ),
           CueTableHeader(
@@ -75,7 +84,10 @@ class CueTable extends StatelessWidget {
                 : null,
           ),
           Expanded(
-            child: visible.isEmpty
+            child: CueTableShortcuts(
+              controller: controller,
+              focusNode: focusNode,
+              child: visible.isEmpty
                 ? Center(
                     child: Text(
                       doc.cues.isEmpty ? '这份字幕还没有内容' : '没有符合条件的字幕',
@@ -86,20 +98,38 @@ class CueTable extends StatelessWidget {
                   )
                 : _CueList(
                     controller: controller,
+                    focusNode: focusNode,
                     visible: visible,
                     columns: columns,
                     speakers: speakers,
                     compact: compact,
                     translated: translated,
                   ),
+            ),
           ),
           _Footer(
             controller: controller,
             visibleCount: visible.length,
-            showHint: isFile || speakers,
+            tableFocus: focusNode,
           ),
         ],
       ),
+    );
+    return ListenableBuilder(
+      listenable: focusNode,
+      builder: (context, child) => AnimatedContainer(
+        duration: AppDuration.short,
+        curve: AppEasing.standard,
+        foregroundDecoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(
+            color: focusNode.hasFocus ? cs.primary : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: child,
+      ),
+      child: table,
     );
   }
 }
@@ -109,6 +139,7 @@ class CueTable extends StatelessWidget {
 class _CueList extends StatefulWidget {
   const _CueList({
     required this.controller,
+    required this.focusNode,
     required this.visible,
     required this.columns,
     required this.speakers,
@@ -117,7 +148,10 @@ class _CueList extends StatefulWidget {
   });
 
   final EditorController controller;
-  final List<Cue> visible;
+  final FocusNode focusNode;
+
+  /// 看得见的行在文档里的下标，按显示顺序。
+  final List<int> visible;
   final List<double?> columns;
   final bool speakers;
   final bool compact;
@@ -146,7 +180,7 @@ class _CueListState extends State<_CueList> {
     if (!mounted || !_scroll.hasClients) return;
     final cue = widget.controller.current;
     if (cue == null) return;
-    final row = widget.visible.indexWhere((c) => c.index == cue.index);
+    final row = widget.visible.indexOf(widget.controller.selected);
     if (row < 0) return;
     final top = row * _CueList.rowHeight;
     final bottom = top + _CueList.rowHeight;
@@ -174,16 +208,18 @@ class _CueListState extends State<_CueList> {
     final controller = widget.controller;
     final doc = controller.document;
     final visible = widget.visible;
+    // 一次算好选中集合，别让每一行各算一遍。
+    final chosen = controller.selectedPositions.toSet();
     return ListView.builder(
       controller: _scroll,
       padding: EdgeInsets.zero,
       itemExtent: _CueList.rowHeight,
       itemCount: visible.length,
       itemBuilder: (context, i) {
-        final cue = visible[i];
-        final position = doc.cues.indexWhere((c) => c.index == cue.index);
+        final position = visible[i];
+        final cue = doc.cues[position];
         // 连续说话人按看得见的上一行算：筛选后行与行不一定相邻。
-        final previous = i > 0 ? visible[i - 1].speaker : null;
+        final previous = i > 0 ? doc.cues[visible[i - 1]].speaker : null;
         return CueTableRow(
           cue: cue,
           state: displayStateOf(cue, translated: widget.translated),
@@ -198,8 +234,21 @@ class _CueListState extends State<_CueList> {
               cue.speaker != null && doc.speakers.containsKey(cue.speaker),
           view: controller.view,
           edited: controller.isEdited(cue),
-          selected: position == controller.selected,
-          onTap: () => controller.select(position),
+          selected: chosen.contains(position),
+          focused: position == controller.selected,
+          onTap: () {
+            // macOS 上 Ctrl+点击按惯例是右键。Flutter 报成带 Ctrl 的普通点击，
+            // 照普通点击处理会把已有的多选清掉；这里没有右键菜单，干脆不动。
+            if (usesCommandKey() && HardwareKeyboard.instance.isControlPressed) {
+              return;
+            }
+            // Shift 优先：主修饰键 + Shift 也按扩选处理。主修饰键按平台区分。
+            controller.selectWith(
+              position,
+              extend: HardwareKeyboard.instance.isShiftPressed,
+              toggle: isPrimaryModifierPressed(),
+            );
+          },
         );
       },
     );
@@ -210,12 +259,14 @@ class _Footer extends StatelessWidget {
   const _Footer({
     required this.controller,
     required this.visibleCount,
-    required this.showHint,
+    required this.tableFocus,
   });
 
   final EditorController controller;
   final int visibleCount;
-  final bool showHint;
+
+  /// 提示跟着列表有没有焦点变，自己听它，不靠上层重建。
+  final FocusNode tableFocus;
 
   @override
   Widget build(BuildContext context) {
@@ -235,10 +286,7 @@ class _Footer extends StatelessWidget {
           unpaired++;
       }
     }
-    final hint = showHint
-        // 两种会话都能 ⌘S：写的是字幕文件，编辑进度本来就在自动存。
-        ? ' · J/K 上下条 · Enter 校对 · ⌘S 保存到文件'
-        : '';
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.s4,
@@ -251,11 +299,27 @@ class _Footer extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              '显示 $visibleCount / ${doc.cues.length}$hint',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: context.texts.bodySmall?.copyWith(
+            child: ListenableBuilder(
+              listenable: tableFocus,
+              builder: (context, _) => Text(
+                '显示 $visibleCount / ${doc.cues.length} · '
+                '${editorFooterHint(controller, tableFocused: tableFocus.hasFocus)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.texts.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+          Tooltip(
+            message: editorShortcutSheet(),
+            child: Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.s3),
+              child: Icon(
+                Symbols.keyboard,
+                size: 16,
+                weight: 400,
                 color: cs.onSurfaceVariant,
               ),
             ),

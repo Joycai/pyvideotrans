@@ -1,18 +1,17 @@
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/glass_panel.dart';
-import '../../core/widgets/text_focus.dart';
 import '../../domain/srt.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/settings.dart';
 import '../shared/enqueue_request.dart';
 import '../shared/new_task_panels.dart';
+import '../shared/submit_shortcuts.dart';
 import 'transcribe_advanced_section.dart';
 import 'transcribe_footer.dart';
 import 'transcribe_form.dart';
@@ -104,78 +103,65 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
     if (result != null) Navigator.of(context).pop(result);
   }
 
-  /// 多行输入框里的回车是换行，不该把任务提交出去。
-  bool get _editingText => isEditingText(multiline: true);
-
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): () =>
-            Navigator.of(context).pop(),
-        const SingleActivator(LogicalKeyboardKey.enter): () {
-          if (!_editingText) _start();
-        },
-        const SingleActivator(LogicalKeyboardKey.enter, meta: true): _start,
-        const SingleActivator(LogicalKeyboardKey.enter, control: true): _start,
-      },
-      child: Focus(
-        autofocus: true,
-        child: Dialog(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          child: DropTarget(
-            onDragEntered: (_) => setState(() => _dragging = true),
-            onDragExited: (_) => setState(() => _dragging = false),
-            onDragDone: (d) =>
-                handleDrop(d.files.map((f) => f.path).toList()),
-            child: GlassPanel(
-              strong: true,
-              expand: false,
-              radius: AppRadius.xl,
-              shadow: context.elevation.shadow3,
-              child: SizedBox(
-                width: 720,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _header(cs),
-                    // 内容区最高 640，再长就在对话框内部滚动 —— 标题与底部
-                    // 那行校验必须始终看得见，否则用户不知道为什么不能开始。
-                    Flexible(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 640),
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.s6,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _fileArea(),
-                              const SizedBox(height: AppSpacing.s4),
-                              TranscribeRecognizeSection(
-                                form: _form,
-                                onOpenSettings: widget.onOpenSettings == null
-                                    ? null
-                                    : () {
-                                        Navigator.of(context).pop();
-                                        widget.onOpenSettings!();
-                                      },
-                              ),
-                              const SizedBox(height: AppSpacing.s4),
-                              TranscribeTranslateSection(form: _form),
-                              const SizedBox(height: AppSpacing.s4),
-                              TranscribeAdvancedSection(form: _form),
-                            ],
-                          ),
+    return SubmitShortcuts(
+      onSubmit: _start,
+      onDismiss: () => Navigator.of(context).pop(),
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: DropTarget(
+          onDragEntered: (_) => setState(() => _dragging = true),
+          onDragExited: (_) => setState(() => _dragging = false),
+          onDragDone: (d) =>
+              handleDrop(d.files.map((f) => f.path).toList()),
+          child: GlassPanel(
+            strong: true,
+            expand: false,
+            radius: AppRadius.xl,
+            shadow: context.elevation.shadow3,
+            child: SizedBox(
+              width: 720,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _header(cs),
+                  // 内容区最高 640，再长就在对话框内部滚动 —— 标题与底部
+                  // 那行校验必须始终看得见，否则用户不知道为什么不能开始。
+                  Flexible(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 640),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.s6,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _fileArea(),
+                            const SizedBox(height: AppSpacing.s4),
+                            TranscribeRecognizeSection(
+                              form: _form,
+                              onOpenSettings: widget.onOpenSettings == null
+                                  ? null
+                                  : () {
+                                      Navigator.of(context).pop();
+                                      widget.onOpenSettings!();
+                                    },
+                            ),
+                            const SizedBox(height: AppSpacing.s4),
+                            TranscribeTranslateSection(form: _form),
+                            const SizedBox(height: AppSpacing.s4),
+                            TranscribeAdvancedSection(form: _form),
+                          ],
                         ),
                       ),
                     ),
-                    _footerBar(cs),
-                  ],
-                ),
+                  ),
+                  _footerBar(cs),
+                ],
               ),
             ),
           ),

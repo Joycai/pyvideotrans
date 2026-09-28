@@ -106,6 +106,18 @@ Python 后端都说 OpenAI 兼容协议，于是共用 `OpenAiCompatibleAsrProvi
   `writeFiles`，要问用户的经 `main.dart` 注入的 `EditorPrompts`，view-model 不 import widget；
   预览播放器由 controller 的 `EditorMedia` 持有 —— 页面切分区就重建，别把它挂回页面上。
 
+### 快捷键：用焦点范围隔开，不猜焦点
+
+- 键位写成 `AppShortcut`（`core/shortcuts/`）。它生成 `SingleActivator` 与界面文案，主修饰键按平台区分：macOS 是 ⌘，其余是 Ctrl。
+  - 不手查 `HardwareKeyboard`。只有鼠标操作（⌘/Ctrl+点击）用 `isPrimaryModifierPressed`。
+  - 不写死「⌘S」。
+- 编辑器的单键（J/K、数字、Enter、空格……）只挂在字幕列表自己的 `Focus` 上（`CueTableShortcuts`），不包工具栏。焦点在输入框、按钮、浮层里时按键到不了这里。
+  - 新加单键时放进这个范围，不要回到「一个全局处理函数 + isEditingText」的写法。
+- ⌘ 组合挂在编辑器分区（`EditorShortcuts`，`main.dart` 里包住整个应用外壳，顶栏浮层开着时也收得到）。这一层比输入框自带的快捷键先拿到按键，所以和输入框撞键的（⌘Z）要在 Action 的 `isEnabled` 里让出去。
+- 动作一律用 `ShortcutAction`（`core/shortcuts/`）。条件不满足时返回「未启用」而不是吞掉按键，按键才会继续传给真正该处理它的控件；输入法组字时它一律不启用，Enter、Esc 让给输入法，各处不用再自己判断。
+- Esc 由最里层先处理：浮层 → 对话框 → 输入框 → 字幕表。
+- macOS 上不用 Ctrl+点击（系统右键）和 ⌘⇧3/4/5（系统截屏）。
+
 ### 持久化与外部依赖
 
 - 任务存成 JSON 在应用支持目录（`TaskStore`），进度回调很密所以攒 300ms 批量写盘；

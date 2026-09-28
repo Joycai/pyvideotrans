@@ -89,6 +89,11 @@ class _GatedTranslator implements TranslationProvider {
   }
 }
 
+/// 表里看得见的各条行号。
+List<int> _shown(EditorController c) => [
+  for (final p in c.visiblePositions) c.document.cues[p].index,
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -188,6 +193,26 @@ void main() {
       expect(t.outputs.keys, written);
       expect(t.outputsWrittenAt, isNotNull);
       expect(c.sync, SyncState.written);
+      c.dispose();
+    });
+
+    test('「本次修改」筛选下多选后写入：写完看不见的行不再参与批量操作', () async {
+      final t = task();
+      final c = controllerFor(TaskSession(t))..select(0);
+      c.editSource('改过的第一句');
+      c
+        ..select(1)
+        ..editSource('改过的第二句')
+        ..setFilter(CueFilter.edited)
+        ..selectWith(0)
+        ..selectWith(1, extend: true);
+      expect(c.multiSelected, isTrue);
+
+      await c.save();
+      // 写入换了「已修改」的基准，两条都不算修改了，表里看不见。
+      expect(c.visiblePositions, isEmpty);
+      expect(c.multiSelected, isFalse);
+      expect(c.selectedPositions, [1]);
       c.dispose();
     });
 
@@ -508,7 +533,7 @@ void main() {
       // 拆出的两条是新的；后面两条只是重新编号，不算改过。
       expect(c.countOf(CueFilter.edited), 2);
       c.setFilter(CueFilter.edited);
-      expect(c.visibleCues.map((x) => x.index), [1, 2]);
+      expect(_shown(c), [1, 2]);
     });
 
     test('写入后以写入的版本为准重新算', () async {
@@ -1099,7 +1124,7 @@ void main() {
       expect(find.text('字幕文件'), findsOneWidget);
       expect(find.text('demo.zh.srt'), findsOneWidget);
       expect(find.text('撤销到上次写入'), findsOneWidget);
-      await tester.tap(find.text('写入文件 ⌘S'));
+      await tester.tap(find.text('写入文件'));
       await tester.pumpAndSettle();
       expect(saved, 1);
     });

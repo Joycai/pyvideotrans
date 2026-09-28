@@ -5,6 +5,7 @@ import '../../core/widgets/glass_panel.dart';
 import 'editor_controller.dart';
 import 'inspector_cue_editor.dart';
 import 'inspector_preview.dart';
+import 'inspector_selection_editor.dart';
 import 'preview_playback.dart';
 
 /// 右侧 440px 检视面板：预览 + 当前条的编辑。
@@ -61,12 +62,17 @@ class Inspector extends StatelessWidget {
                       absorbing: controller.locked,
                       child: Opacity(
                         opacity: controller.locked ? 0.6 : 1,
-                        child: InspectorCueEditor(
-                          controller: controller,
-                          onRetranslate: onRetranslate,
-                          onManageSpeakers: onManageSpeakers,
-                          onMountTranslation: onMountTranslation,
-                        ),
+                        child: controller.multiSelected
+                            ? InspectorSelectionEditor(
+                                controller: controller,
+                                onManageSpeakers: onManageSpeakers,
+                              )
+                            : InspectorCueEditor(
+                                controller: controller,
+                                onRetranslate: onRetranslate,
+                                onManageSpeakers: onManageSpeakers,
+                                onMountTranslation: onMountTranslation,
+                              ),
                       ),
                     ),
                   ),

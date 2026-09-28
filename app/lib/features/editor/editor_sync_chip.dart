@@ -9,6 +9,7 @@ import '../../domain/file_stamp.dart';
 import '../../domain/paths.dart';
 import '../../services/reveal.dart';
 import 'editor_controller.dart';
+import 'editor_keys.dart';
 import 'editor_widgets.dart';
 
 /// 任务会话的保存状态 chip（设计稿「编辑器保存模型」画板 1、2）。
@@ -254,8 +255,8 @@ class _SyncPopover extends StatelessWidget {
           status: fileStatus,
           statusColor: fileColor,
           body: controller.sync == SyncState.noOutput
-              ? '任务没有跑完，还没写出字幕文件；按 ⌘S 按任务参数生成，与完成时同名同路径。'
-              : '播放器、剪辑软件读的是这 ${paths.length} 份文件，按 ⌘S 才会更新。',
+              ? '任务没有跑完，还没写出字幕文件；按 ${EditorKeys.save.label()} 按任务参数生成，与完成时同名同路径。'
+              : '播放器、剪辑软件读的是这 ${paths.length} 份文件，按 ${EditorKeys.save.label()} 才会更新。',
           extra: [
             const SizedBox(height: AppSpacing.s1),
             for (final path in paths)
@@ -331,17 +332,22 @@ class _SyncPopover extends StatelessWidget {
                     close?.call();
                   },
                 ),
-              PrimaryButton(
-                label: controller.sync == SyncState.noOutput
-                    ? '生成文件 ⌘S'
-                    : '写入文件 ⌘S',
-                height: 30,
-                onPressed: controller.canWrite && onSave != null
-                    ? () {
-                        close?.call();
-                        onSave!();
-                      }
-                    : null,
+              // 快捷键放进悬停提示：写进按钮里，Windows 上的「Ctrl+S」比「⌘S」
+              // 宽，这一行会挤出去。
+              Tooltip(
+                message: EditorKeys.save.label(),
+                child: PrimaryButton(
+                  label: controller.sync == SyncState.noOutput
+                      ? '生成文件'
+                      : '写入文件',
+                  height: 30,
+                  onPressed: controller.canWrite && onSave != null
+                      ? () {
+                          close?.call();
+                          onSave!();
+                        }
+                      : null,
+                ),
               ),
             ],
           ),

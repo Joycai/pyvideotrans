@@ -7,6 +7,7 @@ import '../../core/widgets/indicators.dart';
 import '../../domain/paths.dart';
 import '../../domain/subtitle_pairing.dart';
 import 'editor_controller.dart';
+import 'editor_keys.dart';
 import 'editor_open_form.dart';
 import 'editor_session.dart';
 import 'editor_widgets.dart';
@@ -232,7 +233,7 @@ class EditorSourceChip extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
               child: Text(
-                '⌘S 会覆盖上面 $fileCount 个文件。想保留原文件，请用「导出…」。',
+                '${EditorKeys.save.label()} 会覆盖上面 $fileCount 个文件。想保留原文件，请用「导出…」。',
                 style: context.texts.bodySmall?.copyWith(
                   color: cs.onSurfaceVariant,
                 ),
