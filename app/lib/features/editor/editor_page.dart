@@ -52,12 +52,18 @@ class EditorPageState extends State<EditorPage> {
   /// 字幕列表的焦点：单键快捷键只在它有焦点时生效。
   final _tableFocus = FocusNode(debugLabel: 'CueTable');
 
+  /// 编辑页自己的焦点作用域。输入框点外面会 unfocus，焦点落到最近的作用域
+  /// 上：没有这一层就落到路由上，在编辑页的快捷键之外，⌘S、Esc 全都收不到。
+  /// 焦点落到作用域本身时转给字幕列表。
+  final _pageScope = FocusScopeNode(debugLabel: 'EditorPage');
+
   EditorController get controller => widget.controller;
 
   @override
   void initState() {
     super.initState();
     _listen(controller);
+    _pageScope.addListener(_forwardToTable);
     // 进页面就让字幕列表拿焦点，J/K 不用先点一下列表才生效。
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _tableFocus.requestFocus(),
@@ -78,6 +84,9 @@ class EditorPageState extends State<EditorPage> {
     _unlisten(controller);
     // 播放器随 controller 留着，页面收起时只暂停，回来还在原位置。
     unawaited(controller.media.pause());
+    _pageScope
+      ..removeListener(_forwardToTable)
+      ..dispose();
     _tableFocus.dispose();
     super.dispose();
   }
@@ -100,6 +109,10 @@ class EditorPageState extends State<EditorPage> {
     );
     if (picked == null || !mounted) return;
     await controller.media.attach(picked.path);
+  }
+
+  void _forwardToTable() {
+    if (_pageScope.hasPrimaryFocus) _tableFocus.requestFocus();
   }
 
   void _refresh() {
@@ -209,13 +222,16 @@ class EditorPageState extends State<EditorPage> {
       controller: controller,
       tableFocus: _tableFocus,
       onSave: _save,
-      child: onDrop == null
-          ? page
-          : EditorDropZone(
-              hasTranslation: controller.hasTranslations,
-              onDrop: onDrop,
-              child: page,
-            ),
+      child: FocusScope(
+        node: _pageScope,
+        child: onDrop == null
+            ? page
+            : EditorDropZone(
+                hasTranslation: controller.hasTranslations,
+                onDrop: onDrop,
+                child: page,
+              ),
+      ),
     );
   }
 }

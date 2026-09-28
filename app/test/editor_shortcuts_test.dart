@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,7 +20,10 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final mac = TargetPlatformVariant.only(TargetPlatform.macOS);
 
+  var saved = 0;
+
   Future<EditorController> pump(WidgetTester tester) async {
+    saved = 0;
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
     final c = EditorController(session: localSession(), settings: settings);
@@ -34,7 +38,7 @@ void main() {
           body: SizedBox(
             width: 1332,
             height: 800,
-            child: EditorPage(controller: c),
+            child: EditorPage(controller: c, onSave: () async => saved++),
           ),
         ),
       ),
@@ -49,13 +53,20 @@ void main() {
     bool command = false,
     bool shift = false,
   }) async {
-    if (command) await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    // 主修饰键按测试平台选：macOS 是 ⌘，其余是 Ctrl。
+    final primary = defaultTargetPlatform == TargetPlatform.macOS
+        ? LogicalKeyboardKey.metaLeft
+        : LogicalKeyboardKey.controlLeft;
+    if (command) await tester.sendKeyDownEvent(primary);
     if (shift) await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyEvent(key);
     if (shift) await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
-    if (command) await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    if (command) await tester.sendKeyUpEvent(primary);
     await tester.pump();
   }
+
+  bool tableHasFocus() =>
+      FocusManager.instance.primaryFocus?.debugLabel == 'CueTable';
 
   /// 检视面板里的原文输入框。
   Future<void> focusSourceField(WidgetTester tester) async {
@@ -120,6 +131,71 @@ void main() {
     }, variant: mac);
   });
 
+  group('焦点不会被带出字幕列表', () {
+    testWidgets('没有预览时 ←/→ 什么都不做，也不把焦点带走', (tester) async {
+      final c = await pump(tester);
+      c.select(0);
+      await tester.pump();
+      expect(c.media.playback, isNull);
+      // 每按一下都看：→ 把焦点带走后 ← 可能又带回来。
+      await press(tester, LogicalKeyboardKey.arrowRight);
+      expect(tableHasFocus(), isTrue);
+      await press(tester, LogicalKeyboardKey.arrowLeft);
+      expect(tableHasFocus(), isTrue);
+      await press(tester, LogicalKeyboardKey.keyJ);
+      expect(c.selected, 1);
+    }, variant: mac);
+
+    testWidgets('在输入框里点外面，焦点回到字幕列表，快捷键都还在', (tester) async {
+      final c = await pump(tester);
+      c.select(0);
+      await tester.pump();
+      await focusSourceField(tester);
+      // 点页脚（不在列表区里）：输入框 unfocus，焦点落到编辑页作用域再转给列表。
+      await tester.tap(find.textContaining('显示 '));
+      await tester.pump();
+      expect(tableHasFocus(), isTrue);
+      await press(tester, LogicalKeyboardKey.keyJ);
+      expect(c.selected, 1);
+      await press(tester, LogicalKeyboardKey.keyS, command: true);
+      expect(saved, 1);
+    }, variant: mac);
+
+    testWidgets('点列表区的空白（没有行的地方）也让列表拿焦点', (tester) async {
+      final c = await pump(tester);
+      c.select(0);
+      c.setSearch('没有这句');
+      await tester.pump();
+      await focusSourceField(tester);
+      await tester.tap(find.text('没有符合条件的字幕'));
+      await tester.pump();
+      expect(tableHasFocus(), isTrue);
+    }, variant: mac);
+
+    testWidgets('数字键长按只指派一次', (tester) async {
+      final c = await pump(tester);
+      c.select(0);
+      await tester.pump();
+      final before = c.session.pendingEdits;
+      // 名单每次现算，按位置找第一位不是当前说话人的。
+      final speakers = c.speakers;
+      final n =
+          speakers.indexWhere((s) => s.id != c.document.cues[0].speaker) + 1;
+      final target = speakers[n - 1];
+      final key = [
+        LogicalKeyboardKey.digit1,
+        LogicalKeyboardKey.digit2,
+        LogicalKeyboardKey.digit3,
+      ][n - 1];
+      await tester.sendKeyDownEvent(key);
+      await tester.sendKeyRepeatEvent(key);
+      await tester.sendKeyRepeatEvent(key);
+      await tester.sendKeyUpEvent(key);
+      expect(c.document.cues[0].speaker, target.id);
+      expect(c.session.pendingEdits, before + 1);
+    }, variant: mac);
+  });
+
   group('焦点在输入框', () {
     testWidgets('单键是打字，不当快捷键', (tester) async {
       final c = await pump(tester);
@@ -135,18 +211,27 @@ void main() {
       expect(c.document.cues[0].reviewed, before.reviewed);
     }, variant: mac);
 
-    testWidgets('⌘ 组合照常生效：⌘数字指派、⌘Enter 校对', (tester) async {
-      final c = await pump(tester);
-      c.select(0);
-      await tester.pump();
-      await focusSourceField(tester);
-      final third = c.speakers[2];
-      await press(tester, LogicalKeyboardKey.digit3, command: true);
-      expect(c.document.cues[0].speaker, third.id);
-      final reviewed = c.document.cues[0].reviewed;
-      await press(tester, LogicalKeyboardKey.enter, command: true);
-      expect(c.document.cues[0].reviewed, !reviewed);
-    }, variant: mac);
+    testWidgets(
+      '主修饰键组合照常生效：数字指派、Enter 校对、S 保存',
+      (tester) async {
+        final c = await pump(tester);
+        c.select(0);
+        await tester.pump();
+        await focusSourceField(tester);
+        final third = c.speakers[2];
+        await press(tester, LogicalKeyboardKey.digit3, command: true);
+        expect(c.document.cues[0].speaker, third.id);
+        final reviewed = c.document.cues[0].reviewed;
+        await press(tester, LogicalKeyboardKey.enter, command: true);
+        expect(c.document.cues[0].reviewed, !reviewed);
+        await press(tester, LogicalKeyboardKey.keyS, command: true);
+        expect(saved, 1);
+      },
+      variant: const TargetPlatformVariant({
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+      }),
+    );
 
     testWidgets('⌘Z 撤销的是输入框里的字，不是整份文档', (tester) async {
       final c = await pump(tester);

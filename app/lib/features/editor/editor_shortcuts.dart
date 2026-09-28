@@ -105,16 +105,22 @@ class CueTableShortcuts extends StatelessWidget {
             (_) => c.media.playback?.toggle(),
             enabled: (_) => c.media.playback != null,
           ),
+          // 没有预览时也把 ←/→ 吃掉：放出去会变成 App 层的方向键焦点导航，
+          // 焦点被带出列表，J/K 就失灵了。
           _NudgeIntent: _Act<_NudgeIntent>(
             (i) => c.media.playback?.nudge(EditorKeys.nudge * i.direction),
-            enabled: (_) => c.media.playback != null,
           ),
           _ExitMultiIntent: _Act<_ExitMultiIntent>(
             (_) => c.clearMultiSelection(),
             enabled: (_) => c.multiSelected,
           ),
         },
-        child: Focus(focusNode: focusNode, child: child),
+        // 在列表区任何地方按下（包括行下面的空白、「没有符合条件的字幕」）
+        // 都把焦点交给列表：「点一下表格」就该让单键生效。
+        child: Listener(
+          onPointerDown: (_) => focusNode.requestFocus(),
+          child: Focus(focusNode: focusNode, child: child),
+        ),
       ),
     );
   }

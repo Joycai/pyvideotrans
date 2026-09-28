@@ -237,8 +237,6 @@ class _CueListState extends State<_CueList> {
           selected: chosen.contains(position),
           focused: position == controller.selected,
           onTap: () {
-            // 点行就让列表拿焦点：单键快捷键跟着生效。
-            widget.focusNode.requestFocus();
             // Shift 优先：主修饰键 + Shift 也按扩选处理。主修饰键按平台区分，
             // macOS 上的 Ctrl+点击是系统右键。
             controller.selectWith(
