@@ -45,6 +45,9 @@ class _FakeTranscoder extends Transcoder {
         detail: 'moov atom not found',
       );
     }
+    if (path.contains('weird')) {
+      throw const FormatException('ffprobe 输出不是 JSON');
+    }
     return probes[path] ?? probeOf();
   }
 }
@@ -59,6 +62,12 @@ void main() {
   late Map<String, Object> files;
   late MergeFormController form;
 
+  /// 有值时字幕解析 / 列目录要等它放行。
+  Completer<void>? subtitleGate;
+  Completer<void>? listGate;
+  var picked = <String>[];
+  String? pickedDir;
+
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     settings = await AppSettings.load();
@@ -68,14 +77,25 @@ void main() {
     form = MergeFormController(
       settings: settings,
       transcoder: transcoder,
-      listDir: (dir) async => dirs[dir] ?? const [],
-      readSubtitle: (path) async => switch (files[path]) {
-        final String text => text,
-        final Exception e => throw e,
-        _ => throw const FileSystemException('找不到文件'),
+      listDir: (dir) async {
+        await listGate?.future;
+        return dirs[dir] ?? const [];
       },
-      pickDirectory: () async => '/out',
+      readSubtitle: (path) async {
+        await subtitleGate?.future;
+        return switch (files[path]) {
+          final String text => text,
+          final Exception e => throw e,
+          _ => throw const FileSystemException('找不到文件'),
+        };
+      },
+      pickDirectory: () async => pickedDir,
+      pickVideos: () async => picked,
     );
+    subtitleGate = null;
+    listGate = null;
+    picked = [];
+    pickedDir = '/out';
   });
 
   /// 等异步的探测与字幕解析都回来。
@@ -323,5 +343,158 @@ void main() {
     await settle();
     expect(form.segments, hasLength(2));
     expect(form.canStart, isTrue);
+  });
+
+  test('上次合并留下的 a.merged.srt、b.backup.srt 不算同名；a.zh-Hans.srt 算', () async {
+    dirs['/v'] = ['/v/a.merged.srt', '/v/b.backup.srt', '/v/c.zh-Hans.srt'];
+    files['/v/c.zh-Hans.srt'] = _srt;
+    await form.addPaths(['/v/a.mp4', '/v/b.mp4', '/v/c.mp4']);
+    await settle();
+    expect(
+      [for (final s in form.segments) s.subtitlePath],
+      [null, null, '/v/c.zh-Hans.srt'],
+    );
+  });
+
+  test('拖入字幕优先配给同目录的同名段，不挂到别的目录去', () async {
+    files['/y/video.srt'] = _srt;
+    await form.addPaths(['/x/video.mp4']);
+    await form.addPaths(['/y/video.mp4', '/y/video.srt']);
+    await settle();
+    expect(form.segments.first.subtitlePath, isNull);
+    expect(form.segments.last.subtitlePath, '/y/video.srt');
+    expect(form.rejected, isNull);
+  });
+
+  test('探测抛出别的异常时这段标成读不出，不会永远停在读取中', () async {
+    await form.addPaths(['/v/a.mp4', '/v/weird.mp4']);
+    await settle();
+    expect(form.segments.last.probing, isFalse);
+    expect(form.segments.last.probeError, contains('不是 JSON'));
+    expect(form.footer.text, '第 2 段读不出音视频流，移除或换一个文件');
+  });
+
+  test('两个字幕开关都关时，交出去的参数不带字幕路径', () async {
+    files['/v/a.srt'] = _srt;
+    dirs['/v'] = ['/v/a.srt'];
+    await form.addPaths(['/v/a.mp4', '/v/b.mp4']);
+    await settle();
+    form
+      ..setEmbedSubtitles(false)
+      ..setSidecarSubtitles(false);
+    expect(form.submit()!.segments.first.subtitlePath, isNull);
+  });
+
+  test('清空视为换一批：文件名重新跟着第 1 段', () async {
+    await form.addPaths(['/v/a.mp4', '/v/b.mp4']);
+    form.setOutputStem('成片');
+    form.clear();
+    await form.addPaths(['/v/c.mp4']);
+    expect(form.options.outputStem, 'c.merged');
+  });
+
+  test('多选添加按文件名自然排序', () async {
+    picked = ['/v/part10.mp4', '/v/part2.mp4', '/v/Part1.mp4'];
+    await form.browse();
+    expect(
+      [for (final s in form.segments) s.fileName],
+      ['Part1.mp4', 'part2.mp4', 'part10.mp4'],
+    );
+  });
+
+  test('字幕解析回来时已摘下或换了别的，结果作废', () async {
+    files['/v/a.srt'] = _srt;
+    files['/v/b.srt'] = const FormatException('bad');
+    await form.addPaths(['/v/a.mp4', '/v/b.mp4']);
+    subtitleGate = Completer();
+    form.attachSubtitle(0, '/v/a.srt');
+    form.detachSubtitle(0);
+    form.attachSubtitle(1, '/v/a.srt');
+    form.attachSubtitle(1, '/v/b.srt');
+    subtitleGate!.complete();
+    await settle();
+    expect(form.segments.first.subtitlePath, isNull);
+    expect(form.segments.first.cues, isNull);
+    expect(form.segments.last.subtitlePath, '/v/b.srt');
+    expect(form.segments.last.subtitleError, isNotNull);
+  });
+
+  test('列目录期间用户自己挂了字幕，同名字幕不覆盖它', () async {
+    listGate = Completer();
+    dirs['/v'] = ['/v/a.srt'];
+    files['/v/a.srt'] = _srt;
+    files['/s/mine.srt'] = _srt;
+    unawaited(form.addPaths(['/v/a.mp4', '/v/b.mp4']));
+    await settle();
+    form.attachSubtitle(0, '/s/mine.srt');
+    listGate!.complete();
+    await settle();
+    expect(form.segments.first.subtitlePath, '/s/mine.srt');
+    expect(form.segments.first.subtitleAuto, isFalse);
+  });
+
+  test('字幕还在读取时不能开始；开关都关时不等它', () async {
+    files['/v/a.srt'] = _srt;
+    await form.addPaths(['/v/a.mp4', '/v/b.mp4']);
+    await settle();
+    subtitleGate = Completer();
+    form.attachSubtitle(0, '/v/a.srt');
+    expect(form.footer.text, '第 1 段的字幕还在读取');
+    form
+      ..setEmbedSubtitles(false)
+      ..setSidecarSubtitles(false);
+    expect(form.canStart, isTrue);
+    subtitleGate!.complete();
+  });
+
+  test('优先级：不一致压过字幕读不出，文件名为空压过探测中', () async {
+    transcoder.probes['/v/b.mp4'] = probeOf(width: 640, height: 360);
+    files['/v/a.srt'] = const FormatException('bad');
+    await form.addPaths(['/v/a.mp4', '/v/b.mp4']);
+    form.attachSubtitle(0, '/v/a.srt');
+    await settle();
+    expect(form.footer.text, startsWith('第 2 段分辨率'));
+
+    form.clear();
+    transcoder.gates['/v/d.mp4'] = Completer();
+    unawaited(form.addPaths(['/v/c.mp4', '/v/d.mp4']));
+    await settle();
+    form.setOutputStem('');
+    expect(form.footer.text, '文件名不能为空');
+    transcoder.gates['/v/d.mp4']!.complete();
+  });
+
+  test('换容器后编码放不进去的段被标出', () async {
+    transcoder.probes['/v/a.mp4'] = probeOf(video: 'vp9');
+    transcoder.probes['/v/b.mp4'] = probeOf(video: 'vp9');
+    await form.addPaths(['/v/a.mp4', '/v/b.mp4']);
+    await settle();
+    expect(form.canStart, isTrue);
+    form.setContainer(OutputContainer.mov);
+    expect(form.footer.text, '第 1 段：VP9 视频不能原样放进 MOV');
+  });
+
+  test('选「指定目录」还没有目录时先弹选择框，取消就不切换', () async {
+    pickedDir = null;
+    form.chooseOutputLocation(OutputLocation.custom);
+    await settle();
+    expect(form.options.outputLocation, OutputLocation.besideSource);
+    pickedDir = '/out';
+    form.chooseOutputLocation(OutputLocation.custom);
+    await settle();
+    expect(form.options.outputLocation, OutputLocation.custom);
+    expect(form.options.outputDir, '/out');
+  });
+
+  test('销毁后异步结果回来不再通知', () async {
+    transcoder.gates['/v/a.mp4'] = Completer();
+    unawaited(form.addPaths(['/v/a.mp4']));
+    await settle();
+    var notified = 0;
+    form.addListener(() => notified++);
+    form.dispose();
+    transcoder.gates['/v/a.mp4']!.complete();
+    await settle();
+    expect(notified, 0);
   });
 }

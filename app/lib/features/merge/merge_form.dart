@@ -318,7 +318,11 @@ class MergeFormController extends ChangeNotifier {
       for (final s in _segments)
         MergeSegment(
           videoPath: s.videoPath,
-          subtitlePath: s.cues == null ? null : s.subtitlePath,
+          // 两个字幕开关都关时字幕用不上，不交出去：排队期间字幕被挪走，
+          // 准备阶段就不会因为一份用不上的文件失败。
+          subtitlePath: s.cues == null || !_usesSubtitles
+              ? null
+              : s.subtitlePath,
           chapterTitle: s.chapterTitle.trim().isEmpty
               ? MergeSegment.defaultTitle(s.videoPath)
               : s.chapterTitle,
@@ -410,7 +414,14 @@ class MergeFormController extends ChangeNotifier {
 
   // —— 段 ————————————————————————————————————————————————
 
-  Future<void> browse() async => addPaths(await _pickVideos());
+  /// 多选时系统给的顺序不一定按文件名，按自然序排好再加 —— 列表顺序就是成片顺序。
+  /// 拖入保持系统给的顺序（那是用户在访达里看到的顺序）。
+  Future<void> browse() async {
+    final picked = await _pickVideos();
+    await addPaths(
+      picked..sort((a, b) => naturalCompare(baseName(a), baseName(b))),
+    );
+  }
 
   /// 拖入与选择共用：视频追加为段（旁边有同名字幕就挂上），字幕配给同名、
   /// 还没挂字幕的段，其余拒收并说明。
@@ -445,10 +456,21 @@ class MergeFormController extends ChangeNotifier {
 
     // 拖进来的字幕先配，再给还空着的新段找旁边的同名字幕：用户明确拖进来的优先。
     var unmatched = 0;
+    // 同名的段可能不止一个（相机按日期分目录、文件名都叫 video.mp4）：
+    // 同目录的优先，其次本次拖进来的新段，最后才是列表里别的段。
+    final freshIds = {for (final s in fresh) s.id};
     for (final sub in subtitles) {
-      final i = _segments.indexWhere(
-        (s) => s.subtitlePath == null && _matches(sub, s.videoPath),
-      );
+      int rank(StagedSegment s) =>
+          sameSeparators(s.directory) == sameSeparators(dirName(sub))
+          ? 0
+          : freshIds.contains(s.id)
+          ? 1
+          : 2;
+      final candidates = [
+        for (final (i, s) in _segments.indexed)
+          if (s.subtitlePath == null && _matches(sub, s.videoPath)) (i, s),
+      ]..sort((a, b) => rank(a.$2).compareTo(rank(b.$2)));
+      final i = candidates.firstOrNull?.$1 ?? -1;
       if (i < 0) {
         unmatched++;
       } else {
@@ -470,12 +492,19 @@ class MergeFormController extends ChangeNotifier {
   }
 
   /// 字幕 [subtitle] 是不是视频 [video] 的同名字幕：文件名去扩展名一样，
-  /// 或去掉语言后缀（`.zh`、`.en-US`）后一样。
+  /// 或去掉语言后缀（`.zh`、`.en-US`、`.zh-Hans`）后一样。
+  ///
+  /// 后缀限定成语言代码的样子：上次合并旁挂的 `a.merged.srt`、`ep1.old.srt`
+  /// 不是 `a.mp4` / `ep1.mp4` 的字幕，挂上去会把整份时间轴压到第 1 段上。
   static bool _matches(String subtitle, String video) {
     final stem = stemOf(baseName(video));
     final sub = stemOf(baseName(subtitle));
-    return sub == stem || stemOf(sub) == stem;
+    if (sub == stem) return true;
+    if (stemOf(sub) != stem) return false;
+    return _languageTag.hasMatch(sub.substring(stem.length + 1));
   }
+
+  static final _languageTag = RegExp(r'^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*$');
 
   Future<void> _probe(String id) async {
     final path = _byId(id)?.videoPath;
@@ -488,6 +517,10 @@ class MergeFormController extends ChangeNotifier {
         id,
         (s) => s.copyWith(probing: false, probeError: e.detail ?? e.message),
       );
+    } catch (e) {
+      // ffprobe 输出不是合法 UTF-8 / JSON 时抛的是别的异常；不兜住的话这段
+      // 永远停在「读取中」，开始按钮一直禁用又不说为什么。
+      _update(id, (s) => s.copyWith(probing: false, probeError: '$e'));
     }
   }
 
@@ -496,8 +529,15 @@ class MergeFormController extends ChangeNotifier {
     final seg = _byId(id);
     if (seg == null || seg.subtitlePath != null) return;
     final stem = stemOf(seg.fileName);
+    final List<String> listing;
+    try {
+      listing = await _listDir(seg.directory);
+    } catch (_) {
+      // 找不到同名字幕不算错，用户可以自己挂。
+      return;
+    }
     final candidates = [
-      for (final p in await _listDir(seg.directory))
+      for (final p in listing)
         if (mergeSubtitleExtensions.contains(extensionOf(p)) &&
             _matches(p, seg.videoPath))
           p,
@@ -575,9 +615,11 @@ class MergeFormController extends ChangeNotifier {
     _notify();
   }
 
+  /// 清空视为换一批：文件名回到跟着新的第 1 段走，与提交后一致。
   void clear() {
     _segments.clear();
     _rejected = null;
+    _stemEdited = false;
     _followFirstSegment();
     _notify();
   }
