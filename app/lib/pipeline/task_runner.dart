@@ -13,6 +13,7 @@ import '../services/provider_api.dart';
 import '../services/registry.dart';
 import '../services/settings.dart';
 import '../services/transcoder.dart';
+import 'merge_task_pipeline.dart';
 import 'subtitle_output_writer.dart';
 import 'task_progress.dart';
 import 'task_stage_runner.dart';
@@ -69,7 +70,7 @@ class TaskRunner {
 
   final Ffmpeg media;
 
-  /// 转码任务用它探测源文件与跑 ffmpeg。
+  /// 转码、合并任务用它探测源文件与跑 ffmpeg。
   final Transcoder transcoder;
 
   final AsrFactory? _asrOverride;
@@ -79,6 +80,9 @@ class TaskRunner {
 
   late final TranscodeTaskPipeline _transcodePipeline =
       TranscodeTaskPipeline(transcoder: transcoder, stages: _stages);
+
+  late final MergeTaskPipeline _mergePipeline =
+      MergeTaskPipeline(transcoder: transcoder, stages: _stages);
 
   /// 任务参数里的模型与提示词覆盖设置里的值 —— 参数在入队时就定死了。
   /// 默认实现把本实例的 [media] 交给需要切分音频的服务，共用同一份 ffmpeg 定位。
@@ -125,7 +129,9 @@ class TaskRunner {
           await _transcodePipeline.run(task, token, onChange);
           await _transcodePipeline.finish(task, onChange);
         case MergeJob():
-          throw const ActionableException('合并流水线尚未接上');
+          await _mergePipeline.prepare(task, onChange);
+          await _mergePipeline.run(task, token, onChange);
+          await _mergePipeline.finish(task, onChange);
         case null:
           // 存档残缺（媒体任务丢了参数）时别落进字幕流水线去调付费识别。
           if (task.kind.isMedia) {

@@ -280,11 +280,14 @@ class Transcoder extends ChangeNotifier {
     return probe;
   }
 
-  /// 跑一次转码。[onProgress] 在每个进度区块到达时调用。取消时杀掉进程并
-  /// 抛 [TaskCancelled]；失败抛 [ActionableException]，detail 是 stderr 末尾。
+  /// 跑一次 ffmpeg（转码或合并）。[onProgress] 在每个进度区块到达时调用。
+  /// 取消时杀掉进程并抛 [TaskCancelled]；失败抛 [ActionableException]，
+  /// detail 是 stderr 末尾。[encoderId] 为 null 表示只搬流不编码（合并），
+  /// [action] 是报错标题里的动作名。
   Future<void> run({
     required List<String> args,
-    required String encoderId,
+    required String? encoderId,
+    String action = '转码',
     required CancellationToken token,
     required void Function(TranscodeProgress) onProgress,
   }) async {
@@ -331,11 +334,17 @@ class Transcoder extends ChangeNotifier {
     }
     await outDone.catchError((_) {});
     await errDone.catchError((_) {});
-    if (exitCode != 0) throw describeFailure(stderr.toString(), encoderId);
+    if (exitCode != 0) {
+      throw describeFailure(stderr.toString(), encoderId, action: action);
+    }
   }
   /// ffmpeg 退出码非零时的报错。
   @visibleForTesting
-  static ActionableException describeFailure(String stderr, String encoderId) {
+  static ActionableException describeFailure(
+    String stderr,
+    String? encoderId, {
+    String action = '转码',
+  }) {
     final tail = stderr.trimRight();
     final detail = tail.length > 800
         ? '…${tail.substring(tail.length - 800)}'
@@ -350,11 +359,14 @@ class Transcoder extends ChangeNotifier {
         hint: '换一个容器，或把那一路改为重新编码而不是复制。',
       );
     }
-    if (s.contains('error while opening encoder') ||
+    // 不编码时没有「编码器初始化失败」这回事，同样的字样（initializing output
+    // stream）多是封装出错，落到下面的通用说明。
+    if (encoderId != null &&
+        (s.contains('error while opening encoder') ||
         s.contains('could not open encoder') ||
         s.contains('initializing output stream') ||
         s.contains('no capable devices') ||
-        s.contains('unknown encoder')) {
+        s.contains('unknown encoder'))) {
       return ActionableException(
         '$encoderId 初始化失败',
         detail: detail,
@@ -376,7 +388,7 @@ class Transcoder extends ChangeNotifier {
       );
     }
     return ActionableException(
-      'FFmpeg 转码失败',
+      'FFmpeg $action失败',
       detail: detail.isEmpty ? '退出码非零，没有输出报错' : detail,
       hint: '查看报错原文；多为源文件损坏或参数组合不受支持。',
     );

@@ -8,7 +8,7 @@ import '../domain/transcode/command.dart';
 import '../domain/transcode/probe.dart';
 import '../services/ffmpeg.dart';
 import '../services/transcoder.dart';
-import 'task_progress.dart';
+import 'ffmpeg_progress.dart';
 import 'task_stage_runner.dart';
 
 /// 转码任务的准备、执行与收尾。TaskRunner 只负责选择任务分支和统一错误处理。
@@ -107,45 +107,12 @@ class TranscodeTaskPipeline {
     task.note('开始转码 · $encoderId');
     await Directory(File(output).parent.path).create(recursive: true);
 
-    final started = DateTime.now();
-    final total = task.mediaDuration;
-    var lastPaint = DateTime.fromMillisecondsSinceEpoch(0);
     try {
       await transcoder.run(
         args: args,
         encoderId: encoderId,
         token: token,
-        onProgress: (p) {
-          job.speed = p.speed;
-          if (total != null && total.inMilliseconds > 0) {
-            task.progress = (p.position.inMilliseconds / total.inMilliseconds)
-                .clamp(0.0, 1.0);
-            final speed = p.speed;
-            task.eta = speed != null && speed > 0
-                ? Duration(
-                    milliseconds:
-                        ((total - p.position).inMilliseconds / speed).round(),
-                  )
-                : estimateRemaining(
-                    started,
-                    p.position.inMilliseconds,
-                    total.inMilliseconds,
-                  );
-          }
-          task.stages[TaskStage.transcode] = task.stages[TaskStage.transcode]!
-              .copyWith(
-                note: [
-                  if (p.frame != null) '帧 ${p.frame}',
-                  if (p.speed != null) '${p.speed}x',
-                ].join(' · '),
-              );
-          // 进度区块每 0.5 秒一个，界面与写盘不必每个都跟。
-          final now = DateTime.now();
-          if (p.done || now.difference(lastPaint).inMilliseconds >= 400) {
-            lastPaint = now;
-            onChange();
-          }
-        },
+        onProgress: ffmpegProgress(task: task, job: job, onChange: onChange),
       );
       await File(partial).rename(output);
     } catch (_) {

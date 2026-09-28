@@ -33,7 +33,7 @@ sealed class MediaJob {
   int? get outputBytes;
 
   /// 跑 ffmpeg 时的倍速，运行时状态，不存。
-  double? get speed;
+  abstract double? speed;
 
   /// 跑 ffmpeg 的那一段，任务行里显示成「转码 · 2.4x」。
   TaskStage get workStage;

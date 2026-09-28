@@ -573,7 +573,7 @@ void main() {
       final task = SubtitleTask(
         id: 'm1',
         sourcePath: '/v/a.mp4',
-        kind: TaskKind.transcribe,
+        kind: TaskKind.merge,
         options: testOptions(),
         media: MergeJob(
           options: options,

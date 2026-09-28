@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import '../domain/file_stamp.dart';
@@ -24,6 +25,17 @@ Future<int> fileLength(String path) async {
 
 /// 按 UTF-8 读整份文本。编码不对时抛 [FileSystemException]。
 Future<String> readText(String path) => File(path).readAsString();
+
+/// 读字幕文本：先按 UTF-8，不是 UTF-8 时按 Latin-1 兜底 —— 老的单字节编码
+/// 字幕正文会乱码，但时间码是 ASCII，时间轴照样能用。
+Future<String> readSubtitleText(String path) async {
+  final bytes = await File(path).readAsBytes();
+  try {
+    return utf8.decode(bytes);
+  } on FormatException {
+    return latin1.decode(bytes);
+  }
+}
 
 Future<void> ensureDir(String path) async {
   await Directory(path).create(recursive: true);
