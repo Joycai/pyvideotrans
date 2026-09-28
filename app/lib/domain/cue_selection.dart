@@ -61,6 +61,17 @@ class CueSelection {
     return CueSelection._(position, anchor, {...order.sublist(lo, hi + 1)});
   }
 
+  /// 只保留 [keep] 里的行，比如当前看得见的行。焦点不在 [keep] 里时
+  /// 退回只选焦点这一条 —— 焦点是检视面板正在看的那条，不能凭空换掉。
+  CueSelection restrictTo(Set<int> keep) {
+    if (!isMultiple) return this;
+    if (!keep.contains(focus)) return CueSelection.single(focus);
+    final rest = positions.where(keep.contains).toSet();
+    if (rest.length == positions.length) return this;
+    if (rest.length == 1) return CueSelection.single(focus);
+    return CueSelection._(focus, anchor, rest);
+  }
+
   /// 取消焦点行后的新焦点：可见顺序里往后最近的选中行，没有就往前找；
   /// 都不可见就取文档里最靠前的一条。
   static int _nearest(int removed, Set<int> rest, List<int> order) {

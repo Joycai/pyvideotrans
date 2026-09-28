@@ -85,6 +85,27 @@ void main() {
     });
   });
 
+  group('只保留看得见的行', () {
+    test('去掉被筛掉的行，焦点与锚点不变', () {
+      final s = const CueSelection.single(1).extendTo(4, all);
+      final r = s.restrictTo({0, 2, 4, 6});
+      expect(r.positions, {2, 4});
+      expect(r.focus, 4);
+      expect(r.anchor, 1);
+    });
+
+    test('焦点被筛掉，或只剩一条：退回单选', () {
+      final s = const CueSelection.single(1).extendTo(4, all);
+      expect(s.restrictTo({1, 2}), const CueSelection.single(4));
+      expect(s.restrictTo({4, 7}), const CueSelection.single(4));
+    });
+
+    test('全都看得见时原样返回', () {
+      final s = const CueSelection.single(1).extendTo(4, all);
+      expect(identical(s.restrictTo(all.toSet()), s), isTrue);
+    });
+  });
+
   test('性质：随机操作序列下不变量始终成立', () {
     final random = Random(20260928);
     for (var round = 0; round < 300; round++) {
@@ -106,6 +127,11 @@ void main() {
         final p = order[random.nextInt(order.length)];
         final extend = random.nextBool();
         s = extend ? s.extendTo(p, order) : s.toggle(p, order);
+
+        final r = s.restrictTo(order.toSet());
+        expect(r.positions, contains(r.focus));
+        expect(r.focus, s.focus);
+        if (r.isMultiple) expect(order, containsAll(r.positions));
 
         expect(s.positions, isNotEmpty);
         expect(s.positions, contains(s.focus));

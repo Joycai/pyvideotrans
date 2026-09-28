@@ -39,7 +39,7 @@ class CueTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    final visible = controller.visibleCues;
+    final visible = controller.visiblePositions;
     final doc = controller.document;
     final speakers = doc.hasSpeakers;
     final isFile = controller.session is FileSession;
@@ -118,7 +118,8 @@ class _CueList extends StatefulWidget {
   });
 
   final EditorController controller;
-  final List<Cue> visible;
+  /// 看得见的行在文档里的下标，按显示顺序。
+  final List<int> visible;
   final List<double?> columns;
   final bool speakers;
   final bool compact;
@@ -147,7 +148,7 @@ class _CueListState extends State<_CueList> {
     if (!mounted || !_scroll.hasClients) return;
     final cue = widget.controller.current;
     if (cue == null) return;
-    final row = widget.visible.indexWhere((c) => c.index == cue.index);
+    final row = widget.visible.indexOf(widget.controller.selected);
     if (row < 0) return;
     final top = row * _CueList.rowHeight;
     final bottom = top + _CueList.rowHeight;
@@ -175,16 +176,18 @@ class _CueListState extends State<_CueList> {
     final controller = widget.controller;
     final doc = controller.document;
     final visible = widget.visible;
+    // 一次算好选中集合，别让每一行各算一遍。
+    final chosen = controller.selectedPositions.toSet();
     return ListView.builder(
       controller: _scroll,
       padding: EdgeInsets.zero,
       itemExtent: _CueList.rowHeight,
       itemCount: visible.length,
       itemBuilder: (context, i) {
-        final cue = visible[i];
-        final position = doc.cues.indexWhere((c) => c.index == cue.index);
+        final position = visible[i];
+        final cue = doc.cues[position];
         // 连续说话人按看得见的上一行算：筛选后行与行不一定相邻。
-        final previous = i > 0 ? visible[i - 1].speaker : null;
+        final previous = i > 0 ? doc.cues[visible[i - 1]].speaker : null;
         return CueTableRow(
           cue: cue,
           state: displayStateOf(cue, translated: widget.translated),
@@ -199,7 +202,7 @@ class _CueListState extends State<_CueList> {
               cue.speaker != null && doc.speakers.containsKey(cue.speaker),
           view: controller.view,
           edited: controller.isEdited(cue),
-          selected: controller.isSelected(position),
+          selected: chosen.contains(position),
           focused: position == controller.selected,
           onTap: () {
             // Shift 优先：⌘+Shift 与 Ctrl+Shift 都按扩选处理。

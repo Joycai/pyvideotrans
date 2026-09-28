@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
@@ -382,23 +384,96 @@ void main() {
       expect(c.document.cues.map((x) => x.speaker), [0, 0, 1, 2, 1, 1]);
     });
 
-    test('筛选、搜索、J/K、Esc 都回到单选，焦点不变', () async {
+    test('筛选、搜索后被筛掉的行退出选区，放开后回来', () async {
+      final c = await _speakerController()
+        ..selectWith(1)
+        ..selectWith(4, extend: true);
+      expect(c.selectedPositions, [1, 2, 3, 4]);
+
+      c.toggleSpeakerFilter(1); // 只看周老师：下标 2、4
+      expect(c.selectedPositions, [2, 4]);
+      c.setSearch('一开始'); // 只剩焦点这一条
+      expect(c.multiSelected, isFalse);
+      expect(c.selectedPositions, [4]);
+      c
+        ..setSearch('')
+        ..setSpeakerFilter({});
+      expect(c.selectedPositions, [1, 2, 3, 4]);
+    });
+
+    test('焦点被筛掉时退回只选焦点', () async {
+      final c = await _speakerController()
+        ..selectWith(1)
+        ..selectWith(3, extend: true); // 焦点下标 3，说话人3
+      c.toggleSpeakerFilter(0); // 只看 Mia：下标 0、1
+      expect(c.multiSelected, isFalse);
+      expect(c.selected, 3);
+    });
+
+    test('在筛选下点击：藏着的行不会借这次点击冒回来', () async {
+      final c = await _speakerController()
+        ..selectWith(0)
+        ..selectWith(4, extend: true);
+      c
+        ..toggleSpeakerFilter(1) // 下标 2、4、5 可见，选中的剩 2、4
+        ..selectWith(5, toggle: true)
+        ..setSpeakerFilter({});
+      expect(c.selectedPositions, [2, 4, 5]);
+    });
+
+    test('性质：随机操作下批量只改看得见的选中行，焦点在范围内', () async {
+      final random = Random(20260929);
+      const searches = ['', '一', '谢', '嗯', '没有这句'];
+      const speakers = <int?>[0, 1, 2, null];
+      for (var round = 0; round < 40; round++) {
+        final c = await _speakerController();
+        for (var step = 0; step < 60; step++) {
+          final visible = c.visiblePositions;
+          switch (random.nextInt(9)) {
+            case 0 || 1 || 2 when visible.isNotEmpty:
+              final p = visible[random.nextInt(visible.length)];
+              final mode = random.nextInt(3);
+              c.selectWith(p, extend: mode == 1, toggle: mode == 2);
+            case 3:
+              c.setFilter(random.nextBool() ? CueFilter.all : CueFilter.edited);
+            case 4:
+              c.setSearch(searches[random.nextInt(searches.length)]);
+            case 5:
+              c.toggleSpeakerFilter(speakers[random.nextInt(speakers.length)]);
+            case 6:
+              final before = c.document.cues.map((x) => x.speaker).toList();
+              final targets = c.multiSelected ? c.selectedPositions : null;
+              c.assignSpeaker(speakers[random.nextInt(speakers.length)]);
+              final after = c.document.cues.map((x) => x.speaker).toList();
+              if (targets != null) {
+                for (var i = 0; i < after.length; i++) {
+                  if (after[i] != before[i]) expect(targets, contains(i));
+                }
+              }
+            case 7:
+              c.undo();
+            case _:
+              random.nextBool() ? c.split() : c.mergeWithNext();
+          }
+
+          final n = c.document.cues.length;
+          expect(c.selected, inInclusiveRange(0, n - 1));
+          expect(c.selectedPositions, contains(c.selected));
+          if (c.multiSelected) {
+            expect(c.visiblePositions, containsAll(c.selectedPositions));
+          } else {
+            expect(c.selectedPositions, [c.selected]);
+          }
+        }
+      }
+    });
+
+    test('J/K、Esc 回到单选', () async {
       final c = await _speakerController();
       void multi() => c
         ..selectWith(1)
         ..selectWith(3, extend: true);
 
-      multi();
-      c.setFilter(CueFilter.all);
-      expect((c.multiSelected, c.selected), (false, 3));
-      multi();
-      c.setSearch('嗯');
-      expect((c.multiSelected, c.selected), (false, 3));
-      c.setSearch('');
-      multi();
-      c.toggleSpeakerFilter(1);
-      expect(c.multiSelected, isFalse);
-      c.setSpeakerFilter({});
       multi();
       c.step(1);
       expect((c.multiSelected, c.selected), (false, 4));

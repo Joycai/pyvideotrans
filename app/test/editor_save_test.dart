@@ -191,6 +191,26 @@ void main() {
       c.dispose();
     });
 
+    test('「本次修改」筛选下多选后写入：写完看不见的行不再参与批量操作', () async {
+      final t = task();
+      final c = controllerFor(TaskSession(t))..select(0);
+      c.editSource('改过的第一句');
+      c
+        ..select(1)
+        ..editSource('改过的第二句')
+        ..setFilter(CueFilter.edited)
+        ..selectWith(0)
+        ..selectWith(1, extend: true);
+      expect(c.multiSelected, isTrue);
+
+      await c.save();
+      // 写入换了「已修改」的基准，两条都不算修改了，表里看不见。
+      expect(c.visiblePositions, isEmpty);
+      expect(c.multiSelected, isFalse);
+      expect(c.selectedPositions, [1]);
+      c.dispose();
+    });
+
     test('重开任务时接着显示上次没写入的修改数', () {
       final t = task()..unsyncedEdits = 3;
       final c = controllerFor(TaskSession(t));

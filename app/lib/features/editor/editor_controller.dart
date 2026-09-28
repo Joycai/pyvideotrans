@@ -190,26 +190,45 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   /// 说话人筛选，可多选。空集表示不按说话人筛；集合里的 null 表示「无说话人」。
   Set<int?> speakerFilter = {};
 
-  /// 选区：焦点、选中集合与 Shift 锚点，位置都是**完整文档**里的下标。
-  /// 只有这一个字段存选中状态，改焦点一律经 [_focusOn] 或 [selectWith]。
+  /// 用户点出来的选区：焦点、选中集合与 Shift 锚点，位置都是**完整文档**
+  /// 里的下标。只有这一个字段存选中状态，改焦点一律经 [_focusOn] 或
+  /// [selectWith]。
+  ///
+  /// 对外不直接给它，而是给与可见行取交集后的 [_effective]：让某行看不见
+  /// 的原因很多（筛选、搜索、改说话人、写入后「已修改」的基准变了……），
+  /// 在读取时取交集，就不用每个写入方都记着去修选区。
   CueSelection _selection = const CueSelection.single(0);
+
+  (CueSelection, List<int>, CueSelection)? _effectiveMemo;
+
+  CueSelection get _effective {
+    final visible = visiblePositions;
+    final memo = _effectiveMemo;
+    if (memo != null &&
+        identical(memo.$1, _selection) &&
+        identical(memo.$2, visible)) {
+      return memo.$3;
+    }
+    final effective = _selection.restrictTo(visible.toSet());
+    _effectiveMemo = (_selection, visible, effective);
+    return effective;
+  }
 
   /// 焦点条在**完整文档**里的下标：检视面板编辑、播放跟随、单条操作的那一条。
   @override
   int get selected => _selection.focus;
 
-  /// 选中了不止一条：检视面板换成批量形态，播放与选区脱钩。
+  /// 看得见的选中行不止一条：检视面板换成批量形态，播放与选区脱钩。
   @override
-  bool get multiSelected => _selection.isMultiple;
+  bool get multiSelected => _effective.isMultiple;
 
-  int get selectionCount => _selection.length;
+  int get selectionCount => _effective.length;
 
-  bool isSelected(int indexInDocument) => _selection.contains(indexInDocument);
-
-  /// 选中各条按文档顺序的下标。只给范围内的：流水线整份换掉文档到
-  /// 选区跟上之间隔着一次队列通知，这期间界面可能先重建一帧。
+  /// 选中且看得见的各条，按文档顺序。批量操作只作用于它们。
   List<int> get selectedPositions => [
-    for (final p in _selection.positions)
+    // 焦点可能刚好越界：流水线整份换掉文档到选区跟上之间隔着一次队列
+    // 通知，这期间界面可能先重建一帧。
+    for (final p in _effective.positions)
       if (p < document.cues.length) p,
   ]..sort();
 
@@ -324,16 +343,43 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   CueState displayState(Cue cue) =>
       displayStateOf(cue, translated: hasTranslations);
 
-  List<Cue> get visibleCues => document.cues.where(_visibility()).toList();
+  List<Cue> get visibleCues => [
+    for (final p in visiblePositions) document.cues[p],
+  ];
 
-  /// 可见行按显示顺序的文档下标，Shift 扩选只在这些行里取区间。与
-  /// [visibleCues] 共用一套条件，不经行号反查 —— 行号不保证唯一。
+  (SubtitleDocument, CueFilter, String, Set<int?>, SubtitleDocument, List<int>)?
+  _visibleMemo;
+
+  /// 看得见的行按显示顺序的文档下标。表格、J/K、Shift 扩选、选区都从这
+  /// 一份来，不经行号反查 —— 行号不保证唯一。
+  ///
+  /// 输入（文档、筛选、搜索、说话人筛选、「已修改」的基准）都没换就复用
+  /// 上次的结果：播放时每一帧都会问 [multiSelected]。这些输入都是整份替换
+  /// 而不是原地修改，比身份就够了。
   List<int> get visiblePositions {
+    final memo = _visibleMemo;
+    if (memo != null &&
+        identical(memo.$1, document) &&
+        memo.$2 == filter &&
+        memo.$3 == search &&
+        identical(memo.$4, speakerFilter) &&
+        identical(memo.$5, _baseline)) {
+      return memo.$6;
+    }
     final visible = _visibility();
-    return [
+    final positions = List<int>.unmodifiable([
       for (final (i, cue) in document.cues.indexed)
         if (visible(cue)) i,
-    ];
+    ]);
+    _visibleMemo = (
+      document,
+      filter,
+      search,
+      speakerFilter,
+      _baseline,
+      positions,
+    );
+    return positions;
   }
 
   /// 当前筛选与搜索下一条字幕看不看得见。
@@ -421,24 +467,21 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     notifyListeners();
   }
 
-  // 筛选或搜索一变就回到单选：否则选区里会藏着看不见的行，批量修改
-  // 改到用户看不见的字幕。
+  // 筛选或搜索变了不用动选区：被筛掉的行在读取时自动退出（见
+  // [_effective]），放开筛选又回来。
 
   void setFilter(CueFilter f) {
     filter = f;
-    _collapse();
     notifyListeners();
   }
 
   void setSearch(String s) {
-    if (s != search) _collapse();
     search = s;
     notifyListeners();
   }
 
   void setSpeakerFilter(Set<int?> speakers) {
     speakerFilter = {...speakers};
-    _collapse();
     notifyListeners();
   }
 
@@ -446,7 +489,6 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     final next = {...speakerFilter};
     if (!next.remove(speaker)) next.add(speaker);
     speakerFilter = next;
-    _collapse();
     notifyListeners();
   }
 
@@ -465,10 +507,12 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     bool toggle = false,
   }) {
     if (indexInDocument < 0 || indexInDocument >= document.cues.length) return;
+    // 从看得见的选区出发：藏着的行不会借这次点击又冒回来。
+    final base = _effective;
     if (extend) {
-      _selection = _selection.extendTo(indexInDocument, visiblePositions);
+      _selection = base.extendTo(indexInDocument, visiblePositions);
     } else if (toggle) {
-      _selection = _selection.toggle(indexInDocument, visiblePositions);
+      _selection = base.toggle(indexInDocument, visiblePositions);
     } else {
       _selection = CueSelection.single(indexInDocument);
     }
@@ -478,7 +522,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   /// Esc 与「取消多选」：回到单选，焦点不变。
   void clearMultiSelection() {
     if (!multiSelected) return;
-    _collapse();
+    _focusOn(selected);
     notifyListeners();
   }
 
@@ -491,36 +535,19 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     );
   }
 
-  void _collapse() {
-    if (multiSelected) _focusOn(selected);
-  }
 
-  /// 文档改完后让选区跟上，所有改文档的路径都经 [_changed] 走到这里：
-  /// - 条数变了（拆分、合并、删行、撤销这些）：下标整体挪位，回到单选并
-  ///   把焦点夹回范围内；
-  /// - 条数没变但有选中行不再满足筛选（比如在说话人筛选下把选中的改给
-  ///   别人）：回到单选，免得接着批量改到看不见的行。
-  void _reconcileSelection({required bool resized}) {
-    if (resized) {
-      _focusOn(selected);
-    } else if (multiSelected &&
-        !visiblePositions.toSet().containsAll(_selection.positions)) {
-      _focusOn(selected);
-    }
-  }
 
   /// J/K 在**当前可见列表**里移动，而不是整份文档 —— 过滤成「待校对」后
   /// 按 J 应该跳到下一条待校对，不是下一行。
   void step(int delta) {
-    final visible = visibleCues;
+    final visible = visiblePositions;
     if (visible.isEmpty) return;
-    final currentCue = current;
-    var position = currentCue == null
-        ? -1
-        : visible.indexWhere((c) => c.index == currentCue.index);
-    position = (position + delta).clamp(0, visible.length - 1);
-    final target = visible[position];
-    _focusOn(document.cues.indexWhere((c) => c.index == target.index));
+    // 当前条被筛掉时 indexOf 为 -1：往下从第一条开始。
+    final position = (visible.indexOf(selected) + delta).clamp(
+      0,
+      visible.length - 1,
+    );
+    _focusOn(visible[position]);
     notifyListeners();
   }
 
@@ -537,7 +564,9 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   /// 「刚写入」让位给新的修改，否则写完 2 秒内再改、再按 ⌘S 会被当成
   /// 没事可做。写入失败的红色保留到下一次写成。
   void _changed({bool resized = false}) {
-    _reconcileSelection(resized: resized);
+    // 条数变了（拆分、合并、删行、撤销这些）下标整体挪位，旧选区对不上号，
+    // 回到单选并把焦点夹回范围内。看不看得见不用在这里管，见 [_effective]。
+    if (resized) _focusOn(selected);
     _seen = document;
     progressAt = _clock();
     _justWritten = null;
