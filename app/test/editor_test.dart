@@ -369,7 +369,6 @@ void main() {
         ..selectWith(4)
         ..selectWith(5, extend: true);
       expect(c.selectionMixedSpeakers, isFalse);
-      expect(c.selectionSpeaker, 1);
       c.selectWith(3, toggle: true);
       expect(c.selectionMixedSpeakers, isTrue);
     });
@@ -466,6 +465,26 @@ void main() {
           }
         }
       }
+    });
+
+    test('新建说话人并指派：多选时一次提交，一步撤销连名单一起撤掉', () async {
+      final c = await _speakerController()
+        ..selectWith(0)
+        ..selectWith(3, toggle: true);
+      final id = c.assignNewSpeaker('小王');
+      expect(id, 3);
+      expect(c.document.speakerName(3), '小王');
+      expect([c.document.cues[0].speaker, c.document.cues[3].speaker], [3, 3]);
+      c.undo();
+      expect(c.document.speakerIds, [0, 1, 2]);
+      expect(c.canUndo, isFalse);
+    });
+
+    test('新建说话人并指派：单选时按当前条或连续段', () async {
+      final c = await _speakerController()..select(5);
+      c.assignNewSpeaker('', run: true);
+      expect(c.document.cues.map((x) => x.speaker), [0, 0, 1, 2, 3, 3]);
+      expect(c.document.speakerName(3), '说话人4');
     });
 
     test('J/K、Esc 回到单选', () async {

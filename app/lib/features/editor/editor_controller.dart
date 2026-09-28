@@ -405,10 +405,6 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     };
   }
 
-  /// 选中各条共同的说话人（都没有则为 null）；各不相同时看
-  /// [selectionMixedSpeakers]。
-  int? get selectionSpeaker => current?.speaker;
-
   bool get selectionMixedSpeakers {
     final first = current?.speaker;
     return selectedPositions.any((p) => document.cues[p].speaker != first);
@@ -705,13 +701,24 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   /// 字幕也没有名字的说话人在名单里无从存在。
   int addSpeaker(String name) {
     final id = document.nextSpeakerId;
+    _commit(_withSpeaker(id, name));
+    return id;
+  }
+
+  SubtitleDocument _withSpeaker(int id, String name) {
     final trimmed = name.trim();
-    _commit(
-      document.renameSpeaker(
-        id,
-        trimmed.isEmpty ? document.speakerName(id) : trimmed,
-      ),
+    return document.renameSpeaker(
+      id,
+      trimmed.isEmpty ? document.speakerName(id) : trimmed,
     );
+  }
+
+  /// 新建一位说话人并直接指派，范围同 [assignSpeaker]。合成一次提交：
+  /// 一步撤销就连名单里的新人一起撤掉，不留一位 0 条的说话人。
+  int? assignNewSpeaker(String name, {bool run = false}) {
+    if (locked || current == null) return null;
+    final id = document.nextSpeakerId;
+    _commit(_withSpeaker(id, name).assignSpeaker(_speakerTargets(run), id));
     return id;
   }
 
@@ -721,18 +728,22 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   void assignSpeaker(int? speaker, {bool run = false}) {
     // 只读时流水线可能刚换掉文档、选区还没跟上，先挡住再按下标取条目。
     if (locked || current == null) return;
-    final range = run
-        ? document.speakerRun(selected)
-        : (start: selected, end: selected);
-    final targets = multiSelected
-        ? selectedPositions
-        : [for (var i = range.start; i <= range.end; i++) i];
     final positions = [
-      for (final i in targets)
+      for (final i in _speakerTargets(run))
         if (document.cues[i].speaker != speaker) i,
     ];
     if (positions.isEmpty) return;
     _commit(document.assignSpeaker(positions, speaker));
+  }
+
+  /// 改说话人作用到哪几条：多选时是选中的全部，否则是当前条或它所在的
+  /// 同一人连续段。
+  List<int> _speakerTargets(bool run) {
+    if (multiSelected) return selectedPositions;
+    final range = run
+        ? document.speakerRun(selected)
+        : (start: selected, end: selected);
+    return [for (var i = range.start; i <= range.end; i++) i];
   }
 
   /// 导出时是否写说话人标签。

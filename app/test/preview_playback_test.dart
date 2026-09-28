@@ -70,11 +70,15 @@ void main() {
     test('多选时播放头不带动选区，播放中点选也不拽播放头', () {
       final c = cues()..multiSelected = true;
       expect(followTarget(c, 1500, playing: true), isNull);
-      expect(seeksOnSelect(c, playing: true), isFalse);
+      bool seeks({required bool playing, bool before = true, bool after = true}) =>
+          seeksOnSelect(playing: playing, multiBefore: before, multiAfter: after);
+      expect(seeks(playing: true), isFalse);
+      // ⌘+点击取消到只剩一条、⌘+点击加出第二条：都还是在挑行。
+      expect(seeks(playing: true, after: false), isFalse);
+      expect(seeks(playing: true, before: false), isFalse);
       // 暂停时点选照常跳过去，画面停在那一条。
-      expect(seeksOnSelect(c, playing: false), isTrue);
-      c.multiSelected = false;
-      expect(seeksOnSelect(c, playing: true), isTrue);
+      expect(seeks(playing: false), isTrue);
+      expect(seeks(playing: true, before: false, after: false), isTrue);
     });
   });
 

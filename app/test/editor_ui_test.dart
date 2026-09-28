@@ -274,6 +274,29 @@ void main() {
       expect(find.text('清除这一条的说话人'), findsOneWidget);
     });
 
+    testWidgets('批量菜单里新增说话人：选中的都指派给新人', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      await click(tester, 2, LogicalKeyboardKey.shiftLeft);
+      final id = c.document.nextSpeakerId;
+      await tester.tap(find.text('多个说话人'));
+      await tester.pump();
+      await tester.tap(find.text('新增说话人…'));
+      await tester.pump();
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(GlassMenu),
+          matching: find.byType(EditableText),
+        ),
+        '小王',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(c.document.speakerName(id), '小王');
+      expect(c.document.cues.take(3).map((x) => x.speaker), everyElement(id));
+    });
+
     testWidgets('多选时数字键批量指派', (tester) async {
       final c = await _controller();
       await _pump(tester, c);

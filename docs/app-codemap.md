@@ -259,7 +259,7 @@ core/       domain/ ←──── services/
 - `editor_prompts.dart`：`EditorPrompts` 接口（`askLeave` / `askConflict` / `pickDir` / `say`）与 `LeaveIntent`、`LeaveChoice`、`ConflictChoice`；只 import domain，测试换成按剧本回答的假实现（`test/editor_fixtures.dart` 的 `ScriptedPrompts`）。
 - `editor_media.dart`：`EditorMedia`，检视面板预览的音视频：找文件（只找一次，手动关联优先）、「关联视频…」换上并记进 `EditorStore`、持有 `PreviewPlayback`；编辑页收起时只暂停，回来播放位置还在。
 - `editor_open_form.dart`：本地原文 / 译文槽位、解析与配对预检。
-- `preview_playback.dart`：media_kit 播放器封装，与选中条双向同步；只依赖 `PlaybackCues` 接口（controller 实现它），免得 controller → media → playback → controller 成环。
+- `preview_playback.dart`：media_kit 播放器封装，与选中条双向同步，多选时两个方向都脱钩（纯函数 `followTarget` / `seeksOnSelect`）；只依赖 `PlaybackCues` 接口（controller 实现它），免得 controller → media → playback → controller 成环。
 - `editor_workspace.dart`：`EditorWorkspace`，当前会话、入口页是否盖在上面、最近打开；换会话 / 退出前的询问（`confirmLeave`）、保存（`save`）、草稿恢复、替换 / 重新配对都走它，打开会话时让 `media` 去找音视频。只依赖 `EditorPrompts`，不 import widget；挂在根节点上，由 `main.dart` 接线。
 
 ### 编辑页
@@ -352,7 +352,7 @@ core/       domain/ ←──── services/
 | 三个建任务表单共有的状态（参数、文件列表、输出位置、「上次参数」） | `features/shared/new_task_form.dart` |
 | 字幕表格 | `features/editor/cue_table*.dart` |
 | 编辑动作与撤销 | `features/editor/editor_controller.dart` + `domain/cue.dart` |
-| 多选与批量改说话人 | `domain/cue_selection.dart` + `editor_controller.dart`（`selectWith` / `assignSpeaker`）+ `inspector_selection_editor.dart` |
+| 多选与批量改说话人 | `domain/cue_selection.dart` + `editor_controller.dart`（`visiblePositions` 是唯一的可见行来源，选区读取时与它取交集；`selectWith` / `assignSpeaker` / `assignNewSpeaker`）+ `inspector_selection_editor.dart` |
 | 预览播放 | `features/editor/editor_media.dart` + `preview_playback.dart` + `inspector_preview.dart` |
 | 保存 / 离开前询问 / 冲突 | `features/editor/editor_controller.dart`（`confirmLeave` / `writeFiles`）+ `editor_prompts.dart` + `editor_leave_dialog.dart` |
 
@@ -371,7 +371,8 @@ flutter test --tags golden --run-skipped
   `test/editor_save_test.dart` 的「写入流程」组覆盖离开前写草稿、覆盖 / 另存为 / 取消与目标被拒的提示；
   `test/preview_playback_test.dart` 的 `EditorMedia` 组覆盖只找一次、手动关联优先与记住关联；
   `test/text_focus_test.dart` 钉死「焦点在输入框里」的判断（单行 / 多行）；
-  `test/cue_selection_test.dart` 用随机操作序列检查选区不变量，`editor_test.dart` 与 `editor_ui_test.dart` 的「多选」组覆盖点选、筛选下扩选、批量指派与撤销。
+  `test/cue_selection_test.dart` 用随机操作序列检查选区不变量，`editor_test.dart` 与 `editor_ui_test.dart` 的「多选」组覆盖点选、筛选下扩选、批量指派与撤销，并用随机操作序列检查「批量只改看得见的选中行」；
+  `preview_playback_test.dart` 的「播放与选区的联动」组覆盖多选时的脱钩。
 - `test/status_snapshot_test.dart` 钉死状态栏快照的服务文案（未选择 / 未配置 / 已配置）与任务计数。
 - `test/task_filter_test.dart` 钉死状态分组；`test/tasks_controller_test.dart` 覆盖筛选、选中、拖入分流，
   以及拆掉任务页再装回来后选中与筛选仍在。

@@ -231,8 +231,8 @@ class _SpeakerMenuState extends State<_SpeakerMenu> {
                 style: context.texts.bodyMedium,
                 decoration: bareInputDecoration(context, hint: '名字，回车确定'),
                 onSubmitted: (name) {
-                  final id = controller.addSpeaker(name);
-                  _assign(id);
+                  controller.assignNewSpeaker(name, run: _run);
+                  widget.close();
                 },
               ),
             ),
