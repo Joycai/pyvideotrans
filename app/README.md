@@ -152,8 +152,6 @@ flutter test --tags golden --run-skipped --update-goldens   # 重新生成截图
   能带样式的 ASS 导出还没做（格式选项里标为未实施），在那之前做可调的样式
   预览没有对象可对照。
 - **本地模型**：见上。接口已留好。
-- **阿里百炼 Qwen3-ASR**：它的识别接口不是 OpenAI 兼容形态，且不返回时间戳，
-  需要先做静音切分才能对接。已在登记表里标为未实施，选中时给明确提示。
 - **密钥存储**：目前明文存在 `shared_preferences` 里，还没接 macOS Keychain /
   Windows Credential Manager。
 - **字体**：设计稿要求打包 Noto Sans SC 与 JetBrains Mono 的 ttf。
