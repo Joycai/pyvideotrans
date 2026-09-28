@@ -125,6 +125,13 @@ class TaskRunner {
           await _transcodePipeline.run(task, token, onChange);
           await _transcodePipeline.finish(task, onChange);
         case null:
+          // 存档残缺（媒体任务丢了参数）时别落进字幕流水线去调付费识别。
+          if (task.kind.isMedia) {
+            throw ActionableException(
+              '${task.kind.label}任务缺少参数',
+              hint: '删除这个任务后重新建。',
+            );
+          }
           await _prepare(task, token, onChange);
           await _recognize(task, token, onChange);
           await _segment(task, onChange);

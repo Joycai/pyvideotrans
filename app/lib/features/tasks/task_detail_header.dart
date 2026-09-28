@@ -82,8 +82,8 @@ class TaskDetailHeader extends StatelessWidget {
             spacing: AppSpacing.s1 + 2,
             runSpacing: AppSpacing.s1 + 2,
             children: [
-              if (job case final TranscodeJob job)
-                StatusTag(
+              switch (job) {
+                TranscodeJob() => StatusTag(
                   label: switch (job.encoder) {
                     null => job.options.remux ? '仅重混流' : '复制视频流',
                     final e when e.backend.isHardware =>
@@ -96,13 +96,13 @@ class TaskDetailHeader extends StatelessWidget {
                     _ => Symbols.computer,
                   },
                   tone: TagTone.service,
-                )
-              else
-                StatusTag(
+                ),
+                null => StatusTag(
                   label: runsLocally ? '本地' : '云端',
                   icon: runsLocally ? Symbols.computer : Symbols.cloud,
                   tone: TagTone.service,
                 ),
+              },
               if (task.kind == TaskKind.transcribeAndTranslate)
                 StatusTag(
                   label: '${mt?.name ?? ''} 翻译',
