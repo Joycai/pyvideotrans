@@ -5,11 +5,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../domain/media_job.dart';
 import '../domain/media_kinds.dart';
 import '../domain/recognition_checkpoint.dart';
 import '../domain/task.dart';
 import '../domain/task_options.dart';
-import '../domain/transcode/command.dart';
 import '../domain/transcode/options.dart';
 import '../services/provider_api.dart';
 import '../services/settings.dart';
@@ -171,7 +171,7 @@ class TaskQueue extends ChangeNotifier {
           kind: TaskKind.transcode,
           // 字幕参数对转码任务无意义，只是占位，免得存档读回时缺字段。
           options: settings.defaultTaskOptions(),
-          transcode: TranscodeJob(options: options),
+          media: TranscodeJob(options: options),
         ),
       ),
   ];

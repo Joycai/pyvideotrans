@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import '../domain/media_job.dart';
 import '../domain/srt.dart';
 import '../domain/task.dart';
 import '../domain/task_control.dart';
@@ -21,8 +22,8 @@ class TranscodeTaskPipeline {
     SubtitleTask task,
     void Function() onChange,
   ) => stages.run(task, TaskStage.prepare, onChange, () async {
-    final job = task.transcode;
-    if (job == null) {
+    final job = task.media;
+    if (job is! TranscodeJob) {
       throw const ActionableException('转码任务缺少参数', hint: '删除这个任务后重新建。');
     }
     if (!File(task.sourcePath).existsSync()) {
@@ -90,7 +91,7 @@ class TranscodeTaskPipeline {
     CancellationToken token,
     void Function() onChange,
   ) => stages.run(task, TaskStage.transcode, onChange, () async {
-    final job = task.transcode!;
+    final job = task.media! as TranscodeJob;
     final output = job.outputPath!;
     final partial = '$output.part';
     final args = TranscodeCommand.build(
@@ -164,7 +165,7 @@ class TranscodeTaskPipeline {
 
   Future<void> finish(SubtitleTask task, void Function() onChange) =>
       stages.run(task, TaskStage.finish, onChange, () async {
-        final job = task.transcode!;
+        final job = task.media! as TranscodeJob;
         final file = File(job.outputPath!);
         final size = file.existsSync() ? file.lengthSync() : 0;
         if (size == 0) {

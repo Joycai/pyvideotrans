@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:subtitle_studio/domain/media_job.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/transcode/codecs.dart';
 import 'package:subtitle_studio/domain/transcode/encoder_catalog.dart';
@@ -92,11 +93,11 @@ void main() {
       ),
     );
     expect(task.status, TaskStatus.done, reason: task.error?.detail);
-    final out = task.transcode!.outputPath!;
+    final out = task.media!.outputPath!;
     expect(out, '${dir.path}/clip.h264.mp4');
     expect(File('$out.part').existsSync(), isFalse);
-    expect(task.transcode!.outputBytes, greaterThan(0));
-    expect(task.transcode!.sourceVideo, 'H.264');
+    expect(task.media!.outputBytes, greaterThan(0));
+    expect((task.media! as TranscodeJob).sourceVideo, 'H.264');
     for (final s in TaskKind.transcode.stages) {
       expect(task.stages[s]!.state, StageState.done, reason: s.name);
     }
@@ -121,10 +122,10 @@ void main() {
     );
     final first = await run(src, options);
     expect(first.status, TaskStatus.done, reason: first.error?.detail);
-    expect(first.transcode!.outputPath, '${dir.path}/clip.remux.mov');
+    expect(first.media!.outputPath, '${dir.path}/clip.remux.mov');
     final second = await run(src, options);
     expect(second.status, TaskStatus.done, reason: second.error?.detail);
-    expect(second.transcode!.outputPath, '${dir.path}/clip.remux-2.mov');
+    expect(second.media!.outputPath, '${dir.path}/clip.remux-2.mov');
   }, skip: skip);
 
   test('WMV2 复制进 MP4：准备阶段就拦下，给出可行动的提示', () async {
@@ -172,8 +173,8 @@ void main() {
         ),
       );
       expect(task.status, TaskStatus.done, reason: task.error?.detail);
-      expect(task.transcode!.command, contains('-hwaccel videotoolbox'));
-      final out = task.transcode!.outputPath!;
+      expect(task.media!.command, contains('-hwaccel videotoolbox'));
+      final out = task.media!.outputPath!;
       final streams = (await probe(out))['streams']! as List;
       expect(streams.map((s) => (s as Map)['codec_name']), contains(codec));
       if (codec == 'hevc') {
@@ -217,8 +218,8 @@ void main() {
         ),
       );
       expect(task.status, TaskStatus.done, reason: task.error?.detail);
-      expect(task.transcode!.command, contains('-hwaccel $hwaccel'));
-      final out = task.transcode!.outputPath!;
+      expect(task.media!.command, contains('-hwaccel $hwaccel'));
+      final out = task.media!.outputPath!;
       final streams = (await probe(out))['streams']! as List;
       expect(streams.map((s) => (s as Map)['codec_name']), contains(codec));
       if (codec == 'hevc') {
@@ -261,7 +262,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
     expect(task.status, TaskStatus.cancelled);
-    expect(File('${task.transcode!.outputPath}.part').existsSync(), isFalse);
+    expect(File('${task.media!.outputPath}.part').existsSync(), isFalse);
   },
       skip: encoder.endsWith('_videotoolbox') ? macSkip : skip,
       timeout: const Timeout(Duration(minutes: 2)));
@@ -310,7 +311,7 @@ void main() {
     }
     expect(task.status, TaskStatus.cancelled);
     await Future<void>.delayed(const Duration(milliseconds: 500));
-    final left = await Process.run('pgrep', ['-f', '${task.transcode!.outputPath}.part']);
+    final left = await Process.run('pgrep', ['-f', '${task.media!.outputPath}.part']);
     expect('${left.stdout}'.trim(), isEmpty, reason: '子进程 ffmpeg 还在跑');
   }, skip: skip != false ? skip : Platform.isWindows ? '用 shell 包装器模拟，Windows 上不适用' : false,
       timeout: const Timeout(Duration(minutes: 2)));

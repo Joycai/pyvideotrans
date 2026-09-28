@@ -2,11 +2,11 @@ import 'cue.dart';
 import 'enum_by_name.dart';
 import 'file_stamp.dart';
 import 'language.dart';
+import 'media_job.dart';
 import 'paths.dart';
 import 'recognition_checkpoint.dart';
 import 'task_kind.dart';
 import 'task_options.dart';
-import 'transcode/command.dart';
 
 export 'task_kind.dart';
 
@@ -126,7 +126,7 @@ class SubtitleTask {
     this.error,
     this.mediaDuration,
     this.eta,
-    this.transcode,
+    this.media,
     DateTime? createdAt,
     Map<String, FileStamp>? outputs,
     this.outputsWrittenAt,
@@ -171,8 +171,9 @@ class SubtitleTask {
   Duration? mediaDuration;
   Duration? eta;
 
-  /// 转码任务的参数与产物；字幕任务为 null。[options] 对转码任务无意义。
-  final TranscodeJob? transcode;
+  /// 媒体任务（转码等）的参数与产物；字幕任务为 null。[options] 对媒体任务
+  /// 无意义。`kind.isMedia` 与它是否为空始终一致，只在入队时一起赋值。
+  final MediaJob? media;
 
   /// 上次写出的字幕产物，与写完那一刻的大小 / 修改时间。编辑器保存前拿它
   /// 判断产物有没有被别的程序改过。旧存档没有这一项，此时不做比对。
@@ -190,7 +191,7 @@ class SubtitleTask {
   int editorEdits;
 
   /// 同时兼容 POSIX 与 Windows 分隔符。
-  String get fileName => baseName(sourcePath);
+  String get fileName => media?.title ?? baseName(sourcePath);
 
   bool get isActive =>
       status == TaskStatus.running || status == TaskStatus.queued;
@@ -226,7 +227,7 @@ class SubtitleTask {
     if (error != null) 'error': error!.toJson(),
     if (recognition != null) 'recognition': recognition!.toJson(),
     if (mediaDuration != null) 'mediaDurationMs': mediaDuration!.inMilliseconds,
-    if (transcode != null) 'transcode': transcode!.toJson(),
+    if (media case final m?) m.jsonKey: m.toJson(),
     if (outputs.isNotEmpty)
       'outputs': {for (final e in outputs.entries) e.key: e.value.toJson()},
     if (outputsWrittenAt != null)
@@ -286,10 +287,7 @@ class SubtitleTask {
         final int ms => Duration(milliseconds: ms),
         _ => null,
       },
-      transcode: switch (map(json['transcode'])) {
-        final m? => TranscodeJob.fromJson(m),
-        null => null,
-      },
+      media: MediaJob.fromTaskJson(json),
       outputs: {
         for (final MapEntry(:key, :value)
             in (map(json['outputs']) ?? const {}).entries)
@@ -313,9 +311,9 @@ class SubtitleTask {
 
   /// 界面上阶段一行的文案，规则来自设计稿。
   String get stageLabel => switch (status) {
-    TaskStatus.running when transcode?.speed != null &&
-        stage == TaskStage.transcode =>
-      '${stage.label} · ${transcode!.speed}x',
+    TaskStatus.running
+        when media?.speed != null && stage == media!.workStage =>
+      '${stage.label} · ${media!.speed}x',
     TaskStatus.running => stage.label,
     TaskStatus.queued => '排队中',
     TaskStatus.paused => '已暂停 · ${stage.label}',

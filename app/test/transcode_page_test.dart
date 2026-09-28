@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
+import 'package:subtitle_studio/domain/media_job.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/task_control.dart';
 import 'package:subtitle_studio/domain/transcode/codecs.dart';
@@ -226,7 +227,7 @@ void main() {
     expect(queue.tasks, hasLength(1));
     final task = queue.tasks.single;
     expect(task.kind, TaskKind.transcode);
-    expect(task.transcode!.options.remux, isTrue);
+    expect((task.media! as TranscodeJob).options.remux, isTrue);
     expect(form.files, isEmpty);
     expect(find.textContaining('已加入队列'), findsOneWidget);
     queue.cancel(task.id);

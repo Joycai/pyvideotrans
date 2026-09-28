@@ -64,11 +64,11 @@ class _TaskDetailPanelState extends State<TaskDetailPanel> {
             ),
             TaskDetailSection(
               title: '产物',
-              child: task.transcode == null
+              child: task.media == null
                   ? TaskOutputs(task: task)
-                  : TaskTranscodeOutput(task: task, onReveal: widget.onReveal),
+                  : TaskMediaOutput(task: task, onReveal: widget.onReveal),
             ),
-            if (task.transcode?.command case final command?)
+            if (task.media?.command case final command?)
               TaskDetailSection(
                 title: 'FFmpeg 命令',
                 trailing: QuietButton(

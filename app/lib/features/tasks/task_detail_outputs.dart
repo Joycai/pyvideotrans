@@ -96,9 +96,9 @@ class TaskOutputs extends StatelessWidget {
   }
 }
 
-/// 转码任务的产物：一个视频文件。完成后可以在文件管理器里定位它。
-class TaskTranscodeOutput extends StatelessWidget {
-  const TaskTranscodeOutput({super.key, required this.task, this.onReveal});
+/// 媒体任务的产物：一个视频文件。完成后可以在文件管理器里定位它。
+class TaskMediaOutput extends StatelessWidget {
+  const TaskMediaOutput({super.key, required this.task, this.onReveal});
 
   final SubtitleTask task;
   final VoidCallback? onReveal;
@@ -106,13 +106,13 @@ class TaskTranscodeOutput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    final job = task.transcode!;
+    final job = task.media!;
     final done = task.status == TaskStatus.done;
     final path = job.outputPath;
     final meta = done && job.outputBytes != null
         ? MediaFileInfo(path: path ?? '', sizeBytes: job.outputBytes!).sizeLabel
-        : task.status == TaskStatus.running && task.stage == TaskStage.transcode
-        ? '转码中 · ${task.percentLabel}'
+        : task.status == TaskStatus.running && task.stage == job.workStage
+        ? '${job.workStage.label}中 · ${task.percentLabel}'
         : '尚未生成';
     final fg = done ? cs.onSurface : cs.onSurfaceVariant;
     return Container(
@@ -130,7 +130,7 @@ class TaskTranscodeOutput extends StatelessWidget {
           Expanded(
             child: Text(
               path == null
-                  ? '视频 · ${job.options.container.label}'
+                  ? job.outputLabel
                   : baseName(path),
               overflow: TextOverflow.ellipsis,
               style: AppTextStyles.timecode.copyWith(

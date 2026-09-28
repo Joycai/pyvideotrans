@@ -5,10 +5,10 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/indicators.dart';
+import '../../domain/media_job.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/srt.dart';
 import '../../domain/task.dart';
-import '../../domain/transcode/command.dart';
 import '../../services/registry.dart';
 import '../../services/reveal.dart';
 import 'stage_bar.dart';
@@ -268,7 +268,7 @@ class _FileCell extends StatelessWidget {
               const SizedBox(width: AppSpacing.s2),
               Expanded(
                 child: Text(
-                  task.transcode?.direction ??
+                  task.media?.summary ??
                       '${task.sourceLanguage.name} → ${task.targetLanguage.name}',
                   overflow: TextOverflow.ellipsis,
                   style: context.texts.bodySmall?.copyWith(
@@ -292,8 +292,11 @@ class _ServiceCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    final job = task.transcode;
-    if (job != null) return _TranscodeServiceCell(job: job);
+    switch (task.media) {
+      case final TranscodeJob job:
+        return _TranscodeServiceCell(job: job);
+      case null:
+    }
     final asr = Registry.asrInfo(task.asrProviderId);
     final mt = Registry.translationInfo(task.translationProviderId);
 
@@ -457,16 +460,17 @@ class _ActionsCell extends StatelessWidget {
     }
 
     if (task.status == TaskStatus.done) {
-      final transcode = task.kind == TaskKind.transcode;
+      // 媒体任务不产字幕，完成后去看产物；字幕任务去编辑器。
+      final media = task.media != null;
       return Row(
         children: [
           Flexible(
             child: ControlButton(
-              label: transcode ? Reveal.label : '打开编辑器',
-              icon: transcode ? Symbols.folder_open : Symbols.edit_note,
+              label: media ? Reveal.label : '打开编辑器',
+              icon: media ? Symbols.folder_open : Symbols.edit_note,
               dense: true,
               onPressed: () => onAction(
-                transcode ? TaskAction.reveal : TaskAction.openEditor,
+                media ? TaskAction.reveal : TaskAction.openEditor,
               ),
             ),
           ),
@@ -492,7 +496,7 @@ class _ActionsCell extends StatelessWidget {
           tooltip: '取消',
           onPressed: () => onAction(TaskAction.cancel),
         ),
-        if (task.kind != TaskKind.transcode)
+        if (task.media == null)
           IconActionButton(
             icon: Symbols.edit_note,
             tooltip: '打开编辑器',

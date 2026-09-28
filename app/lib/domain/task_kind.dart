@@ -38,21 +38,33 @@ enum TaskKind {
   bool get needsTranslation =>
       this == TaskKind.transcribeAndTranslate || this == TaskKind.translate;
 
+  /// 产出媒体文件、不产字幕的任务。这类任务的 `SubtitleTask.media` 一定非空，
+  /// 反之亦然 —— 两者只在入队时一起赋值。
+  bool get isMedia => switch (this) {
+    TaskKind.transcode => true,
+    TaskKind.transcribe ||
+    TaskKind.transcribeAndTranslate ||
+    TaskKind.translate => false,
+  };
+
   /// 这种任务走的阶段。字幕任务是固定的六段（不需要的那段记为跳过，
   /// 阶段条上画成虚线）；转码只有四段。
-  List<TaskStage> get stages => this == TaskKind.transcode
-      ? const [
-          TaskStage.queued,
-          TaskStage.prepare,
-          TaskStage.transcode,
-          TaskStage.finish,
-        ]
-      : const [
-          TaskStage.queued,
-          TaskStage.prepare,
-          TaskStage.recognize,
-          TaskStage.segment,
-          TaskStage.translate,
-          TaskStage.finish,
-        ];
+  List<TaskStage> get stages => switch (this) {
+    TaskKind.transcode => const [
+      TaskStage.queued,
+      TaskStage.prepare,
+      TaskStage.transcode,
+      TaskStage.finish,
+    ],
+    TaskKind.transcribe ||
+    TaskKind.transcribeAndTranslate ||
+    TaskKind.translate => const [
+      TaskStage.queued,
+      TaskStage.prepare,
+      TaskStage.recognize,
+      TaskStage.segment,
+      TaskStage.translate,
+      TaskStage.finish,
+    ],
+  };
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../domain/cue.dart';
+import '../domain/media_job.dart';
 import '../domain/recognition_checkpoint.dart';
 import '../domain/segmenter.dart';
 import '../domain/srt.dart';
@@ -118,16 +119,17 @@ class TaskRunner {
 
     try {
       await _stages.run(task, TaskStage.queued, onChange, () async {});
-      if (task.kind == TaskKind.transcode) {
-        await _transcodePipeline.prepare(task, onChange);
-        await _transcodePipeline.run(task, token, onChange);
-        await _transcodePipeline.finish(task, onChange);
-      } else {
-        await _prepare(task, token, onChange);
-        await _recognize(task, token, onChange);
-        await _segment(task, onChange);
-        await _translate(task, token, onChange);
-        await _finish(task, onChange);
+      switch (task.media) {
+        case TranscodeJob():
+          await _transcodePipeline.prepare(task, onChange);
+          await _transcodePipeline.run(task, token, onChange);
+          await _transcodePipeline.finish(task, onChange);
+        case null:
+          await _prepare(task, token, onChange);
+          await _recognize(task, token, onChange);
+          await _segment(task, onChange);
+          await _translate(task, token, onChange);
+          await _finish(task, onChange);
       }
 
       task.status = TaskStatus.done;

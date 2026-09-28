@@ -5,6 +5,7 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/indicators.dart';
+import '../../domain/media_job.dart';
 import '../../domain/srt.dart';
 import '../../domain/task.dart';
 import '../../services/registry.dart';
@@ -22,7 +23,7 @@ class TaskDetailHeader extends StatelessWidget {
     final mt = Registry.translationInfo(task.translationProviderId);
     final runsLocally =
         (task.kind.needsRecognition ? asr : mt)?.runsLocally ?? false;
-    final job = task.transcode;
+    final job = task.media;
     final length = task.mediaDuration != null
         ? Srt.formatDuration(task.mediaDuration!)
         : '${task.document.cues.length} 条';
@@ -58,7 +59,7 @@ class TaskDetailHeader extends StatelessWidget {
                           ? [
                               task.kind.label,
                               if (task.mediaDuration != null) length,
-                              job.direction,
+                              job.summary,
                             ].join(' · ')
                           : '${task.kind.label} · $length'
                                 ' · ${task.sourceLanguage.name} → ${task.targetLanguage.name}',
@@ -81,7 +82,7 @@ class TaskDetailHeader extends StatelessWidget {
             spacing: AppSpacing.s1 + 2,
             runSpacing: AppSpacing.s1 + 2,
             children: [
-              if (job != null)
+              if (job case final TranscodeJob job)
                 StatusTag(
                   label: switch (job.encoder) {
                     null => job.options.remux ? '仅重混流' : '复制视频流',

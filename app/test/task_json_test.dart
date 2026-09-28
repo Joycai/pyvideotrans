@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/media_job.dart';
 import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
 import 'package:subtitle_studio/domain/task.dart';
 
@@ -74,6 +75,43 @@ void main() {
     expect(back.recognition!.segment(0, 1500).pieces!.single.speaker, 1);
     expect(back.recognition!.segment(1500, 3000).failures, 1);
     expect(back.options.cjkLineLength, 22);
+  });
+
+  test('媒体任务仍写在旧键 transcode 下，旧存档读回是 TranscodeJob', () {
+    // 改名 task.transcode → task.media 前写下的存档，键名就是 'transcode'。
+    final json = {
+      'id': 'old',
+      'sourcePath': '/v/a.mkv',
+      'kind': 'transcode',
+      'transcode': {
+        'options': <String, Object?>{},
+        'outputPath': '/v/a.mp4',
+        'outputBytes': 42,
+      },
+    };
+    final task = _roundTrip(
+      SubtitleTask.fromJson(json, fallbackOptions: testOptions()),
+    );
+    final job = task.media;
+    expect(job, isA<TranscodeJob>());
+    expect(job!.outputPath, '/v/a.mp4');
+    expect(job.outputBytes, 42);
+    expect(task.toJson().keys, contains('transcode'));
+    expect(task.kind.isMedia, isTrue);
+  });
+
+  test('字幕任务没有 media，存档里也不出现媒体键', () {
+    final task = _roundTrip(
+      SubtitleTask(
+        id: 's',
+        sourcePath: '/v/a.mp4',
+        kind: TaskKind.transcribe,
+        options: testOptions(),
+      ),
+    );
+    expect(task.media, isNull);
+    expect(task.toJson().keys, isNot(contains('transcode')));
+    expect(task.kind.isMedia, isFalse);
   });
 
   test('缺 id 或源文件路径的存档无法使用', () {
