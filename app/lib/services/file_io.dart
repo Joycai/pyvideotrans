@@ -26,15 +26,23 @@ Future<int> fileLength(String path) async {
 /// 按 UTF-8 读整份文本。编码不对时抛 [FileSystemException]。
 Future<String> readText(String path) => File(path).readAsString();
 
-/// 读字幕文本：先按 UTF-8，不是 UTF-8 时按 Latin-1 兜底 —— 老的单字节编码
-/// 字幕正文会乱码，但时间码是 ASCII，时间轴照样能用。
+/// 读字幕文本：UTF-8（带不带 BOM 都行），或带 BOM 的 UTF-16（Windows 记事本的
+/// 「Unicode」）。别的编码抛 [FormatException]，不猜 —— GBK / Big5 按 Latin-1
+/// 兜底时间码照样能解析，正文却会静默变成乱码写进产物。
 Future<String> readSubtitleText(String path) async {
   final bytes = await File(path).readAsBytes();
-  try {
-    return utf8.decode(bytes);
-  } on FormatException {
-    return latin1.decode(bytes);
+  if (bytes.length >= 2) {
+    final le = bytes[0] == 0xFF && bytes[1] == 0xFE;
+    final be = bytes[0] == 0xFE && bytes[1] == 0xFF;
+    if (le || be) {
+      if (bytes.length.isOdd) throw const FormatException('UTF-16 字节数不对');
+      return String.fromCharCodes([
+        for (var i = 2; i + 1 < bytes.length; i += 2)
+          le ? bytes[i] | bytes[i + 1] << 8 : bytes[i] << 8 | bytes[i + 1],
+      ]);
+    }
   }
+  return utf8.decode(bytes);
 }
 
 Future<void> ensureDir(String path) async {

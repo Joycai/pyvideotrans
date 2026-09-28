@@ -33,7 +33,17 @@ class MergeTaskPipeline {
   static const chaptersName = 'chapters.txt';
   static const subtitlesName = 'merged.srt';
 
-  Future<void> prepare(
+  /// 合并阶段还没做完时，每次开跑都重跑准备：入队后、上次失败后文件都可能被
+  /// 换过，各段时长、章节起点、字幕平移都得按现在的文件重算，一致性也得重新把关。
+  /// 探测很便宜；产物路径照样沿用，不会越跑越多 `-2`。
+  Future<void> prepare(SubtitleTask task, void Function() onChange) {
+    if (task.stages[TaskStage.merge]!.state != StageState.done) {
+      task.stages[TaskStage.prepare] = const StageRecord();
+    }
+    return _prepare(task, onChange);
+  }
+
+  Future<void> _prepare(
     SubtitleTask task,
     void Function() onChange,
   ) => stages.run(task, TaskStage.prepare, onChange, () async {
@@ -91,39 +101,68 @@ class MergeTaskPipeline {
       (a, b) => a + b,
     );
 
-    final cues = await _readCues(segments);
-    job.segmentCues = [for (final c in cues) c?.length];
-    final subtitled = cues.nonNulls.length;
-    final cueCount = cues.nonNulls.fold(0, (n, c) => n + c.length);
+    // 两个字幕开关都关时字幕用不上，不读，也不因为坏字幕拦下合并。
+    final raw = options.embedSubtitles || options.sidecarSubtitles
+        ? await _readCues(segments)
+        : List<List<Cue>?>.filled(segments.length, null);
+    final starts = offsets(durations);
+    // 条数、要不要带字幕输入、要不要写旁挂，都按平移截尾之后的结果定，
+    // 与合并阶段真正写出的一致。
+    final merged = concatCues([
+      for (final (i, c) in raw.indexed)
+        (cues: c, offset: starts[i], length: durations[i]),
+    ]);
+    job.mergedCues = merged;
+    job.segmentCues = [
+      for (final (i, c) in raw.indexed)
+        c == null
+            ? null
+            : concatCues([
+                (cues: c, offset: Duration.zero, length: durations[i]),
+              ]).length,
+    ];
+    final subtitled = raw.nonNulls.length;
+    final dropped =
+        raw.nonNulls.fold(0, (n, c) => n + c.length) - merged.length;
 
-    // 续跑沿用上次定下的路径（那里可能留着上次失败的半截文件，会被覆盖）。
-    if (job.outputPath == null) {
-      final paths = mergeOutputPath(
-        options,
-        exists: (p) => File(p).existsSync(),
-      );
-      job.outputPath = paths.video;
-      job.sidecarPath = subtitled > 0 ? paths.sidecar : null;
+    // 续跑沿用上次定下的路径：失败 / 取消时 .part 已删，完成阶段判为不能用的
+    // 产物也删了，那里不会有我们自己的文件。若已经有文件，就是期间别的任务或
+    // 别人放的，不能盖掉，重新避让。
+    bool taken(String p) => File(p).existsSync();
+    final previous = job.outputPath;
+    if (previous == null ||
+        taken(previous) ||
+        (options.sidecarSubtitles && taken(sidecarPathFor(previous)))) {
+      job.outputPath = mergeOutputPath(options, exists: taken).video;
+      if (previous != null) {
+        task.note('上次定下的产物位置已有文件，改写到 ${job.outputPath}', LogLevel.warn);
+      }
     }
+    job.sidecarPath = options.sidecarSubtitles && merged.isNotEmpty
+        ? sidecarPathFor(job.outputPath!)
+        : null;
     job.command = TranscodeCommand.display(
       plan(
         options,
         list: listName,
         chapters: chaptersName,
         subtitles: subtitlesName,
-        hasCues: cueCount > 0,
+        hasCues: merged.isNotEmpty,
       ).args(job.outputPath!),
     );
 
     task.stages[TaskStage.prepare] = task.stages[TaskStage.prepare]!.copyWith(
       note: [
         'ffprobe · ${segments.length} 段参数一致',
-        if (subtitled > 0) '字幕 $subtitled 份 $cueCount 条',
+        if (subtitled > 0) '字幕 $subtitled 份 ${merged.length} 条',
       ].join(' · '),
     );
     task.note(
       '共 ${segments.length} 段 · ${Srt.formatDuration(task.mediaDuration!)}',
     );
+    if (dropped > 0) {
+      task.note('$dropped 条字幕起点在所属段的时长之外，已丢掉', LogLevel.warn);
+    }
     task.note('输出：${job.outputPath}');
     if (job.sidecarPath case final sidecar?) task.note('旁挂字幕：$sidecar');
   });
@@ -138,14 +177,9 @@ class MergeTaskPipeline {
     final output = job.outputPath!;
     final partial = '$output.part';
     final durations = job.segmentDurations!;
-    final starts = offsets(durations);
-    final cues = concatCues([
-      for (final (i, c) in (await _readCues(options.segments)).indexed)
-        (cues: c, offset: starts[i], length: durations[i]),
-    ]);
+    // 准备阶段在同一次开跑里刚算好（合并没做完时准备总会重跑）。
+    final cues = job.mergedCues!;
     final srt = cues.isEmpty ? null : Srt.serialize(cues);
-    // 字幕全落在段外被丢光时，没有旁挂可写，别在详情里留一个不存在的路径。
-    if (srt == null) job.sidecarPath = null;
 
     task.progress = 0;
     job.speed = null;
@@ -212,6 +246,7 @@ class MergeTaskPipeline {
     final file = File(job.outputPath!);
     final size = file.existsSync() ? file.lengthSync() : 0;
     if (size == 0) {
+      await _discardOutput(task, job);
       throw ActionableException(
         '产物为空',
         detail: job.outputPath,
@@ -223,12 +258,13 @@ class MergeTaskPipeline {
     if (durations != null &&
         actual != null &&
         looksTruncated(actual, durations)) {
+      await _discardOutput(task, job);
       throw ActionableException(
         '合并结果比各段加起来短，可能有一段没拼进去',
         detail:
             '产物 ${Srt.formatDuration(actual)}，'
             '各段合计 ${Srt.formatDuration(task.mediaDuration!)}\n${job.outputPath}',
-        hint: '查看日志里 FFmpeg 的输出，确认各段文件都还能打开，然后从合并阶段继续。',
+        hint: '不完整的产物已删掉。查看日志里 FFmpeg 的输出，确认各段文件都还能打开，然后从合并阶段继续。',
       );
     }
     job.outputBytes = size;
@@ -253,7 +289,22 @@ class MergeTaskPipeline {
     container: options.container,
   );
 
+  /// 完成阶段发现产物不能用：删掉它（与旁挂字幕），并把合并阶段退回待执行 ——
+  /// 否则续跑只会重做完成阶段的检查，永远过不去；留着它，续跑时准备阶段又会
+  /// 当成别人的文件而避让到 `-2`。
+  static Future<void> _discardOutput(SubtitleTask task, MergeJob job) async {
+    for (final path in [job.outputPath, job.sidecarPath].nonNulls) {
+      try {
+        await File(path).delete();
+      } on FileSystemException {
+        // 本来就没有。
+      }
+    }
+    task.stages[TaskStage.merge] = const StageRecord();
+  }
+
   /// 读各段字幕，没挂的为 null。读不出或一条都没有时指明是第几段。
+  /// 只在准备阶段调用，所以 hint 都说「从准备阶段继续」。
   static Future<List<List<Cue>?>> _readCues(List<MergeSegment> segments) async {
     final out = <List<Cue>?>[];
     for (final (i, s) in segments.indexed) {
@@ -270,6 +321,13 @@ class MergeTaskPipeline {
           '第 ${i + 1} 段的字幕读不出来',
           detail: '$path\n${e.message}',
           hint: '确认文件还在、有读取权限，然后从准备阶段继续。',
+        );
+      } on FormatException {
+        // 不按 Latin-1 兜底：GBK / Big5 字幕会静默变成乱码写进成片。
+        throw ActionableException(
+          '第 ${i + 1} 段的字幕不是 UTF-8 编码',
+          detail: path,
+          hint: '用文本编辑器把它另存为 UTF-8，然后从准备阶段继续。',
         );
       }
       if (cues.isEmpty) {

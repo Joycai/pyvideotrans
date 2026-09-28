@@ -30,25 +30,32 @@ class _FakeTranscoder extends Transcoder {
 
   Future<void> Function(List<String> args, CancellationToken token)? onRun;
 
+  /// 执行时先喂给进度回调的区块。
+  List<TranscodeProgress> feed = const [];
+
+  int probeCount = 0;
+
   @override
-  Future<MediaProbe> probe(String path) async =>
-      probes[path] ??
-      (path.split('/').last.startsWith('out')
-          ? MediaProbe(duration: outputDuration)
-          : null) ??
-      const MediaProbe(
-        duration: Duration(seconds: 10),
-        video: [
-          VideoStreamInfo(
-            codec: 'h264',
-            width: 640,
-            height: 360,
-            fps: 30,
-            pixFmt: 'yuv420p',
-          ),
-        ],
-        audio: [AudioStreamInfo(codec: 'aac', channels: 2, sampleRate: 48000)],
-      );
+  Future<MediaProbe> probe(String path) async {
+    probeCount++;
+    if (probes[path] case final p?) return p;
+    if (path.split('/').last.startsWith('out')) {
+      return MediaProbe(duration: outputDuration);
+    }
+    return const MediaProbe(
+      duration: Duration(seconds: 10),
+      video: [
+        VideoStreamInfo(
+          codec: 'h264',
+          width: 640,
+          height: 360,
+          fps: 30,
+          pixFmt: 'yuv420p',
+        ),
+      ],
+      audio: [AudioStreamInfo(codec: 'aac', channels: 2, sampleRate: 48000)],
+    );
+  }
 
   @override
   Future<void> run({
@@ -64,6 +71,7 @@ class _FakeTranscoder extends Transcoder {
       final path = args[i + 1];
       seen[path.split('/').last] = File(path).readAsStringSync();
     }
+    feed.forEach(onProgress);
     await (onRun ?? _writeOutput)(args, token);
   }
 
@@ -250,6 +258,182 @@ void main() {
     expect(t.error?.title, '合并结果比各段加起来短，可能有一段没拼进去');
   });
 
+  const hd = MediaProbe(
+    duration: Duration(seconds: 3),
+    video: [
+      VideoStreamInfo(
+        codec: 'h264',
+        width: 1280,
+        height: 720,
+        fps: 30,
+        pixFmt: 'yuv420p',
+      ),
+    ],
+    audio: [AudioStreamInfo(codec: 'aac', channels: 2, sampleRate: 48000)],
+  );
+
+  test('合并阶段失败后续跑会重新探测：换进来的文件不一致照样拦下', () async {
+    transcoder.onRun = (_, _) async =>
+        throw const ActionableException('FFmpeg 合并失败');
+    final o = options();
+    final t = task(o);
+    await run(t);
+    expect(t.stage, TaskStage.merge);
+    expect(transcoder.probeCount, 2);
+
+    transcoder.onRun = null;
+    transcoder.probes[o.segments.last.videoPath] = hd;
+    await run(t);
+    expect(transcoder.probeCount, 4);
+    expect(t.status, TaskStatus.failed);
+    expect(t.stage, TaskStage.prepare);
+    expect(t.error?.title, '第 2 段的分辨率与第 1 段不同');
+  });
+
+  test('续跑按现在的时长重排：concat 列表、总长都更新', () async {
+    transcoder.onRun = (_, _) async =>
+        throw const ActionableException('FFmpeg 合并失败');
+    final o = options();
+    final t = task(o);
+    await run(t);
+
+    transcoder.onRun = null;
+    transcoder.probes[o.segments.last.videoPath] = const MediaProbe(
+      duration: Duration(seconds: 4),
+      video: [
+        VideoStreamInfo(
+          codec: 'h264',
+          width: 640,
+          height: 360,
+          fps: 30,
+          pixFmt: 'yuv420p',
+        ),
+      ],
+      audio: [AudioStreamInfo(codec: 'aac', channels: 2, sampleRate: 48000)],
+    );
+    transcoder.outputDuration = const Duration(seconds: 14);
+    await run(t);
+    expect(t.status, TaskStatus.done, reason: t.error?.title);
+    expect(t.mediaDuration, const Duration(seconds: 14));
+    expect(transcoder.seen['list.txt'], contains('duration 4.000'));
+  });
+
+  test('续跑时产物位置被别的文件占了，改写到下一个序号，旁挂跟着走', () async {
+    transcoder.onRun = (_, _) async =>
+        throw const ActionableException('FFmpeg 合并失败');
+    final a = file('a.srt', srt([(1, 2, '甲')]));
+    final t = task(options(subs: [a, null], sidecar: true));
+    await run(t);
+    final job = t.media! as MergeJob;
+    expect(job.outputPath, '${dir.path}/out.mp4');
+
+    file('out.mp4', 'someone else');
+    transcoder.onRun = null;
+    await run(t);
+    expect(t.status, TaskStatus.done, reason: t.error?.title);
+    expect(job.outputPath, '${dir.path}/out-2.mp4');
+    expect(job.sidecarPath, '${dir.path}/out-2.srt');
+    expect(File('${dir.path}/out.mp4').readAsStringSync(), 'someone else');
+  });
+
+  test('字幕全落在段外：命令里不带字幕输入，不写旁挂', () async {
+    final a = file('a.srt', '1\n00:00:30,000 --> 00:00:31,000\n段外\n');
+    final t = await run(task(options(subs: [a, null], sidecar: true)));
+    expect(t.status, TaskStatus.done, reason: t.error?.title);
+    final job = t.media! as MergeJob;
+    expect(job.sidecarPath, isNull);
+    expect(job.segmentCues, [0, null]);
+    expect(job.command, isNot(contains('merged.srt')));
+    expect(t.log.map((l) => l.message), contains('1 条字幕起点在所属段的时长之外，已丢掉'));
+  });
+
+  test('两个字幕开关都关时不读字幕，坏字幕不拦合并', () async {
+    final bad = file('bad.srt', 'not a subtitle');
+    final o = options(subs: [bad, null]);
+    final t = await run(
+      task(o.copyWith(embedSubtitles: false, sidecarSubtitles: false)),
+    );
+    expect(t.status, TaskStatus.done, reason: t.error?.title);
+    expect((t.media! as MergeJob).segmentCues, [null, null]);
+  });
+
+  test('字幕不是 UTF-8 时报编码，不静默变成乱码；带 BOM 的 UTF-16 能读', () async {
+    // 「中文」的 GBK 编码。
+    final gbk = File('${dir.path}/gbk.srt')
+      ..writeAsBytesSync([
+        ...'1\n00:00:01,000 --> 00:00:02,000\n'.codeUnits,
+        0xD6,
+        0xD0,
+        0xCE,
+        0xC4,
+        0x0A,
+      ]);
+    final t = await run(task(options(subs: [gbk.path, null])));
+    expect(t.error?.title, '第 1 段的字幕不是 UTF-8 编码');
+
+    const text = '1\n00:00:01,000 --> 00:00:02,000\n中文\n';
+    final utf16 = File('${dir.path}/u16.srt')
+      ..writeAsBytesSync([
+        0xFF,
+        0xFE,
+        for (final u in text.codeUnits) ...[u & 0xFF, u >> 8],
+      ]);
+    final ok = await run(task(options(subs: [utf16.path, null])));
+    expect(ok.status, TaskStatus.done, reason: ok.error?.title);
+    expect((ok.media! as MergeJob).mergedCues!.single.source, '中文');
+  });
+
+  test('完成阶段发现缺段：删掉产物，续跑从合并阶段重来且沿用路径', () async {
+    transcoder.outputDuration = const Duration(seconds: 10);
+    final t = await run(task(options()));
+    final job = t.media! as MergeJob;
+    expect(t.stage, TaskStage.finish);
+    expect(File(job.outputPath!).existsSync(), isFalse);
+    expect(t.resumeStage, TaskStage.merge);
+
+    transcoder.outputDuration = const Duration(seconds: 20);
+    await run(t);
+    expect(t.status, TaskStatus.done, reason: t.error?.title);
+    expect(job.outputPath, '${dir.path}/out.mp4');
+  });
+
+  test('ffmpeg 出错（不是取消）时也删掉 .part', () async {
+    transcoder.onRun = (args, _) async {
+      await File(args.last).writeAsString('half');
+      throw const ActionableException('FFmpeg 合并失败');
+    };
+    final t = await run(task(options()));
+    expect(t.status, TaskStatus.failed);
+    expect(
+      File('${(t.media! as MergeJob).outputPath}.part').existsSync(),
+      isFalse,
+    );
+  });
+
+  test('进度折算到合并阶段：进度、剩余时间、倍速与阶段备注', () async {
+    transcoder.feed = const [
+      TranscodeProgress(position: Duration(seconds: 5), frame: 150, speed: 10),
+    ];
+    final t = task(options());
+    final job = t.media! as MergeJob;
+    var sawProgress = false;
+    await runner.run(
+      t,
+      token: CancellationToken(),
+      onChange: () {
+        if (t.stage == TaskStage.merge && t.progress > 0 && t.progress < 1) {
+          sawProgress = true;
+          expect(t.progress, 0.25);
+          expect(t.eta, const Duration(milliseconds: 1500));
+          expect(job.speed, 10);
+        }
+      },
+    );
+    expect(sawProgress, isTrue);
+    expect(t.stages[TaskStage.merge]!.note, '帧 150 · 10.0x');
+    expect(job.speed, isNull);
+  });
+
   test('ffmpeg 失败时标题写「合并失败」而不是「转码失败」', () {
     final e = Transcoder.describeFailure(
       'Error initializing output stream 0:0',
@@ -257,5 +441,18 @@ void main() {
       action: '合并',
     );
     expect(e.message, 'FFmpeg 合并失败');
+    final container = Transcoder.describeFailure(
+      'Could not find tag for codec vp9',
+      null,
+      action: '合并',
+    );
+    expect(container.hint, contains('先用「转码」'));
+    expect(
+      Transcoder.describeFailure(
+        'Could not find tag for codec',
+        'libx264',
+      ).hint,
+      '换一个容器，或把那一路改为重新编码而不是复制。',
+    );
   });
 }

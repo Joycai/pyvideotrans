@@ -1,3 +1,4 @@
+import 'cue.dart';
 import 'mux/merge_options.dart';
 import 'paths.dart';
 import 'task_kind.dart';
@@ -153,8 +154,12 @@ final class MergeJob extends MediaJob {
   /// 各段时长，准备阶段探测填；续跑时重新探测（入队后文件可能被换）。
   List<Duration>? segmentDurations;
 
-  /// 各段字幕条数，没挂字幕的段为 null。准备阶段读字幕时填。
+  /// 各段字幕条数（截到段尾之后），没挂字幕的段为 null。准备阶段读字幕时填。
   List<int?>? segmentCues;
+
+  /// 平移、截尾后拼好的整份字幕。准备阶段算好交给合并阶段，运行时状态，不存：
+  /// 合并没做完时每次开跑都会重跑准备。
+  List<Cue>? mergedCues;
 
   @override
   String? outputPath;

@@ -279,6 +279,10 @@ List<Cue> concatCues(List<SegmentCues> segments) {
   return out;
 }
 
+/// 视频产物旁的字幕：同名，扩展名换成 `.srt`。
+String sidecarPathFor(String video) =>
+    '${video.replaceAll(RegExp(r'\.[^./\\]*$'), '')}.srt';
+
 /// 产物路径：`<目录>/<文件名>.<扩展名>`；开了旁挂字幕时同名 `.srt` 也要不存在。
 /// 有冲突就加 `-2`、`-3`…，与转码同一规则：不覆盖任何已有文件，也不写到
 /// 某一段源文件身上。
@@ -303,7 +307,7 @@ List<Cue> concatCues(List<SegmentCues> segments) {
   for (var n = 1; ; n++) {
     final base = '$prefix$stem${n == 1 ? '' : '-$n'}';
     final video = '$base.$ext';
-    final sidecar = options.sidecarSubtitles ? '$base.srt' : null;
+    final sidecar = options.sidecarSubtitles ? sidecarPathFor(video) : null;
     if (taken(video) || (sidecar != null && taken(sidecar))) continue;
     return (video: video, sidecar: sidecar);
   }

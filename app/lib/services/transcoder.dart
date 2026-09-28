@@ -350,13 +350,17 @@ class Transcoder extends ChangeNotifier {
         ? '…${tail.substring(tail.length - 800)}'
         : tail;
     final s = tail.toLowerCase();
+    // 只搬流不编码（合并）时，页面上没有编码器、额外参数这些选项，建议换成那边做得到的。
+    final copyOnly = encoderId == null;
     if (s.contains('could not find tag for codec') ||
         s.contains('only supported in mp4') ||
         s.contains('not currently supported in container')) {
       return ActionableException(
         '容器装不下其中一路流',
         detail: detail,
-        hint: '换一个容器，或把那一路改为重新编码而不是复制。',
+        hint: copyOnly
+            ? '换一个容器，或先用「转码」把那一段转成容器装得下的编码。'
+            : '换一个容器，或把那一路改为重新编码而不是复制。',
       );
     }
     // 不编码时没有「编码器初始化失败」这回事，同样的字样（initializing output
@@ -377,14 +381,18 @@ class Transcoder extends ChangeNotifier {
       return ActionableException(
         'FFmpeg 不认识其中一个参数',
         detail: detail,
-        hint: '检查「额外参数」的写法，或者这份 FFmpeg 版本过旧。',
+        hint: copyOnly
+            ? '这份 FFmpeg 版本可能过旧，换一个新版本后重试。'
+            : '检查「额外参数」的写法，或者这份 FFmpeg 版本过旧。',
       );
     }
     if (s.contains('no space left')) {
       return ActionableException(
         '磁盘空间不足',
         detail: detail,
-        hint: '清理输出目录所在磁盘，或在高级里换一个输出目录。',
+        hint: copyOnly
+            ? '清理输出目录所在磁盘，或回合并页换一个输出位置后重新建任务。'
+            : '清理输出目录所在磁盘，或在高级里换一个输出目录。',
       );
     }
     return ActionableException(
