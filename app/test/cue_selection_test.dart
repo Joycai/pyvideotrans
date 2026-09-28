@@ -89,13 +89,20 @@ void main() {
     final random = Random(20260928);
     for (var round = 0; round < 300; round++) {
       final n = 1 + random.nextInt(20);
-      final order = [
-        for (var i = 0; i < n; i++)
-          if (random.nextDouble() < 0.7) i,
-      ];
-      if (order.isEmpty) order.add(random.nextInt(n));
+      // 可见行随机收窄或放宽，模拟筛选变化：锚点和已选行可能被筛掉。
+      List<int> visible() {
+        final order = [
+          for (var i = 0; i < n; i++)
+            if (random.nextDouble() < 0.7) i,
+        ];
+        if (order.isEmpty) order.add(random.nextInt(n));
+        return order;
+      }
+
+      var order = visible();
       var s = CueSelection.single(order[random.nextInt(order.length)]);
       for (var step = 0; step < 40; step++) {
+        if (random.nextInt(5) == 0) order = visible();
         final p = order[random.nextInt(order.length)];
         final extend = random.nextBool();
         s = extend ? s.extendTo(p, order) : s.toggle(p, order);
@@ -108,7 +115,8 @@ void main() {
           expect(q, inInclusiveRange(0, n - 1));
         }
         if (extend) {
-          // 扩选的结果是可见顺序里的一段连续区间，而且只含可见行。
+          // 扩选的结果是可见顺序里的一段连续区间，而且只含可见行；
+          // 锚点被筛掉时退回单选，也满足这一条。
           final at = s.positions.map(order.indexOf).toList()..sort();
           expect(at.first, greaterThanOrEqualTo(0));
           expect(at.last - at.first + 1, at.length);

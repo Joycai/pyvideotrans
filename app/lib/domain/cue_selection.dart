@@ -5,6 +5,9 @@
 ///
 /// 不变量：[positions] 非空，[focus] 恒在其中。选区不能被取消到空 ——
 /// 检视面板永远要有一条可看。
+///
+/// [toggle] 与 [extendTo] 的目标行应当在 `order`（可见行）里 —— 点击只会
+/// 落在看得见的行上。万一不在，扩选退回单选，切换照常进行。
 class CueSelection {
   const CueSelection.single(int position)
     : focus = position,
