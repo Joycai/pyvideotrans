@@ -71,6 +71,18 @@ void main() {
     });
   });
 
+  testWidgets('鼠标操作的主修饰键也按平台区分', (tester) async {
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    expect(isPrimaryModifierPressed(TargetPlatform.macOS), isTrue);
+    expect(isPrimaryModifierPressed(TargetPlatform.windows), isFalse);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    expect(isPrimaryModifierPressed(TargetPlatform.macOS), isFalse);
+    expect(isPrimaryModifierPressed(TargetPlatform.linux), isTrue);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+  });
+
   test('未指定平台时跟着 defaultTargetPlatform', () {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);

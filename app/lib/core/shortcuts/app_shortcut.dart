@@ -2,7 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
-/// 平台的主修饰键是不是 ⌘：macOS 用 ⌘，Windows 与 Linux 用 Ctrl。
+/// 平台的主修饰键是不是 ⌘：macOS 用 ⌘，Windows 与 Linux 用 Ctrl。iOS 接
+/// 实体键盘时也是 ⌘，一并算上；其余平台按 Ctrl。
 ///
 /// 不两个都认：macOS 上 Ctrl+点击是系统右键，Ctrl+S 也不是那里的习惯；
 /// Windows 上 Win 键归系统。
@@ -86,6 +87,7 @@ String keyName(LogicalKeyboardKey key) {
   final named = _names[key];
   if (named != null) return named;
   final label = key.keyLabel;
+  if (label.isEmpty) return key.debugName ?? '?';
   return label.length == 1 ? label.toUpperCase() : label;
 }
 
