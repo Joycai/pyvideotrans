@@ -39,8 +39,7 @@ class PreviewPlayback extends ChangeNotifier {
   PreviewPlayback({required this.cues, required this.mediaPath})
     : player = Player(),
       isAudio = MediaKinds.isAudio(mediaPath),
-      _selected = cues.selected,
-      _multiSelected = cues.multiSelected {
+      _selected = cues.selected {
     video = VideoController(player);
     cues.addListener(_onEditorChanged);
     _subs = [
@@ -88,9 +87,6 @@ class PreviewPlayback extends ChangeNotifier {
 
   late List<StreamSubscription<Object?>> _subs;
   int _selected;
-
-  /// 上一次看到的多选状态，给 [seeksOnSelect] 比较改动前后。
-  bool _multiSelected;
   bool _syncing = false;
   int? _pendingSeekMs;
   bool _disposed = false;
@@ -137,19 +133,9 @@ class PreviewPlayback extends ChangeNotifier {
       seekTo((position + delta).inMilliseconds);
 
   void _onEditorChanged() {
-    if (_disposed) return;
-    final wasMulti = _multiSelected;
-    _multiSelected = cues.multiSelected;
-    if (cues.selected == _selected) return;
+    if (_disposed || cues.selected == _selected) return;
     _selected = cues.selected;
-    if (_syncing) return;
-    if (!seeksOnSelect(
-      playing: playing,
-      multiBefore: wasMulti,
-      multiAfter: _multiSelected,
-    )) {
-      return;
-    }
+    if (_syncing || !seeksOnSelect(cues, playing: playing)) return;
     final cue = cues.current;
     if (cue != null) seekTo(cue.startMs);
   }
@@ -189,10 +175,7 @@ int? followTarget(PlaybackCues cues, int ms, {required bool playing}) {
   return index == cues.selected ? null : index;
 }
 
-/// 选中条变了要不要把播放头拽过去：正在播放时，改动前后只要有一边是
-/// 多选就不拽 —— ⌘+点击取消到只剩一条也是在挑行，不是要跳过去。
-bool seeksOnSelect({
-  required bool playing,
-  required bool multiBefore,
-  required bool multiAfter,
-}) => !(playing && (multiBefore || multiAfter));
+/// 选中条变了要不要把播放头拽过去：多选且正在播放时不拽。只看改完之后：
+/// 从多选点回单选（普通点击、J/K）要跳过去，否则下一帧又被播放头拽回。
+bool seeksOnSelect(PlaybackCues cues, {required bool playing}) =>
+    !(playing && cues.multiSelected);

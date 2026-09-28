@@ -86,10 +86,10 @@ void main() {
   });
 
   group('只保留看得见的行', () {
-    test('去掉被筛掉的行，焦点与锚点不变', () {
+    test('去掉被筛掉的行，焦点与看得见的锚点不变', () {
       final s = const CueSelection.single(1).extendTo(4, all);
-      final r = s.restrictTo({0, 2, 4, 6});
-      expect(r.positions, {2, 4});
+      final r = s.restrictTo({1, 2, 4, 6});
+      expect(r.positions, {1, 2, 4});
       expect(r.focus, 4);
       expect(r.anchor, 1);
     });
@@ -98,6 +98,13 @@ void main() {
       final s = const CueSelection.single(1).extendTo(4, all);
       expect(s.restrictTo({1, 2}), const CueSelection.single(4));
       expect(s.restrictTo({4, 7}), const CueSelection.single(4));
+    });
+
+    test('锚点被筛掉时换成焦点：Shift 扩选仍有起点', () {
+      final s = const CueSelection.single(1).extendTo(4, all);
+      final r = s.restrictTo({2, 3, 4, 6});
+      expect(r.anchor, 4);
+      expect(r.extendTo(6, [2, 3, 4, 6]).positions, {4, 6});
     });
 
     test('全都看得见时原样返回', () {
@@ -131,7 +138,10 @@ void main() {
         final r = s.restrictTo(order.toSet());
         expect(r.positions, contains(r.focus));
         expect(r.focus, s.focus);
-        if (r.isMultiple) expect(order, containsAll(r.positions));
+        if (r.isMultiple) {
+          expect(order, containsAll(r.positions));
+          expect(order, contains(r.anchor));
+        }
 
         expect(s.positions, isNotEmpty);
         expect(s.positions, contains(s.focus));

@@ -89,6 +89,11 @@ class _GatedTranslator implements TranslationProvider {
   }
 }
 
+/// 表里看得见的各条行号。
+List<int> _shown(EditorController c) => [
+  for (final p in c.visiblePositions) c.document.cues[p].index,
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -528,7 +533,7 @@ void main() {
       // 拆出的两条是新的；后面两条只是重新编号，不算改过。
       expect(c.countOf(CueFilter.edited), 2);
       c.setFilter(CueFilter.edited);
-      expect(c.visibleCues.map((x) => x.index), [1, 2]);
+      expect(_shown(c), [1, 2]);
     });
 
     test('写入后以写入的版本为准重新算', () async {

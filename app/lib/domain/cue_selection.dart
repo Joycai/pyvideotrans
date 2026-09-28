@@ -63,11 +63,14 @@ class CueSelection {
 
   /// 只保留 [keep] 里的行，比如当前看得见的行。焦点不在 [keep] 里时
   /// 退回只选焦点这一条 —— 焦点是检视面板正在看的那条，不能凭空换掉。
+  /// 锚点不在 [keep] 里时换成焦点，否则 Shift+点击找不到起点，会把还
+  /// 看得见的选中行一起丢掉。
   CueSelection restrictTo(Set<int> keep) {
     if (!isMultiple) return this;
     if (!keep.contains(focus)) return CueSelection.single(focus);
     final rest = positions.where(keep.contains).toSet();
-    if (rest.length == positions.length) return this;
+    final anchor = keep.contains(this.anchor) ? this.anchor : focus;
+    if (rest.length == positions.length && anchor == this.anchor) return this;
     if (rest.length == 1) return CueSelection.single(focus);
     return CueSelection._(focus, anchor, rest);
   }

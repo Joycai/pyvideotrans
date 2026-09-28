@@ -343,10 +343,6 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   CueState displayState(Cue cue) =>
       displayStateOf(cue, translated: hasTranslations);
 
-  List<Cue> get visibleCues => [
-    for (final p in visiblePositions) document.cues[p],
-  ];
-
   (SubtitleDocument, CueFilter, String, Set<int?>, SubtitleDocument, List<int>)?
   _visibleMemo;
 
@@ -503,9 +499,12 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     bool toggle = false,
   }) {
     if (indexInDocument < 0 || indexInDocument >= document.cues.length) return;
-    // 从看得见的选区出发：藏着的行不会借这次点击又冒回来。
+    // 从看得见的选区出发：藏着的行不会借这次点击又冒回来。焦点被筛掉时
+    // 看得见的选区是空的，没有可以加减的，任何点击都是单选。
     final base = _effective;
-    if (extend) {
+    if (!visiblePositions.contains(selected)) {
+      _selection = CueSelection.single(indexInDocument);
+    } else if (extend) {
       _selection = base.extendTo(indexInDocument, visiblePositions);
     } else if (toggle) {
       _selection = base.toggle(indexInDocument, visiblePositions);

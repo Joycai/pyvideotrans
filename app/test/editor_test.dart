@@ -67,6 +67,11 @@ Future<EditorController> _speakerController() async {
   return c;
 }
 
+/// 表里看得见的各条行号。
+List<int> _shown(EditorController c) => [
+  for (final p in c.visiblePositions) c.document.cues[p].index,
+];
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -81,16 +86,16 @@ void main() {
     test('过滤后只剩符合条件的条目', () async {
       final c = await _controller()
         ..setFilter(CueFilter.review);
-      expect(c.visibleCues.map((x) => x.index), [2]);
+      expect(_shown(c), [2]);
     });
 
     test('搜索同时看原文与译文，且不区分大小写', () async {
       final c = await _controller()
         ..setSearch('SECOND');
-      expect(c.visibleCues.map((x) => x.index), [2]);
+      expect(_shown(c), [2]);
 
       c.setSearch('第三');
-      expect(c.visibleCues.map((x) => x.index), [3]);
+      expect(_shown(c), [3]);
     });
   });
 
@@ -282,14 +287,14 @@ void main() {
       final c = await _speakerController()
         ..toggleSpeakerFilter(0)
         ..toggleSpeakerFilter(2);
-      expect(c.visibleCues.map((x) => x.index), [1, 2, 4]);
+      expect(_shown(c), [1, 2, 4]);
       c
         ..toggleSpeakerFilter(0)
         ..toggleSpeakerFilter(2)
         ..toggleSpeakerFilter(null);
-      expect(c.visibleCues, isEmpty);
+      expect(c.visiblePositions, isEmpty);
       c.setSpeakerFilter({});
-      expect(c.visibleCues, hasLength(6));
+      expect(c.visiblePositions, hasLength(6));
     });
 
     test('说话人筛选与状态筛选叠加', () async {
@@ -302,7 +307,7 @@ void main() {
       c
         ..setFilter(CueFilter.untranslated)
         ..setSpeakerFilter({1});
-      expect(c.visibleCues.map((x) => x.index), [3, 5, 6]);
+      expect(_shown(c), [3, 5, 6]);
     });
   });
 
@@ -487,6 +492,27 @@ void main() {
       expect(c.document.speakerName(3), '说话人4');
     });
 
+    test('焦点被筛掉时 ⌘+点击按单选：放开筛选后旧焦点不冒回来', () async {
+      final c = await _speakerController()
+        ..selectWith(1)
+        ..selectWith(3, extend: true); // 焦点下标 3，说话人3
+      c
+        ..toggleSpeakerFilter(1) // 只看周老师：下标 2、4、5
+        ..selectWith(4, toggle: true)
+        ..setSpeakerFilter({});
+      expect(c.selectedPositions, [4]);
+    });
+
+    test('锚点被筛掉后 Shift 扩选从焦点起算，不丢看得见的选中行', () async {
+      final c = await _speakerController()
+        ..selectWith(0)
+        ..selectWith(4, extend: true); // 锚点下标 0（Mia），焦点下标 4
+      c
+        ..toggleSpeakerFilter(1) // 只看周老师：下标 2、4、5
+        ..selectWith(5, extend: true);
+      expect(c.selectedPositions, [4, 5]);
+    });
+
     test('J/K、Esc 回到单选', () async {
       final c = await _speakerController();
       void multi() => c
@@ -601,7 +627,7 @@ void main() {
       expect(c.countOf(CueFilter.unpaired), 1);
       expect(c.countOf(CueFilter.untranslated), 1);
       c.setFilter(CueFilter.unpaired);
-      expect(c.visibleCues.map((x) => x.index), [2]);
+      expect(_shown(c), [2]);
     });
 
     test('并入上一条：译文接上、原文不留空格、说话人沿用上一条', () async {
