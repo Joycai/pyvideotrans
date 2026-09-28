@@ -576,7 +576,7 @@ class MergeFormController extends ChangeNotifier {
       cues = Srt.parse(await _readSubtitle(path));
       if (cues.isEmpty) error = '没有可用的字幕条目，确认是 SRT / VTT 且时间码格式正确';
     } on FormatException {
-      error = '不是 UTF-8 编码，用文本编辑器另存为 UTF-8';
+      error = '编码认不出（只收 UTF-8 与带 BOM 的 UTF-16），用文本编辑器另存为 UTF-8';
     } on FileSystemException catch (e) {
       error = e.message;
     }

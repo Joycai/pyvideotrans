@@ -369,7 +369,7 @@ void main() {
         0x0A,
       ]);
     final t = await run(task(options(subs: [gbk.path, null])));
-    expect(t.error?.title, '第 1 段的字幕不是 UTF-8 编码');
+    expect(t.error?.title, '第 1 段的字幕编码认不出');
 
     const text = '1\n00:00:01,000 --> 00:00:02,000\n中文\n';
     final utf16 = File('${dir.path}/u16.srt')
@@ -395,6 +395,19 @@ void main() {
     await run(t);
     expect(t.status, TaskStatus.done, reason: t.error?.title);
     expect(job.outputPath, '${dir.path}/out.mp4');
+  });
+
+  test('旁挂字幕写不出时不留下成片：续跑不会另写一份 -2', () async {
+    final a = file('a.srt', srt([(1, 2, '甲')]));
+    // 旁挂位置被一个同名目录占着，写 SRT 时改名失败。File.existsSync 对
+    // 目录为假，所以避让规则看不见它。
+    Directory('${dir.path}/out.srt').createSync();
+    final t = await run(task(options(subs: [a, null], sidecar: true)));
+    expect(t.status, TaskStatus.failed);
+    expect(t.stage, TaskStage.merge);
+    final job = t.media! as MergeJob;
+    expect(File(job.outputPath!).existsSync(), isFalse);
+    expect(File('${job.outputPath}.part').existsSync(), isFalse);
   });
 
   test('ffmpeg 出错（不是取消）时也删掉 .part', () async {

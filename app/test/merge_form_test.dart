@@ -247,7 +247,7 @@ void main() {
     await form.addPaths(['/v/a.mp4', '/v/b.mp4']);
     form.attachSubtitle(0, '/v/a.srt');
     await settle();
-    expect(form.segments.first.subtitleError, contains('不是 UTF-8'));
+    expect(form.segments.first.subtitleError, contains('编码认不出'));
     expect(form.footer.text, '第 1 段的字幕读不出来，摘下或换一个');
 
     form.setEmbedSubtitles(false);

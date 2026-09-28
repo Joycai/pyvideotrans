@@ -187,6 +187,7 @@ class MergeTaskPipeline {
     await Directory(File(output).parent.path).create(recursive: true);
 
     final tmp = await Directory.systemTemp.createTemp('merge_');
+    var wroteSidecar = false;
     try {
       final list = '${tmp.path}/$listName';
       final chapters = '${tmp.path}/$chaptersName';
@@ -217,15 +218,20 @@ class MergeTaskPipeline {
         token: token,
         onProgress: ffmpegProgress(task: task, job: job, onChange: onChange),
       );
-      await File(partial).rename(output);
+      // 旁挂先写、成片最后改名：中途失败时下面把写出的都删掉，不留下半套
+      // 产物 —— 留着的成片续跑时会被当成别人的文件，另写一份 -2，它就成了孤儿。
       if (srt != null && job.sidecarPath != null) {
         await writeFileAtomically(job.sidecarPath!, srt);
+        wroteSidecar = true;
       }
+      await File(partial).rename(output);
     } catch (_) {
-      try {
-        await File(partial).delete();
-      } on FileSystemException {
-        // 没生成过临时文件。
+      for (final path in [partial, if (wroteSidecar) job.sidecarPath!]) {
+        try {
+          await File(path).delete();
+        } on FileSystemException {
+          // 没生成过。
+        }
       }
       rethrow;
     } finally {
@@ -325,9 +331,9 @@ class MergeTaskPipeline {
       } on FormatException {
         // 不按 Latin-1 兜底：GBK / Big5 字幕会静默变成乱码写进成片。
         throw ActionableException(
-          '第 ${i + 1} 段的字幕不是 UTF-8 编码',
+          '第 ${i + 1} 段的字幕编码认不出',
           detail: path,
-          hint: '用文本编辑器把它另存为 UTF-8，然后从准备阶段继续。',
+          hint: '只收 UTF-8 与带 BOM 的 UTF-16。用文本编辑器把它另存为 UTF-8，然后从准备阶段继续。',
         );
       }
       if (cues.isEmpty) {

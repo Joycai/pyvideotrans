@@ -196,11 +196,11 @@ core/       domain/ ←──── services/
 - `provider_fields.dart`：服务分组、模型字段、readiness 行、服务 / 模型摘要。
 - `command_block.dart`：转码页、合并页与任务详情共用的可复制命令块。
 - `param_section.dart`：参数面板里的分段 `ParamSection` 与小字 `ParamHint`，转码页与合并页共用。
-- `enqueued_banner.dart`：三个建任务页面共用的入队成功横幅。
-- `step_dots.dart`：三个建任务页面共用的三步说明。
+- `enqueued_banner.dart`：各建任务页面共用的入队成功横幅。
+- `step_dots.dart`：各建任务页面共用的三步说明。
 - `page_chrome.dart`：页面交给顶栏的稳定契约：标题、副标题、尾随标签、操作区。Shell 与各页都依赖它，
   放在这里而不是 `shell/`，各页就不必 import 另一个 feature。
-- `new_task_page.dart`：`NewTaskPageState`，三个建任务页的页面状态基类 —— 拖放、入队横幅、
+- `new_task_page.dart`：`NewTaskPageState`，四个建任务页（含合并）的页面状态基类 —— 拖放、入队横幅、
   快捷键、960 / 1100 两栏布局；各页只说明表单、怎么入队、两栏各放什么。
 - `submit_shortcuts.dart`：`SubmitShortcuts`，建任务入口（工作台页与两个对话框）共用的键盘约定：
   Enter 提交但让给多行框与按钮，⌘Enter 一律提交，Esc 先失焦再关闭。

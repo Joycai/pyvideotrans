@@ -75,7 +75,7 @@ Python 后端都说 OpenAI 兼容协议，于是共用 `OpenAiCompatibleAsrProvi
 `TaskStage`：排队 / 准备 / 识别 / 断句 / 翻译 / 完成（转码、合并这类媒体任务只走排队 / 准备 /
 转码或合并 / 完成，见 `TaskKind.stages`）。媒体任务的状态挂在 sealed 的 `SubtitleTask.media`
 （`MediaJob`）上，按种类区分的地方写 `switch (task.media)`，别再加类型专用的可空字段。**失败与取消都保留已完成阶段的结果**，重试从 `SubtitleTask.resumeStage`
-继续；翻译阶段以"这一条有没有译文"为断点，续跑只翻剩下的，不重复花钱。
+继续（例外：合并任务在合并阶段没做完时总会重跑准备，重新探测各段，文件可能已被换过）；翻译阶段以"这一条有没有译文"为断点，续跑只翻剩下的，不重复花钱。
 界面上向用户明确承诺了这件事，改 `TaskRunner` 时别破坏它。
 逐段识别的服务用 `RecognitionCheckpoint` 记录每段结果，同样支持段级续跑。
 

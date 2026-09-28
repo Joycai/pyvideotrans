@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/tokens.dart';
 import 'submit_shortcuts.dart';
 
-/// 三个建任务工作台页（新建转写 / 翻译 / 转码）共用的页面状态。
+/// 四个建任务工作台页（新建转写 / 翻译 / 转码 / 合并）共用的页面状态。
 ///
 /// 这几页不会关闭：跳去设置填密钥再回来，文件与参数还在；提交后列表清空、
 /// 参数保留，方便一批接一批建。表单控制器由应用根节点持有并传进来，切换导航
