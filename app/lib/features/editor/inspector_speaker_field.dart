@@ -25,8 +25,13 @@ class InspectorSpeakerField extends StatelessWidget {
     final cs = context.colors;
     final doc = controller.document;
     final cue = controller.current!;
-    final id = cue.speaker;
+    // 多选且各条说话人不同：锚点控件只写「多个说话人」，计数是选中条数。
+    final mixed = controller.multiSelected && controller.selectionMixedSpeakers;
+    final id = mixed ? null : cue.speaker;
     final summary = controller.speakers.where((s) => s.id == id).firstOrNull;
+    final count = controller.multiSelected
+        ? controller.selectionCount
+        : summary?.cueCount;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -76,7 +81,11 @@ class InspectorSpeakerField extends StatelessWidget {
                 ],
                 Expanded(
                   child: Text(
-                    id == null ? '无说话人' : doc.speakerName(id),
+                    mixed
+                        ? '多个说话人'
+                        : id == null
+                        ? '无说话人'
+                        : doc.speakerName(id),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: context.texts.bodyMedium?.copyWith(
@@ -86,9 +95,9 @@ class InspectorSpeakerField extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (summary != null)
+                if (count != null)
                   Text(
-                    '${summary.cueCount} 条',
+                    '$count 条',
                     style: context.texts.bodySmall?.copyWith(
                       color: cs.onSurfaceVariant,
                     ),
@@ -146,6 +155,11 @@ class _SpeakerMenuState extends State<_SpeakerMenu> {
     final range = controller.document.speakerRun(controller.selected);
     String n(int position) =>
         controller.document.cues[position].index.toString().padLeft(3, '0');
+    final multi = controller.multiSelected;
+    // 对勾只打在「选中的都是这个人」上；各不相同时一个都不打。
+    final checked = multi && controller.selectionMixedSpeakers
+        ? -1
+        : cue.speaker;
 
     return GlassMenu(
       children: [
@@ -156,25 +170,26 @@ class _SpeakerMenuState extends State<_SpeakerMenu> {
             child: Row(
               children: [
                 Text(
-                  '应用范围',
+                  multi ? '应用到已选 ${controller.selectionCount} 条' : '应用范围',
                   style: context.texts.labelMedium?.copyWith(
                     color: cs.onSurfaceVariant,
                   ),
                 ),
                 const Spacer(),
-                MiniSegmented<bool>(
-                  height: 28,
-                  value: _run && runLength > 1,
-                  onChanged: (v) => setState(() => _run = v),
-                  segments: [
-                    (value: false, label: '这一条'),
-                    if (runLength > 1)
-                      (
-                        value: true,
-                        label: '连续 $runLength 条 · ${n(range.start)}–${n(range.end)}',
-                      ),
-                  ],
-                ),
+                if (!multi)
+                  MiniSegmented<bool>(
+                    height: 28,
+                    value: _run && runLength > 1,
+                    onChanged: (v) => setState(() => _run = v),
+                    segments: [
+                      (value: false, label: '这一条'),
+                      if (runLength > 1)
+                        (
+                          value: true,
+                          label: '连续 $runLength 条 · ${n(range.start)}–${n(range.end)}',
+                        ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -195,7 +210,7 @@ class _SpeakerMenuState extends State<_SpeakerMenu> {
                 ),
                 SizedBox(
                   width: 26,
-                  child: s.id == cue.speaker
+                  child: s.id == checked
                       ? Icon(Symbols.check, size: 18, weight: 400, color: cs.primary)
                       : null,
                 ),
@@ -240,7 +255,11 @@ class _SpeakerMenuState extends State<_SpeakerMenu> {
             weight: 400,
             color: cs.onSurfaceVariant,
           ),
-          label: _run && runLength > 1 ? '清除这一段的说话人' : '清除这一条的说话人',
+          label: multi
+              ? '清除已选各条的说话人'
+              : _run && runLength > 1
+              ? '清除这一段的说话人'
+              : '清除这一条的说话人',
           onTap: () => _assign(null),
         ),
       ],

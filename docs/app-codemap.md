@@ -104,6 +104,7 @@ core/       domain/ ←──── services/
 | `srt.dart` | SRT / VTT 解析与序列化、时长格式（`formatDuration`，可固定写出小时位）、说话人标签检测、导出字段 |
 | `line_wrap.dart` | 导出时折行；CJK 与拉丁文字使用不同上限 |
 | `segmenter.dart` | 识别结果的重叠修正、短句合并、长句拆分 |
+| `cue_selection.dart` | 字幕表选区 `CueSelection`：焦点、选中集合与 Shift 锚点；⌘/Ctrl 切换、Shift 只在可见行里扩选 |
 | `subtitle_pairing.dart` | 本地原文与译文字幕的配对模式、统计与合并 |
 | `speech_segments.dart` | 静音区间 → 可逐段识别的语音区间 |
 | `recognition_checkpoint.dart` | 段级识别检查点，支持失败、取消和重启后的续跑 |
@@ -284,7 +285,8 @@ core/       domain/ ←──── services/
 - `inspector.dart`：预览和当前条编辑器的组合。
 - `inspector_preview.dart`：视频 / 音频画面、播放控制与 SeekBar。
 - `inspector_cue_editor.dart`：当前字幕文本、文件名、时间码与动作。
-- `inspector_speaker_field.dart`：说话人字段与菜单。
+- `inspector_speaker_field.dart`：说话人字段与菜单；多选时作用于全部选中条。
+- `inspector_selection_editor.dart`：多选时替换当前条编辑器：已选条数、行号区间、批量说话人字段。
 
 入口页拆成：
 
@@ -350,6 +352,7 @@ core/       domain/ ←──── services/
 | 三个建任务表单共有的状态（参数、文件列表、输出位置、「上次参数」） | `features/shared/new_task_form.dart` |
 | 字幕表格 | `features/editor/cue_table*.dart` |
 | 编辑动作与撤销 | `features/editor/editor_controller.dart` + `domain/cue.dart` |
+| 多选与批量改说话人 | `domain/cue_selection.dart` + `editor_controller.dart`（`selectWith` / `assignSpeaker`）+ `inspector_selection_editor.dart` |
 | 预览播放 | `features/editor/editor_media.dart` + `preview_playback.dart` + `inspector_preview.dart` |
 | 保存 / 离开前询问 / 冲突 | `features/editor/editor_controller.dart`（`confirmLeave` / `writeFiles`）+ `editor_prompts.dart` + `editor_leave_dialog.dart` |
 
@@ -367,9 +370,10 @@ flutter test --tags golden --run-skipped
 - `test/editor_workspace_test.dart` 覆盖换会话、入口页开合、「最近打开」的串行写盘、换会话 / 退出前的询问与保存（用 `ScriptedPrompts`，不需要 widget 树）；
   `test/editor_save_test.dart` 的「写入流程」组覆盖离开前写草稿、覆盖 / 另存为 / 取消与目标被拒的提示；
   `test/preview_playback_test.dart` 的 `EditorMedia` 组覆盖只找一次、手动关联优先与记住关联；
-  `test/text_focus_test.dart` 钉死「焦点在输入框里」的判断（单行 / 多行）。
+  `test/text_focus_test.dart` 钉死「焦点在输入框里」的判断（单行 / 多行）；
+  `test/cue_selection_test.dart` 用随机操作序列检查选区不变量，`editor_test.dart` 与 `editor_ui_test.dart` 的「多选」组覆盖点选、筛选下扩选、批量指派与撤销。
 - `test/status_snapshot_test.dart` 钉死状态栏快照的服务文案（未选择 / 未配置 / 已配置）与任务计数。
 - `test/task_filter_test.dart` 钉死状态分组；`test/tasks_controller_test.dart` 覆盖筛选、选中、拖入分流，
   以及拆掉任务页再装回来后选中与筛选仍在。
-- golden 测试共 45 张场景图；拆 UI 文件后必须保持逐像素一致。
+- golden 测试共 46 张场景图；拆 UI 文件后必须保持逐像素一致。
 - `live` 测试需要真实密钥，默认跳过；ffmpeg / 平台硬件编码用例会按本机能力跳过。

@@ -182,6 +182,12 @@ class EditorPageState extends State<EditorPage> {
       return KeyEventResult.handled;
     }
 
+    if (event.logicalKey == LogicalKeyboardKey.escape &&
+        controller.multiSelected) {
+      controller.clearMultiSelection();
+      return KeyEventResult.handled;
+    }
+
     final playback = controller.media.playback;
     switch (event.logicalKey) {
       case LogicalKeyboardKey.keyJ:

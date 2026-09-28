@@ -126,6 +126,7 @@ class CueTableRow extends StatefulWidget {
     required this.view,
     this.edited = false,
     required this.selected,
+    this.focused = false,
     required this.onTap,
   });
 
@@ -145,7 +146,12 @@ class CueTableRow extends StatefulWidget {
 
   /// 与上次写进字幕文件的版本不一样：序号前加一个小圆点。
   final bool edited;
+  /// 在选区里：底色。
   final bool selected;
+
+  /// 焦点行，即检视面板正在看的那一条：主色左缘。多选时靠它分辨预览
+  /// 跟的是哪条；单选时焦点就是唯一的选中行，外观和原来一样。
+  final bool focused;
   final VoidCallback onTap;
 
   @override
@@ -165,7 +171,7 @@ class _CueTableRowState extends State<CueTableRow> {
     // 待校对用字幕黄的左缘 —— 这是设计规范里黄色仅有的两个用途之一。
     final edge = isReview
         ? cs.tertiary
-        : widget.selected
+        : widget.focused
         ? cs.primary
         : Colors.transparent;
 

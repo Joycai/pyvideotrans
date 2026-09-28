@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/file_stamp.dart';
 import 'package:subtitle_studio/domain/subtitle_pairing.dart';
+import 'package:subtitle_studio/features/editor/cue_table_rows.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_leave_dialog.dart';
 import 'package:subtitle_studio/features/editor/editor_open_form.dart';
@@ -15,6 +16,7 @@ import 'package:subtitle_studio/features/editor/editor_page_actions.dart';
 import 'package:subtitle_studio/features/editor/editor_prompts.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/editor_widgets.dart';
+import 'package:subtitle_studio/features/editor/inspector_selection_editor.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 import 'editor_fixtures.dart';
@@ -168,6 +170,99 @@ void main() {
       await tester.pump();
       expect(c.document.unpairedCount, 0);
     });
+  });
+
+  group('多选', () {
+    Future<void> click(
+      WidgetTester tester,
+      int row, [
+      LogicalKeyboardKey? modifier,
+    ]) async {
+      if (modifier != null) await tester.sendKeyDownEvent(modifier);
+      await tester.tap(find.byType(CueTableRow).at(row));
+      if (modifier != null) await tester.sendKeyUpEvent(modifier);
+      await tester.pump();
+    }
+
+    testWidgets('Shift 扩选、⌘ 与 Ctrl 切换，检视面板换成批量形态', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      expect(c.multiSelected, isFalse);
+      expect(find.textContaining('已选'), findsNothing);
+
+      await click(tester, 2, LogicalKeyboardKey.shiftLeft);
+      expect(c.selectedPositions, [0, 1, 2]);
+      await click(tester, 4, LogicalKeyboardKey.controlLeft);
+      expect(c.selectedPositions, [0, 1, 2, 4]);
+      await click(tester, 1, LogicalKeyboardKey.metaLeft);
+      expect(c.selectedPositions, [0, 2, 4]);
+      expect(find.text('已选 3 条字幕'), findsOneWidget);
+      expect(find.text('001、003、005'), findsOneWidget);
+
+      // 普通点击回到单选。
+      await click(tester, 3);
+      expect(c.selectedPositions, [3]);
+      expect(find.textContaining('已选'), findsNothing);
+    });
+
+    testWidgets('Esc 退出多选，焦点不变', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      await click(tester, 2, LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(c.multiSelected, isFalse);
+      expect(c.selected, 2);
+    });
+
+    testWidgets('从批量菜单选一个人，选中的都改过去', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 0);
+      await click(tester, 3, LogicalKeyboardKey.shiftLeft);
+      final target = c.speakers.last;
+
+      final anchor = c.selectionMixedSpeakers
+          ? find.text('多个说话人')
+          : find.text('4 条');
+      await tester.tap(anchor);
+      await tester.pump();
+      expect(find.text('应用到已选 4 条'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(GlassMenu),
+          matching: find.text(target.name),
+        ),
+      );
+      await tester.pump();
+      expect(
+        c.document.cues.take(4).map((x) => x.speaker),
+        everyElement(target.id),
+      );
+      c.undo();
+      expect(c.canUndo, isFalse);
+    });
+
+    testWidgets('多选时数字键批量指派', (tester) async {
+      final c = await _controller();
+      await _pump(tester, c);
+      await click(tester, 1);
+      await click(tester, 2, LogicalKeyboardKey.shiftLeft);
+      final first = c.speakers.first;
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
+      expect(
+        [c.document.cues[1].speaker, c.document.cues[2].speaker],
+        [first.id, first.id],
+      );
+    });
+  });
+
+  test('行号区间摘要', () {
+    expect(selectionRanges([1, 2, 3, 4, 9, 15, 16]), '001–004、009、015–016');
+    expect(selectionRanges([1, 3, 5], maxRuns: 2), '001、003 等');
+    expect(selectionRanges([]), '');
   });
 
   group('离开编辑器前的询问', () {

@@ -421,6 +421,7 @@ void main() {
     Size size = const Size(1440, 900),
     List<int> review = const [],
     bool speakerManager = false,
+    List<int> multi = const [],
   }) async {
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
@@ -441,6 +442,10 @@ void main() {
         ..toggleReviewed();
     }
     controller.select(6);
+    // 多选：第一条作锚点，其余逐条 ⌘ 加选，焦点落在最后一条。
+    for (final (i, p) in multi.indexed) {
+      controller.selectWith(p, toggle: i > 0);
+    }
 
     await pumpShell(
       tester,
@@ -505,6 +510,16 @@ void main() {
       brightness: Brightness.light,
       file: 'editor_local_narrow',
       size: const Size(1080, 760),
+    );
+  });
+
+  testWidgets('编辑器 · 多选批量改说话人 · 浅色', (tester) async {
+    await pumpLocal(
+      tester,
+      brightness: Brightness.light,
+      file: 'editor_multi_select_light',
+      review: [4],
+      multi: [2, 3, 4, 5, 8],
     );
   });
 

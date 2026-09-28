@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
@@ -198,8 +199,17 @@ class _CueListState extends State<_CueList> {
               cue.speaker != null && doc.speakers.containsKey(cue.speaker),
           view: controller.view,
           edited: controller.isEdited(cue),
-          selected: position == controller.selected,
-          onTap: () => controller.select(position),
+          selected: controller.isSelected(position),
+          focused: position == controller.selected,
+          onTap: () {
+            // Shift 优先：⌘+Shift 与 Ctrl+Shift 都按扩选处理。
+            final keyboard = HardwareKeyboard.instance;
+            controller.selectWith(
+              position,
+              extend: keyboard.isShiftPressed,
+              toggle: keyboard.isMetaPressed || keyboard.isControlPressed,
+            );
+          },
         );
       },
     );
