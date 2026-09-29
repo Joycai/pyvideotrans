@@ -291,24 +291,28 @@ class _SpeakerRowState extends State<_SpeakerRow> {
                               ),
                             ),
                           ),
-                          for (final o in widget.others)
-                            MenuRow(
-                              leading: SpeakerBadge(
-                                id: o.id,
-                                name: o.name,
-                                named: o.named,
-                              ),
-                              label: o.name,
-                              trailing: Timecode(
-                                '${o.cueCount} 条',
-                                fontSize: 12,
-                                color: cs.onSurfaceVariant,
-                              ),
-                              onTap: () {
-                                close();
-                                widget.controller.mergeSpeaker(s.id, o.id);
-                              },
-                            ),
+                          MenuScrollSection(
+                            children: [
+                              for (final o in widget.others)
+                                MenuRow(
+                                  leading: SpeakerBadge(
+                                    id: o.id,
+                                    name: o.name,
+                                    named: o.named,
+                                  ),
+                                  label: o.name,
+                                  trailing: Timecode(
+                                    '${o.cueCount} 条',
+                                    fontSize: 12,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                  onTap: () {
+                                    close();
+                                    widget.controller.mergeSpeaker(s.id, o.id);
+                                  },
+                                ),
+                            ],
+                          ),
                           const MenuDivider(),
                         ],
                         MenuRow(

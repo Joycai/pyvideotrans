@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -114,14 +116,14 @@ class _AnchoredPopoverState extends State<AnchoredPopover> {
                 onTap: close,
               ),
             ),
-            Positioned(
-              left: widget.alignRight ? null : topLeft.dx,
-              right: widget.alignRight
-                  ? overlayBox.size.width - topLeft.dx - anchorBox.size.width
-                  : null,
-              top: topLeft.dy + anchorBox.size.height + widget.gap,
-              child: SizedBox(
-                width: width,
+            Positioned.fill(
+              child: CustomSingleChildLayout(
+                delegate: _PopoverLayout(
+                  anchor: topLeft & anchorBox.size,
+                  width: width,
+                  gap: widget.gap,
+                  alignRight: widget.alignRight,
+                ),
                 child: Material(
                   type: MaterialType.transparency,
                   child: Shortcuts(
@@ -155,6 +157,59 @@ class _AnchoredPopoverState extends State<AnchoredPopover> {
   }
 }
 
+/// 在锚点下方摆浮层，高度封顶在窗口内（内容过长时由浮层自己滚，见
+/// [MenuScrollSection]）。下方放得下就往下开；放不下时往上下两边更宽裕的
+/// 那边开 —— 得先量出浮层多高才知道，所以用布局代理而不是 Positioned。
+class _PopoverLayout extends SingleChildLayoutDelegate {
+  _PopoverLayout({
+    required this.anchor,
+    required this.width,
+    required this.gap,
+    required this.alignRight,
+  });
+
+  /// 浮层离窗口上下边缘至少留这么多。
+  static const double edgeMargin = 12;
+
+  final Rect anchor;
+  final double? width;
+  final double gap;
+  final bool alignRight;
+
+  double _below(Size overlay) =>
+      overlay.height - anchor.bottom - gap - edgeMargin;
+  double _above() => anchor.top - gap - edgeMargin;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    final maxHeight = math.max(
+      0.0,
+      math.max(_below(constraints.biggest), _above()),
+    );
+    final w = width;
+    return w == null
+        ? BoxConstraints(maxWidth: constraints.maxWidth, maxHeight: maxHeight)
+        : BoxConstraints.tightFor(width: w).copyWith(maxHeight: maxHeight);
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final below = _below(size);
+    final downward = childSize.height <= below || below >= _above();
+    return Offset(
+      alignRight ? anchor.right - childSize.width : anchor.left,
+      downward ? anchor.bottom + gap : anchor.top - gap - childSize.height,
+    );
+  }
+
+  @override
+  bool shouldRelayout(_PopoverLayout old) =>
+      anchor != old.anchor ||
+      width != old.width ||
+      gap != old.gap ||
+      alignRight != old.alignRight;
+}
+
 class _CloseIntent extends Intent {
   const _CloseIntent();
 }
@@ -181,6 +236,26 @@ class GlassMenu extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: children,
+    ),
+  );
+}
+
+/// 菜单里条数不定的一段（说话人列表）：浮层被窗口高度封顶时只有这一段滚，
+/// 上面的标题 / 范围选择和下面的操作行始终露在外面。放在 [GlassMenu] 的
+/// children 里用。
+class MenuScrollSection extends StatelessWidget {
+  const MenuScrollSection({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Flexible(
+    child: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
     ),
   );
 }

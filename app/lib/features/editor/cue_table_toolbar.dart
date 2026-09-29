@@ -207,22 +207,26 @@ class _SpeakerFilterChip extends StatelessWidget {
                 trailing: _count(context, controller.document.cues.length),
                 onTap: () => controller.setSpeakerFilter({}),
               ),
-              for (final s in controller.speakers)
-                MenuRow(
-                  leading: _Check(checked: filter.contains(s.id)),
-                  label: s.name,
-                  labelColor: s.named ? null : cs.onSurfaceVariant,
-                  trailing: _count(context, s.cueCount),
-                  onTap: () => controller.toggleSpeakerFilter(s.id),
-                ),
-              if (unassigned > 0)
-                MenuRow(
-                  leading: _Check(checked: filter.contains(null)),
-                  label: '无说话人',
-                  labelColor: cs.onSurfaceVariant,
-                  trailing: _count(context, unassigned),
-                  onTap: () => controller.toggleSpeakerFilter(null),
-                ),
+              MenuScrollSection(
+                children: [
+                  for (final s in controller.speakers)
+                    MenuRow(
+                      leading: _Check(checked: filter.contains(s.id)),
+                      label: s.name,
+                      labelColor: s.named ? null : cs.onSurfaceVariant,
+                      trailing: _count(context, s.cueCount),
+                      onTap: () => controller.toggleSpeakerFilter(s.id),
+                    ),
+                  if (unassigned > 0)
+                    MenuRow(
+                      leading: _Check(checked: filter.contains(null)),
+                      label: '无说话人',
+                      labelColor: cs.onSurfaceVariant,
+                      trailing: _count(context, unassigned),
+                      onTap: () => controller.toggleSpeakerFilter(null),
+                    ),
+                ],
+              ),
               const MenuDivider(),
               MenuRow(
                 leading: Icon(
