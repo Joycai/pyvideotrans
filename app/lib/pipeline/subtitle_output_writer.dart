@@ -3,7 +3,6 @@ import 'dart:io';
 import '../domain/language.dart';
 import '../domain/line_wrap.dart';
 import '../domain/output_naming.dart';
-import '../domain/paths.dart';
 import '../domain/srt.dart';
 import '../domain/task.dart';
 import '../domain/task_control.dart';
@@ -17,8 +16,11 @@ import '../services/provider_api.dart';
 abstract final class SubtitleOutputWriter {
   /// 这个任务的产物会写到哪些路径。内容为空的那一路写的时候会略过，
   /// 这里不管 —— 只是给界面列出「保存会写哪些文件」用的，不值得为此序列化整份文档。
+  ///
+  /// 还没写出过的那一路给的是首选名；真写的时候若那里已有别人的文件，会换成
+  /// 带序号的名字，见 [write]。
   static List<String> targets(SubtitleTask task, {String? dir}) => [
-    for (final (path, _) in _plan(task, dir ?? _dirOf(task))) path,
+    for (final (path, _) in _plan(task, dir)) path,
   ];
 
   /// 写出产物，返回写了哪些路径。
@@ -38,6 +40,7 @@ abstract final class SubtitleOutputWriter {
 
     final target = dir ?? _dirOf(task);
     await Directory(target).create(recursive: true);
+    final plan = dir == null ? await _avoidExisting(task) : _plan(task, dir);
 
     // 两路各按自己的语言折行：双语字幕的上下两行语种不同，用同一个上限
     // 必然有一边难看。
@@ -57,7 +60,7 @@ abstract final class SubtitleOutputWriter {
     final cues = task.document.cues;
 
     final contents = <String, String>{};
-    for (final (path, field) in _plan(task, target)) {
+    for (final (path, field) in plan) {
       final content = switch (format) {
         SubtitleFormat.srt => Srt.serialize(
           cues,
@@ -90,9 +93,12 @@ abstract final class SubtitleOutputWriter {
     } catch (_) {
       // 改名阶段失败时，已经换成新内容的产物留着新内容；不重新记时间戳的话，
       // 下次保存会把应用自己刚写的当成「在别处被改过」。
+      // 这次新建的文件会被 writeFilesAtomically 删掉；删不掉留下来的也是这次
+      // 写的内容（计划时那里没人占着），一并记上 —— 不记的话重试会把它当成
+      // 别人的，另起一个带序号的名字。
       if (dir == null) {
         for (final path in contents.keys) {
-          if (task.outputs.containsKey(path)) {
+          if (task.outputs.containsKey(path) || await fileExists(path)) {
             task.outputs[path] = await stampOf(path);
           }
         }
@@ -102,7 +108,14 @@ abstract final class SubtitleOutputWriter {
     final written = contents.keys.toList();
 
     if (dir == null) {
-      task.outputs = {for (final path in written) path: await stampOf(path)};
+      // 这次内容为空、没写的那一路也留着记录：之后再有内容写回原处，不会把
+      // 自己的旧文件当成别人的，另起一个带序号的名字。
+      task.outputs = {
+        for (final (path, _) in plan)
+          if (!contents.containsKey(path) && task.outputs.containsKey(path))
+            path: task.outputs[path]!,
+        for (final path in written) path: await stampOf(path),
+      };
       task.outputsWrittenAt = DateTime.now();
     }
     return written;
@@ -111,11 +124,93 @@ abstract final class SubtitleOutputWriter {
   static String _dirOf(SubtitleTask task) =>
       task.options.outputDirFor(task.sourcePath);
 
-  static List<(String, SrtField)> _plan(SubtitleTask task, String dir) {
-    final stem = stemOf(task.fileName);
+  /// 每一路写到哪。写到任务自己的输出目录（[dir] 为空）时，已经写出过的
+  /// 那一路沿用记下的路径（包括改命名规则之前的老名字、避让时带了序号的名字），
+  /// 同一个任务的产物不会因为规则变了或重算一遍就换地方。
+  static List<(String, SrtField)> _plan(SubtitleTask task, String? dir) {
+    final options = task.options;
+    final stem = OutputNaming.stemFor(task.kind, task.fileName, options);
+    final base = dir ?? _dirOf(task);
     return [
-      for (final field in OutputNaming.fields(task.kind, task.options))
-        ('$dir/${OutputNaming.fileName(stem, field, task.options)}', field),
+      for (final field in OutputNaming.fields(task.kind, options))
+        (
+          (dir == null ? _recorded(task, field, base, stem) : null) ??
+              '$base/${OutputNaming.fileName(stem, field, options)}',
+          field,
+        ),
     ];
+  }
+
+  /// [field] 这一路已经写出过的路径；没写出过为 null。
+  static String? _recorded(
+    SubtitleTask task,
+    SrtField field,
+    String dir,
+    String stem,
+  ) {
+    final options = task.options;
+    // 主干之后的部分：`.zh.srt`。
+    final rest = OutputNaming.fileName(
+      stem,
+      field,
+      options,
+    ).substring(stem.length);
+    final preferred = '$dir/$stem$rest';
+    final legacy =
+        '$dir/${OutputNaming.legacyFileName(task.fileName, field, options)}';
+    // 带序号的名字：`<目录>/<主干>.<n>.<语言段>.<扩展名>`，中间那段全是数字。
+    final head = '$dir/$stem.';
+    bool numbered(String path) =>
+        path.length > head.length + rest.length &&
+        path.startsWith(head) &&
+        path.endsWith(rest) &&
+        _digits.hasMatch(
+          path.substring(head.length, path.length - rest.length),
+        );
+    for (final path in task.outputs.keys) {
+      if (path == preferred || path == legacy || numbered(path)) {
+        return path;
+      }
+    }
+    return null;
+  }
+
+  static final _digits = RegExp(r'^\d+$');
+
+  /// 首次写出的那一路若已有文件，就是别人的（用户自己下的字幕、别的任务的
+  /// 产物）：换成 `<主干>.2.<语言>.<扩展名>`、`.3.`… 直到没人占着，不盖掉它。
+  /// 以前的产物名带着 `src`、`zh-en` 这类段几乎撞不上，按 Jellyfin 约定改名后
+  /// `Film.srt`、`Film.zh.srt` 与用户已有的文件同名是常事。
+  static Future<List<(String, SrtField)>> _avoidExisting(
+    SubtitleTask task,
+  ) async {
+    final options = task.options;
+    final stem = OutputNaming.stemFor(task.kind, task.fileName, options);
+    final dir = _dirOf(task);
+    final planned = _plan(task, null);
+    final taken = {for (final (path, _) in planned) path};
+    return [
+      for (final (path, field) in planned)
+        if (task.outputs.containsKey(path) || !await fileExists(path))
+          (path, field)
+        else
+          (await _free(dir, stem, field, options, taken), field),
+    ];
+  }
+
+  static Future<String> _free(
+    String dir,
+    String stem,
+    SrtField field,
+    TaskOptions options,
+    Set<String> taken,
+  ) async {
+    for (var n = 2; ; n++) {
+      final path =
+          '$dir/${OutputNaming.fileName(stem, field, options, copy: n)}';
+      if (taken.contains(path) || await fileExists(path)) continue;
+      taken.add(path);
+      return path;
+    }
   }
 }

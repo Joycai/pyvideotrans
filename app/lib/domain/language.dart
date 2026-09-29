@@ -20,6 +20,9 @@ class Language {
 
   bool get isAuto => code == Languages.autoCode;
 
+  /// 主语言子标签：`zh-tw` → `zh`。文件名里的语言段、视频轨道语言都按它比 / 查。
+  String get primaryCode => code.split('-').first;
+
   @override
   String toString() => '$name($code)';
 }
@@ -144,6 +147,36 @@ abstract final class Languages {
     if (value == null || value.trim().isEmpty) return auto;
     return byCode(value) ?? byName(value) ?? _legacy(value.trim()) ?? auto;
   }
+
+  /// ISO 639-2 三字母代码，按主语言子标签查（`zh-tw` 查 `zh`）。MP4 / MOV
+  /// 的轨道语言只收三个字母，写 `zh` 进去 ffmpeg 会静默丢掉；表里没有的
+  /// （`yue`、`fil` 本来就是三个字母）原样用。
+  ///
+  /// B 码（`chi`）与 T 码（`zho`）混用是实测挑的：MOV 只认 ffmpeg 里那张
+  /// Macintosh 语言表，同一种语言只收其中一个（`chi` 收、`zho` 不收，`fra` 收、
+  /// `fre` 不收）；MP4 两个都收。瑞典语、克罗地亚语等在那张表里没有，写进 MOV
+  /// 会被丢掉，MP4 不受影响。Jellyfin 两套码都认。
+  static const _iso6392 = {
+    'zh': 'chi', 'en': 'eng', 'ja': 'jpn', 'ko': 'kor', 'fr': 'fra',
+    'de': 'ger', 'es': 'spa', 'pt': 'por', 'it': 'ita', 'ru': 'rus',
+    'hu': 'hun', 'pl': 'pol', 'nl': 'dut', 'sv': 'swe', 'uk': 'ukr',
+    'cs': 'ces', 'el': 'gre', 'nb': 'nob', 'ro': 'ron', 'bg': 'bul',
+    'fi': 'fin', 'vi': 'vie', 'th': 'tha', 'id': 'ind', 'ms': 'may',
+    'km': 'khm', 'lo': 'lao', 'my': 'bur', 'hi': 'hin', 'ur': 'urd',
+    'bn': 'ben', 'ar': 'ara', 'tr': 'tur', 'fa': 'per', 'kk': 'kaz',
+    'uz': 'uzb', 'he': 'heb', 'af': 'afr', 'sq': 'alb', 'am': 'amh',
+    'az': 'aze', 'bs': 'bos', 'ca': 'cat', 'hr': 'hrv', 'da': 'dan',
+    'et': 'est', 'gl': 'glg', 'ka': 'geo', 'gu': 'guj', 'is': 'ice',
+    'iu': 'iku', 'ga': 'gle', 'jv': 'jav', 'kn': 'kan', 'lv': 'lav',
+    'lt': 'lit', 'mk': 'mac', 'ml': 'mal', 'mt': 'mlt', 'mr': 'mar',
+    'mn': 'mon', 'ne': 'nep', 'ps': 'pus', 'sr': 'srp', 'si': 'sin',
+    'sk': 'slk', 'sl': 'slv', 'so': 'som', 'su': 'sun', 'sw': 'swa',
+    'ta': 'tam', 'te': 'tel', 'cy': 'wel', 'zu': 'zul',
+  };
+
+  /// 写进视频文件轨道元数据的语言码。
+  static String iso6392Of(Language language) =>
+      _iso6392[language.primaryCode] ?? language.primaryCode;
 
   /// 文件名里常见、但不是标准代码的语言段。
   static const _fileTagAliases = {

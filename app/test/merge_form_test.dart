@@ -195,10 +195,12 @@ void main() {
     expect(form.options.outputStem, 'b.merged');
   });
 
+  // 双语那份（`b.Bilingual.en.srt`）按文件名会排在 `b.zh.vtt` 前面，单语的优先。
   test('添加视频时旁边的同名字幕自动挂上：完全同名优先，其次带语言后缀', () async {
     dirs['/v'] = [
       '/v/a.en.srt',
       '/v/a.srt',
+      '/v/b.Bilingual.en.srt',
       '/v/b.zh.vtt',
       '/v/b.ass',
       '/v/c.txt',
@@ -346,14 +348,20 @@ void main() {
     expect(form.canStart, isTrue);
   });
 
-  test('上次合并留下的 a.merged.srt、b.backup.srt 不算同名；a.zh-Hans.srt 算', () async {
-    dirs['/v'] = ['/v/a.merged.srt', '/v/b.backup.srt', '/v/c.zh-Hans.srt'];
+  test('上次合并留下的 a.merged.srt、b.backup.srt 不算同名；c.zh-Hans.srt、d.Bilingual.en.srt 算', () async {
+    dirs['/v'] = [
+      '/v/a.merged.srt',
+      '/v/b.backup.srt',
+      '/v/c.zh-Hans.srt',
+      '/v/d.Bilingual.en.srt',
+    ];
     files['/v/c.zh-Hans.srt'] = _srt;
-    await form.addPaths(['/v/a.mp4', '/v/b.mp4', '/v/c.mp4']);
+    files['/v/d.Bilingual.en.srt'] = _srt;
+    await form.addPaths(['/v/a.mp4', '/v/b.mp4', '/v/c.mp4', '/v/d.mp4']);
     await settle();
     expect(
       [for (final s in form.segments) s.subtitlePath],
-      [null, null, '/v/c.zh-Hans.srt'],
+      [null, null, '/v/c.zh-Hans.srt', '/v/d.Bilingual.en.srt'],
     );
   });
 

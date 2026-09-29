@@ -71,7 +71,7 @@ void main() {
       '-show_chapters',
       '-show_format',
       '-show_entries',
-      'stream=codec_type,codec_name',
+      'stream=codec_type,codec_name:stream_tags=language',
       '-of',
       'json',
       path,
@@ -109,7 +109,7 @@ void main() {
     test('两段合并成 ${container.label}：时长、章节、字幕流与旁挂 SRT', () async {
       final a = await clip('a.mp4', 2);
       final b = await clip('b.mp4', 3);
-      final bSrt = File('${dir.path}/b.srt')
+      final bSrt = File('${dir.path}/b.zh.srt')
         ..writeAsStringSync('1\n00:00:00,500 --> 00:00:01,500\n第二段\n');
       final task = await run(
         MergeOptions(
@@ -152,10 +152,12 @@ void main() {
       expect([
         for (final s in streams) s['codec_type'],
       ], containsAll(['video', 'audio', 'subtitle']));
-      expect(
-        streams.firstWhere((s) => s['codec_type'] == 'subtitle')['codec_name'],
-        'mov_text',
-      );
+      final subtitle = streams.firstWhere((s) => s['codec_type'] == 'subtitle');
+      expect(subtitle['codec_name'], 'mov_text');
+      // 语言从 `b.zh.srt` 推断；MOV 只认 Macintosh 语言表里的码，`chi` 在表里。
+      expect((subtitle['tags'] as Map)['language'], 'chi');
+
+      expect(job.sidecarPath, '${dir.path}/out.zh.srt');
 
       final sidecar = Srt.parse(File(job.sidecarPath!).readAsStringSync());
       expect(sidecar.single.startMs, 2500);

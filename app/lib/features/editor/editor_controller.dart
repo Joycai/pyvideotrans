@@ -1167,6 +1167,16 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
         '这个目录里就是字幕文件本身，想更新它们请用「保存」（${EditorKeys.save.label()}）；导出请换一个目录',
       );
     }
+    // 翻译任务的源文件本身就是字幕，产物名去掉了它的语言段：`Film.en.srt`
+    // 导出「原文」正好又叫 `Film.en.srt`，会拿折过行的版本盖掉用户的原件。
+    // 不分大小写比：macOS / Windows 的文件系统不分，`Film.EN.srt` 的语言段
+    // 也是不分大小写认出来去掉的，导出名会是 `Film.en.srt`。
+    String key(String p) => sameSeparators(p).toLowerCase();
+    if (fields.map(pathOf).map(key).contains(key(session.subtitlePath))) {
+      throw TargetRejected(
+        '会写到源文件 ${baseName(session.subtitlePath)} 身上，请换一个目录',
+      );
+    }
     await ensureDir(dir);
 
     String Function(String) wrap(Language language) {
@@ -1206,6 +1216,18 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
       };
       if (content.trim().isEmpty) continue;
       contents[pathOf(field)] = content;
+    }
+    // 导出到产物所在的目录（选目录时默认打开的就是它）：那里已有的同名文件
+    // 不是这个会话的字幕，就是用户自己的 —— 保存时为它带序号避让开的
+    // `demo.zh.srt`、自动检测原文导出成的 `Film.srt` 撞上的源字幕，一律不盖。
+    // 别的目录照旧覆盖：另存一份时盖掉上次导出的是预期行为。
+    String folder(String p) => sameSeparators(p).replaceAll(RegExp(r'/+$'), '');
+    if (folder(dir) == folder(session.exportDir)) {
+      for (final path in contents.keys) {
+        if (await fileExists(path)) {
+          throw TargetRejected('${baseName(path)} 已存在，请换一个目录');
+        }
+      }
     }
     // 几份一起写，失败时不留半套。
     await writeFilesAtomically(contents);

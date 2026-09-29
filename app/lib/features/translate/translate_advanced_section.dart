@@ -5,6 +5,7 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
+import '../../domain/output_naming.dart';
 import '../../domain/task_options.dart';
 import 'translate_form.dart';
 
@@ -299,10 +300,11 @@ class _OutputLocationRadios extends StatelessWidget {
         Text.rich(
           TextSpan(
             children: [
-              const TextSpan(text: '双语时语言段写成 '),
-              TextSpan(text: 'en-zh', style: mono),
-              const TextSpan(text: '，原文为自动检测时写成 '),
-              TextSpan(text: 'src', style: mono),
+              const TextSpan(text: '双语时在语言段前加 '),
+              TextSpan(text: OutputNaming.bilingualTitle, style: mono),
+              const TextSpan(text: '；原文件名末尾与源语言相同的语言段（如 '),
+              TextSpan(text: '.en', style: mono),
+              const TextSpan(text: '）先去掉，与视频同名，Jellyfin 等播放器能自动挂上'),
             ],
           ),
           style: small,

@@ -7,6 +7,7 @@ import '../../domain/cue.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/mux/merge_options.dart';
 import '../../domain/mux/merge_rules.dart';
+import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
 import '../../domain/srt.dart';
 import '../../domain/task_control.dart';
@@ -506,21 +507,10 @@ class MergeFormController extends ChangeNotifier {
     ]);
   }
 
-  /// 字幕 [subtitle] 是不是视频 [video] 的同名字幕：文件名去扩展名一样，
-  /// 或去掉语言后缀（`.zh`、`.en-US`、`.zh-Hans`）后一样。
-  ///
-  /// 后缀限定成语言代码的样子：上次合并旁挂的 `a.merged.srt` 不是 `a.mp4` 的
-  /// 字幕，挂上去会把整份时间轴压到第 1 段上。局限：三个字母的普通词（`old`）
-  /// 与 ISO 639-2 代码形状相同，分不开，`ep1.old.srt` 仍会配给 `ep1.mp4`。
-  static bool _matches(String subtitle, String video) {
-    final stem = stemOf(baseName(video));
-    final sub = stemOf(baseName(subtitle));
-    if (sub == stem) return true;
-    if (stemOf(sub) != stem) return false;
-    return _languageTag.hasMatch(sub.substring(stem.length + 1));
-  }
-
-  static final _languageTag = RegExp(r'^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*$');
+  /// 字幕 [subtitle] 是不是视频 [video] 的同名字幕，规则见
+  /// [OutputNaming.sidecarTags]。
+  static bool _matches(String subtitle, String video) =>
+      OutputNaming.sidecarTags(video, subtitle) != null;
 
   Future<void> _probe(String id) async {
     final path = _byId(id)?.videoPath;
@@ -540,11 +530,11 @@ class MergeFormController extends ChangeNotifier {
     }
   }
 
-  /// 视频旁的同名字幕：完全同名优先，其次带语言后缀的按文件名排第一个。
+  /// 视频旁的同名字幕：完全同名优先，其次带语言后缀的单语，最后双语；
+  /// 同一档里按文件名排第一个。
   Future<void> _findSibling(String id) async {
     final seg = _byId(id);
     if (seg == null || seg.subtitlePath != null) return;
-    final stem = stemOf(seg.fileName);
     final List<String> listing;
     try {
       listing = await _listDir(seg.directory);
@@ -552,18 +542,31 @@ class MergeFormController extends ChangeNotifier {
       // 找不到同名字幕不算错，用户可以自己挂。
       return;
     }
+    // 单语的排在双语前面：双语那份文件名以大写的 Bilingual 开头，单按文件名
+    // 排会抢到前面，合并出来就成了两行字幕。
     final candidates = [
       for (final p in listing)
-        if (mergeSubtitleExtensions.contains(extensionOf(p)) &&
-            _matches(p, seg.videoPath))
-          p,
-    ]..sort((a, b) => baseName(a).compareTo(baseName(b)));
-    if (candidates.isEmpty) return;
-    final exact = candidates.where((p) => stemOf(baseName(p)) == stem);
+        if (mergeSubtitleExtensions.contains(extensionOf(p)))
+          if (OutputNaming.sidecarTags(seg.videoPath, p) case final tags?)
+            (
+              path: p,
+              rank: tags.isEmpty
+                  ? 0
+                  : tags.any(OutputNaming.isBilingualTitle)
+                  ? 2
+                  : 1,
+            ),
+    ]..sort(
+        (a, b) => a.rank != b.rank
+            ? a.rank - b.rank
+            : baseName(a.path).compareTo(baseName(b.path)),
+      );
+    final best = candidates.firstOrNull?.path;
+    if (best == null) return;
     final i = _indexOf(id);
     // 期间用户自己挂了字幕或移除了这段，就不动。
     if (i < 0 || _segments[i].subtitlePath != null) return;
-    _attach(i, exact.firstOrNull ?? candidates.first, auto: true);
+    _attach(i, best, auto: true);
   }
 
   void _attach(int i, String path, {required bool auto}) {

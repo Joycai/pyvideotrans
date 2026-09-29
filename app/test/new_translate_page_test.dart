@@ -223,7 +223,7 @@ void main() {
     await tester.tap(find.text('双语 · 译文在下'));
     await tester.pump();
     expect(find.text("We'll start from chapter two"), findsOneWidget);
-    expect(find.textContaining('原文件名.src-en.srt'), findsOneWidget);
+    expect(find.textContaining('原文件名.Bilingual.en.srt'), findsOneWidget);
 
     await tester.ensureVisible(find.text('TXT'));
     await tester.tap(find.text('TXT'));

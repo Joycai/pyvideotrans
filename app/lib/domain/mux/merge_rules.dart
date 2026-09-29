@@ -5,6 +5,8 @@
 // 同一份数，三者不可能对不上。
 
 import '../cue.dart';
+import '../language.dart';
+import '../output_naming.dart';
 import '../paths.dart';
 import '../transcode/codecs.dart';
 import '../transcode/probe.dart';
@@ -300,6 +302,51 @@ abstract final class MergeTempFiles {
   static const subtitles = 'merged.srt';
 }
 
+/// 合并后那份字幕的语言与是否双语。
+typedef MergedSubtitleLabel = ({Language? language, bool bilingual});
+
+/// 从各段所挂字幕的文件名推断合并后字幕的语言：`ep1.zh.srt`、
+/// `ep1.Bilingual.zh.srt` 这样的名字（与本应用写出的产物同一套规则）。
+///
+/// 各段都说得出、且说的一样才算数；有一段看不出或各段不一致就当作未知 ——
+/// 标错比不标更糟，播放器会按错的语言自动选轨。没挂字幕的段不参与。
+MergedSubtitleLabel mergedSubtitleLabel(MergeOptions options) {
+  final labels = <MergedSubtitleLabel>[
+    for (final s in options.segments)
+      if (s.subtitlePath case final sub?) _labelOf(s.videoPath, sub),
+  ];
+  if (labels.isEmpty) return (language: null, bilingual: false);
+  final first = labels.first;
+  final bilingual = labels.every((l) => l.bilingual);
+  final language = labels.every((l) => l.language == first.language)
+      ? first.language
+      : null;
+  return (language: language, bilingual: bilingual);
+}
+
+MergedSubtitleLabel _labelOf(String video, String subtitle) {
+  if (OutputNaming.sidecarTags(video, subtitle) case final tags?) {
+    return (
+      language: tags.isEmpty ? null : Languages.fromTag(tags.last),
+      bilingual: tags.any(OutputNaming.isBilingualTitle),
+    );
+  }
+  // 手动挂的、不与视频同名的字幕：只看末尾，与播放器取语言的位置一致。往前找
+  // 的话 `The.It.Crowd.S01.srt` 会被认成意大利语，`Bilingual.Education.zh.srt`
+  // 会被当成双语。双语标题段紧挨在语言段前面，认不出语言时就是最后一段。
+  final parts = stemOf(baseName(subtitle)).split('.').skip(1).toList();
+  final language = parts.isEmpty ? null : Languages.fromTag(parts.last);
+  final titles = language == null ? parts : parts.sublist(0, parts.length - 1);
+  return (
+    language: language,
+    bilingual: titles.isNotEmpty && OutputNaming.isBilingualTitle(titles.last),
+  );
+}
+
+/// 合并后字幕在文件名里的那几段，规则同 [OutputNaming.tags]。
+List<String> mergedSubtitleTags(MergedSubtitleLabel label) =>
+    OutputNaming.labelTags(label.language, bilingual: label.bilingual);
+
 /// 这份参数对应的封装计划。[list] 等是三个临时文件的路径（或 [MergeTempFiles]
 /// 的占位名）；没开章节、没有字幕可内嵌时对应的输入不出现。
 MuxPlan mergePlan(
@@ -312,14 +359,22 @@ MuxPlan mergePlan(
   concatList: list,
   chapters: options.chapters ? chapters : null,
   subtitles: options.embedSubtitles && hasCues ? subtitles : null,
+  subtitleLanguage: switch (mergedSubtitleLabel(options).language) {
+    final l? => Languages.iso6392Of(l),
+    null => null,
+  },
   container: options.container,
 );
 
-/// 视频产物旁的字幕：同名，扩展名换成 `.srt`。
-String sidecarPathFor(String video) =>
-    '${video.replaceAll(RegExp(r'\.[^./\\]*$'), '')}.srt';
+/// 视频产物旁的字幕：视频主干加语言段，`ep.merged.mp4` →
+/// `ep.merged.zh.srt`。Jellyfin 等播放器按主干配视频、按语言段定语言。
+String sidecarPathFor(String video, List<String> tags) => OutputNaming.compose(
+  video.replaceAll(RegExp(r'\.[^./\\]*$'), ''),
+  tags,
+  'srt',
+);
 
-/// 产物路径：`<目录>/<文件名>.<扩展名>`；开了旁挂字幕时同名 `.srt` 也要不存在。
+/// 产物路径：`<目录>/<文件名>.<扩展名>`；开了旁挂字幕时旁边那份字幕也要不存在。
 /// 有冲突就加 `-2`、`-3`…，与转码同一规则：不覆盖任何已有文件，也不写到
 /// 某一段源文件身上。
 ({String video, String? sidecar}) mergeOutputPath(
@@ -337,13 +392,16 @@ String sidecarPathFor(String video) =>
       if (s.subtitlePath != null) sameSeparators(s.subtitlePath!),
   };
   bool taken(String p) => inputs.contains(sameSeparators(p)) || exists(p);
+  final tags = mergedSubtitleTags(mergedSubtitleLabel(options));
 
   // 根目录（`/`、`C:\`）本身带分隔符，别再拼一个。
   final prefix = dir.endsWith('/') || dir.endsWith('\\') ? dir : '$dir$sep';
   for (var n = 1; ; n++) {
     final base = '$prefix$stem${n == 1 ? '' : '-$n'}';
     final video = '$base.$ext';
-    final sidecar = options.sidecarSubtitles ? sidecarPathFor(video) : null;
+    final sidecar = options.sidecarSubtitles
+        ? sidecarPathFor(video, tags)
+        : null;
     if (taken(video) || (sidecar != null && taken(sidecar))) continue;
     return (video: video, sidecar: sidecar);
   }

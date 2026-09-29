@@ -145,7 +145,8 @@ final class TaskSession extends EditorSession {
   String get exportDir => options.outputDirFor(task.sourcePath);
 
   @override
-  String get exportStem => stemOf(task.fileName);
+  String get exportStem =>
+      OutputNaming.stemFor(task.kind, task.fileName, task.options);
 
   @override
   String get subtitlePath => task.sourcePath;
@@ -420,14 +421,7 @@ final class FileSession extends EditorSession {
   /// `interview_ep12.zh.srt` → `interview_ep12`：语言段也去掉，导出时再按
   /// 实际语言加回来。
   @override
-  String get exportStem {
-    final stem = stemOf(baseName(sourcePath));
-    final dot = stem.lastIndexOf('.');
-    if (dot > 0 && Languages.fromTag(stem.substring(dot + 1)) != null) {
-      return stem.substring(0, dot);
-    }
-    return stem;
-  }
+  String get exportStem => OutputNaming.subtitleStem(sourcePath);
 
   /// 写回挂载的文件，返回写了哪些路径。
   ///
@@ -477,9 +471,11 @@ final class FileSession extends EditorSession {
     final tag = languageTag(targetLanguage);
     final sourceExt = extensionOf(sourcePath);
     final ext = sourceExt.isEmpty ? 'srt' : sourceExt;
-    var path = '$dir$sep$exportStem.$tag.$ext';
+    String pathOf([int? copy]) =>
+        '$dir$sep${OutputNaming.compose(exportStem, [tag], ext, copy: copy)}';
+    var path = pathOf();
     for (var n = 2; await fileExists(path); n++) {
-      path = '$dir$sep$exportStem-$n.$tag.$ext';
+      path = pathOf(n);
     }
     return path;
   }

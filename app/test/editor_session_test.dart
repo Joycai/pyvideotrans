@@ -168,7 +168,7 @@ void main() {
         s.document.cues.first.copyWith(translation: 'Hello'),
       );
       final written = await s.save();
-      expect(written.last, '${dir.path}${sep}ep12-2.en.srt');
+      expect(written.last, '${dir.path}${sep}ep12.2.en.srt');
       expect(s.translationPath, written.last);
       expect(
         await File('${dir.path}${sep}ep12.en.srt').readAsString(),

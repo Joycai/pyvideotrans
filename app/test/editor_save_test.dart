@@ -290,6 +290,43 @@ void main() {
       expect(c.sync, SyncState.dirty);
     });
 
+    // 翻译任务的产物名去掉了源字幕的语言段，导出「原文」正好与源文件同名。
+    // 语言段不分大小写认，`demo.ZH.srt` 导出的原文叫 `demo.zh.srt`。
+    test('翻译任务导出原文不许盖掉源字幕', () async {
+      final source = File('${dir.path}${sep}demo.ZH.srt')
+        ..writeAsStringSync('original');
+      final t = SubtitleTask(
+        id: 't2',
+        sourcePath: source.path,
+        kind: TaskKind.translate,
+        options: testOptions(),
+        document: _doc(),
+      );
+      final c = controllerFor(TaskSession(t))..select(0);
+      await expectLater(
+        c.export({SrtField.source}),
+        throwsA(isA<TargetRejected>()),
+      );
+      expect(source.readAsStringSync(), 'original');
+    });
+
+    // 保存为用户的 `demo.zh.srt` 带序号避让了，导出到同一个目录不能又把它盖掉。
+    test('导出到产物目录时不盖已有文件', () async {
+      final theirs = File('${dir.path}${sep}demo.zh.srt')
+        ..writeAsStringSync('theirs');
+      final t = task();
+      final c = controllerFor(TaskSession(t))..select(0);
+      c.editSource('一');
+      await c.save();
+      expect(t.outputs.keys.map(baseName), contains('demo.2.zh.srt'));
+      await expectLater(
+        c.export({SrtField.source}),
+        throwsA(isA<TargetRejected>()),
+      );
+      expect(theirs.readAsStringSync(), 'theirs');
+      c.dispose();
+    });
+
     test('写完 2 秒内再改：马上回到有修改未写入，⌘S 可用', () async {
       final t = task();
       final c = controllerFor(TaskSession(t))..select(0);

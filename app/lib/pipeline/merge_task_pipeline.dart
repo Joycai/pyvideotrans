@@ -122,16 +122,17 @@ class MergeTaskPipeline {
     bool taken(String p) =>
         FileSystemEntity.typeSync(p) != FileSystemEntityType.notFound;
     final previous = job.outputPath;
+    final tags = mergedSubtitleTags(mergedSubtitleLabel(options));
     if (previous == null ||
         taken(previous) ||
-        (options.sidecarSubtitles && taken(sidecarPathFor(previous)))) {
+        (options.sidecarSubtitles && taken(sidecarPathFor(previous, tags)))) {
       job.outputPath = mergeOutputPath(options, exists: taken).video;
       if (previous != null) {
         task.note('上次定下的产物位置已有文件，改写到 ${job.outputPath}', LogLevel.warn);
       }
     }
     job.sidecarPath = options.sidecarSubtitles && merged.isNotEmpty
-        ? sidecarPathFor(job.outputPath!)
+        ? sidecarPathFor(job.outputPath!, tags)
         : null;
     job.command = TranscodeCommand.display(
       mergePlan(
