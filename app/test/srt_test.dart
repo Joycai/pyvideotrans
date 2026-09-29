@@ -43,6 +43,14 @@ hello
       expect(Srt.parseTimecode('00:00:01,-5'), isNull);
     });
 
+    test('时分秒带符号或不是纯数字返回 null', () {
+      expect(Srt.parseTimecode('00:-1:00,000'), isNull);
+      expect(Srt.parseTimecode('00:+1:00,000'), isNull);
+      expect(Srt.parseTimecode('-1:00:00,000'), isNull);
+      expect(Srt.parseTimecode('00:0x1:00,000'), isNull);
+      expect(Srt.parseTimecode('00: 1:00,000'), isNull);
+    });
+
     test('负值夹到零', () {
       expect(Srt.formatTimecode(-5), '00:00:00,000');
     });

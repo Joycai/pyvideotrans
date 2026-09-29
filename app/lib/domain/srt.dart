@@ -296,19 +296,24 @@ abstract final class Srt {
     };
   }
 
+  static final _timestampSeparator = RegExp(r'[:,.]');
+  static final _digitsOnly = RegExp(r'^\d+$');
+
   static int? _parseTimestamp(String raw) {
-    final parts = raw.trim().split(RegExp(r'[:,.]'));
+    final parts = raw.trim().split(_timestampSeparator);
     if (parts.length != 3 && parts.length != 4) return null;
+    // 每段只认纯数字：int.parse 会吃下正负号、空白和 0x 前缀，
+    // 编辑器里输入 `00:-1:00,000` 就成了负的时间码。
+    if (!parts.every(_digitsOnly.hasMatch)) return null;
     final offset = parts.length == 4 ? 1 : 0;
-    final hours = offset == 1 ? int.tryParse(parts[0]) : 0;
-    final minutes = int.tryParse(parts[offset]);
-    final seconds = int.tryParse(parts[offset + 1]);
+    final hours = offset == 1 ? int.parse(parts[0]) : 0;
+    final minutes = int.parse(parts[offset]);
+    final seconds = int.parse(parts[offset + 1]);
     // 小数位按原始字符串右补零再解析：先转成整数会丢掉前导零，
     // `,050` 就成了 50 → '500'，读出来差了近一秒。
     final fractionDigits = parts[offset + 2];
-    if (!RegExp(r'^\d{1,3}$').hasMatch(fractionDigits)) return null;
+    if (fractionDigits.length > 3) return null;
     final millis = int.parse(fractionDigits.padRight(3, '0'));
-    if (hours == null || minutes == null || seconds == null) return null;
     // SRT/VTT timestamps use 0..59 for minutes and seconds. Hours may grow
     // beyond two digits for long recordings.
     if (minutes > 59 || seconds > 59) return null;
