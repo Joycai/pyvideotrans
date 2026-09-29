@@ -21,6 +21,36 @@ void main() {
       expect(Srt.formatTimecode(0), '00:00:00,000');
     });
 
+    test('毫秒位带前导零按原位数读', () {
+      expect(Srt.parseTimecode('00:00:01,050'), 1050);
+      expect(Srt.parseTimecode('00:00:01,005'), 1005);
+      expect(Srt.parseTimecode('00:00:01,000'), 1000);
+      expect(Srt.parseTimecode('00:00:01,05'), 1050);
+      expect(Srt.parseTimecode('00:00:01,5'), 1500);
+      expect(Srt.parseTimecode('00:00:01.050'), 1050);
+      expect(Srt.parseTimecode('02:03.005'), 123005);
+      final cues = Srt.parse('''1
+00:00:01,050 --> 00:00:02,005
+hello
+''');
+      expect(cues.single.startMs, 1050);
+      expect(cues.single.endMs, 2005);
+    });
+
+    test('毫秒位超过三位或不是数字返回 null', () {
+      expect(Srt.parseTimecode('00:00:01,0500'), isNull);
+      expect(Srt.parseTimecode('00:00:01,'), isNull);
+      expect(Srt.parseTimecode('00:00:01,-5'), isNull);
+    });
+
+    test('时分秒带符号或不是纯数字返回 null', () {
+      expect(Srt.parseTimecode('00:-1:00,000'), isNull);
+      expect(Srt.parseTimecode('00:+1:00,000'), isNull);
+      expect(Srt.parseTimecode('-1:00:00,000'), isNull);
+      expect(Srt.parseTimecode('00:0x1:00,000'), isNull);
+      expect(Srt.parseTimecode('00: 1:00,000'), isNull);
+    });
+
     test('负值夹到零', () {
       expect(Srt.formatTimecode(-5), '00:00:00,000');
     });
