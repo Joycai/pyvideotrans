@@ -303,17 +303,15 @@ abstract final class Srt {
     final hours = offset == 1 ? int.tryParse(parts[0]) : 0;
     final minutes = int.tryParse(parts[offset]);
     final seconds = int.tryParse(parts[offset + 1]);
-    final fraction = int.tryParse(parts[offset + 2]);
-    if (hours == null ||
-        minutes == null ||
-        seconds == null ||
-        fraction == null) {
-      return null;
-    }
+    // 小数位按原始字符串右补零再解析：先转成整数会丢掉前导零，
+    // `,050` 就成了 50 → '500'，读出来差了近一秒。
+    final fractionDigits = parts[offset + 2];
+    if (!RegExp(r'^\d{1,3}$').hasMatch(fractionDigits)) return null;
+    final millis = int.parse(fractionDigits.padRight(3, '0'));
+    if (hours == null || minutes == null || seconds == null) return null;
     // SRT/VTT timestamps use 0..59 for minutes and seconds. Hours may grow
     // beyond two digits for long recordings.
-    if (minutes > 59 || seconds > 59 || fraction > 999) return null;
-    final millis = int.parse(fraction.toString().padRight(3, '0'));
+    if (minutes > 59 || seconds > 59) return null;
     return hours * 3600000 + minutes * 60000 + seconds * 1000 + millis;
   }
 
