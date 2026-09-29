@@ -1169,8 +1169,10 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     }
     // 翻译任务的源文件本身就是字幕，产物名去掉了它的语言段：`Film.en.srt`
     // 导出「原文」正好又叫 `Film.en.srt`，会拿折过行的版本盖掉用户的原件。
-    final source = sameSeparators(session.subtitlePath);
-    if (fields.map(pathOf).map(sameSeparators).contains(source)) {
+    // 不分大小写比：macOS / Windows 的文件系统不分，`Film.EN.srt` 的语言段
+    // 也是不分大小写认出来去掉的，导出名会是 `Film.en.srt`。
+    String key(String p) => sameSeparators(p).toLowerCase();
+    if (fields.map(pathOf).map(key).contains(key(session.subtitlePath))) {
       throw TargetRejected(
         '会写到源文件 ${baseName(session.subtitlePath)} 身上，请换一个目录',
       );

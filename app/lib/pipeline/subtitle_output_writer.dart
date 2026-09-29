@@ -105,7 +105,14 @@ abstract final class SubtitleOutputWriter {
     final written = contents.keys.toList();
 
     if (dir == null) {
-      task.outputs = {for (final path in written) path: await stampOf(path)};
+      // 这次内容为空、没写的那一路也留着记录：之后再有内容写回原处，不会把
+      // 自己的旧文件当成别人的，另起一个带序号的名字。
+      task.outputs = {
+        for (final (path, _) in plan)
+          if (!contents.containsKey(path) && task.outputs.containsKey(path))
+            path: task.outputs[path]!,
+        for (final path in written) path: await stampOf(path),
+      };
       task.outputsWrittenAt = DateTime.now();
     }
     return written;

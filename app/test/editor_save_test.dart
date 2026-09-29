@@ -291,8 +291,9 @@ void main() {
     });
 
     // 翻译任务的产物名去掉了源字幕的语言段，导出「原文」正好与源文件同名。
+    // 语言段不分大小写认，`demo.ZH.srt` 导出的原文叫 `demo.zh.srt`。
     test('翻译任务导出原文不许盖掉源字幕', () async {
-      final source = File('${dir.path}${sep}demo.zh.srt')
+      final source = File('${dir.path}${sep}demo.ZH.srt')
         ..writeAsStringSync('original');
       final t = SubtitleTask(
         id: 't2',

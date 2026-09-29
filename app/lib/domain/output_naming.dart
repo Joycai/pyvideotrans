@@ -39,10 +39,8 @@ abstract final class OutputNaming {
       switch (field) {
         SrtField.source => [if (!source.isAuto) languageTag(source)],
         SrtField.translation => [languageTag(target)],
-        SrtField.bilingualTargetAbove || SrtField.bilingualTargetBelow => [
-          bilingualTitle,
-          languageTag(target),
-        ],
+        SrtField.bilingualTargetAbove ||
+        SrtField.bilingualTargetBelow => [bilingualTitle, languageTag(target)],
       };
 
   /// `interview_ep12` + 译文 → `interview_ep12.en.srt`。
@@ -93,15 +91,15 @@ abstract final class OutputNaming {
     if (kind != TaskKind.translate) return stem;
     // 只去掉与源语言对得上的那一段：`The.Big.It.srt` 的 `It` 形同意大利语，
     // 照单全收会削成 `The.Big`，反倒与视频 `The.Big.It.mkv` 不同主干了。
+    // 源语言是「自动检测」时没得比，认得出就去掉 —— 这种片名仍会被削短。
     final source = options.sourceLanguage;
     final tagged = Languages.fromTag(stem.substring(stem.lastIndexOf('.') + 1));
     if (!source.isAuto && tagged?.code != source.code) return stem;
     final stripped = subtitleStem(fileName);
     final own = fileName.toLowerCase();
-    final clash = fields(
-      kind,
-      options,
-    ).any((f) => OutputNaming.fileName(stripped, f, options).toLowerCase() == own);
+    final clash = fields(kind, options).any(
+      (f) => OutputNaming.fileName(stripped, f, options).toLowerCase() == own,
+    );
     return clash ? stem : stripped;
   }
 
