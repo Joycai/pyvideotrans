@@ -87,8 +87,11 @@ class _Segment extends StatelessWidget {
             ? null
             : Align(
                 alignment: Alignment.centerLeft,
+                // Align 会把高度放松成 0..4，不写 heightFactor 的话没有 child 的
+                // DecoratedBox 会缩成 0 高，填充根本画不出来。
                 child: FractionallySizedBox(
                   widthFactor: fillFraction.clamp(0.0, 1.0),
+                  heightFactor: 1,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(colors: fill),

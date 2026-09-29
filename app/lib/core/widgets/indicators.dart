@@ -180,8 +180,11 @@ class GradientProgressBar extends StatelessWidget {
           color: cs.surfaceContainerHighest,
           child: Align(
             alignment: Alignment.centerLeft,
+            // Align 会把高度放松成 0..height，不写 heightFactor 的话没有 child 的
+            // DecoratedBox 会缩成 0 高，进度条永远是空的。
             child: FractionallySizedBox(
               widthFactor: value.clamp(0.0, 1.0),
+              heightFactor: 1,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
