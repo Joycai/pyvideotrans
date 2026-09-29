@@ -547,7 +547,16 @@ class MergeFormController extends ChangeNotifier {
         if (mergeSubtitleExtensions.contains(extensionOf(p)) &&
             _matches(p, seg.videoPath))
           p,
-    ]..sort((a, b) => baseName(a).compareTo(baseName(b)));
+    ];
+    // 单语的排在双语前面：双语那份文件名以大写的 Bilingual 开头，单按文件名
+    // 排会抢到前面，合并出来就成了两行字幕。
+    int rank(String p) =>
+        OutputNaming.sidecarTags(seg.videoPath, p)?.length ?? 0;
+    candidates.sort(
+      (a, b) => rank(a) != rank(b)
+          ? rank(a) - rank(b)
+          : baseName(a).compareTo(baseName(b)),
+    );
     if (candidates.isEmpty) return;
     final exact = candidates.where((p) => stemOf(baseName(p)) == stem);
     final i = _indexOf(id);

@@ -195,10 +195,12 @@ void main() {
     expect(form.options.outputStem, 'b.merged');
   });
 
+  // 双语那份（`b.Bilingual.en.srt`）按文件名会排在 `b.zh.vtt` 前面，单语的优先。
   test('添加视频时旁边的同名字幕自动挂上：完全同名优先，其次带语言后缀', () async {
     dirs['/v'] = [
       '/v/a.en.srt',
       '/v/a.srt',
+      '/v/b.Bilingual.en.srt',
       '/v/b.zh.vtt',
       '/v/b.ass',
       '/v/c.txt',

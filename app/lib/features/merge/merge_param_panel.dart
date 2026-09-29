@@ -8,7 +8,7 @@ import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/mux/merge_options.dart';
 import '../../domain/mux/merge_rules.dart';
-import '../../domain/paths.dart';
+import '../../domain/output_naming.dart';
 import '../../domain/task_options.dart';
 import '../../domain/transcode/codecs.dart';
 import '../shared/command_block.dart';
@@ -155,11 +155,10 @@ class _SubtitleSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final o = form.options;
     final stem = o.outputStem.trim().isEmpty ? '<文件名>' : o.outputStem.trim();
-    final sidecar = baseName(
-      sidecarPathFor(
-        '$stem.${o.container.extension}',
-        mergedSubtitleTags(mergedSubtitleLabel(o)),
-      ),
+    final sidecar = OutputNaming.compose(
+      stem,
+      mergedSubtitleTags(mergedSubtitleLabel(o)),
+      'srt',
     );
     final n = form.segments.length;
     final subtitled = form.subtitledCount;

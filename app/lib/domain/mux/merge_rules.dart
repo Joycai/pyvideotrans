@@ -332,7 +332,7 @@ MergedSubtitleLabel _labelOf(String video, String subtitle) {
     final parts = stemOf(baseName(subtitle)).split('.');
     return (
       language: parts.length > 1 ? Languages.fromTag(parts.last) : null,
-      bilingual: parts.contains(OutputNaming.bilingualTitle),
+      bilingual: parts.any(OutputNaming.isBilingualTitle),
     );
   }
   return (
@@ -342,10 +342,8 @@ MergedSubtitleLabel _labelOf(String video, String subtitle) {
 }
 
 /// 合并后字幕在文件名里的那几段，规则同 [OutputNaming.tags]。
-List<String> mergedSubtitleTags(MergedSubtitleLabel label) => [
-  if (label.bilingual) OutputNaming.bilingualTitle,
-  if (label.language case final l?) languageTag(l),
-];
+List<String> mergedSubtitleTags(MergedSubtitleLabel label) =>
+    OutputNaming.labelTags(label.language, bilingual: label.bilingual);
 
 /// 这份参数对应的封装计划。[list] 等是三个临时文件的路径（或 [MergeTempFiles]
 /// 的占位名）；没开章节、没有字幕可内嵌时对应的输入不出现。
@@ -368,11 +366,11 @@ MuxPlan mergePlan(
 
 /// 视频产物旁的字幕：视频主干加语言段，`ep.merged.mp4` →
 /// `ep.merged.zh.srt`。Jellyfin 等播放器按主干配视频、按语言段定语言。
-String sidecarPathFor(String video, List<String> tags) => [
+String sidecarPathFor(String video, List<String> tags) => OutputNaming.compose(
   video.replaceAll(RegExp(r'\.[^./\\]*$'), ''),
-  ...tags,
+  tags,
   'srt',
-].join('.');
+);
 
 /// 产物路径：`<目录>/<文件名>.<扩展名>`；开了旁挂字幕时旁边那份字幕也要不存在。
 /// 有冲突就加 `-2`、`-3`…，与转码同一规则：不覆盖任何已有文件，也不写到

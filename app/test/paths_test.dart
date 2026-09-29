@@ -114,6 +114,13 @@ void main() {
       );
     });
 
+    test('按主语言比：源语言带地区时文件名只写主语言也去掉', () {
+      final ptBr = translate.copyWith(
+        sourceLanguage: Languages.resolve('pt-br'),
+      );
+      expect(OutputNaming.stemFor(TaskKind.translate, 'Film.pt.srt', ptBr), 'Film');
+    });
+
     test('去掉语言段后与源文件同名时保留，不盖掉源文件', () {
       expect(
         OutputNaming.stemFor(TaskKind.translate, 'Film.zh.srt', translate),
@@ -129,6 +136,10 @@ void main() {
       expect(
         OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep1.Bilingual.zh.srt'),
         ['Bilingual', 'zh'],
+      );
+      expect(
+        OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep1.bilingual.zh.srt'),
+        ['bilingual', 'zh'],
       );
       // 上次合并旁挂的产物不是这一段的字幕。
       expect(OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep1.merged.srt'), isNull);

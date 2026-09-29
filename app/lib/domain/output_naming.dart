@@ -8,11 +8,8 @@ import 'task_options.dart';
 ///
 /// 用语言代码而不是中文名 —— 中文名带不进跨平台安全的文件名。
 /// 「自动检测」没有代码可写，调用方应当略过语言段，见 [OutputNaming.tags]。
-String languageTag(Language language) {
-  // 写成 `auto` 会被 Jellyfin 当成字幕标题，与以前的 `src` 是同一个问题。
-  assert(!language.isAuto, '自动检测没有语言段可写');
-  return language.code.replaceAll(RegExp(r'[^\w-]+'), '_');
-}
+String languageTag(Language language) =>
+    language.code.replaceAll(RegExp(r'[^\w-]+'), '_');
 
 /// 产物命名规则。流水线写产物、编辑器导出、任务详情与建任务页的文件名示例
 /// 都从这里取 —— 各写一份的话，界面上说的文件名迟早与实际写出的对不上。
@@ -40,11 +37,24 @@ abstract final class OutputNaming {
   /// Jellyfin 当成字幕标题，不如留给播放器当作未知语言。
   static List<String> tags(SrtField field, Language source, Language target) =>
       switch (field) {
-        SrtField.source => [if (!source.isAuto) languageTag(source)],
-        SrtField.translation => [languageTag(target)],
+        SrtField.source => labelTags(source.isAuto ? null : source),
+        SrtField.translation => labelTags(target),
         SrtField.bilingualTargetAbove ||
-        SrtField.bilingualTargetBelow => [bilingualTitle, languageTag(target)],
+        SrtField.bilingualTargetBelow => labelTags(target, bilingual: true),
       };
+
+  /// 一份字幕的标题段与语言段：双语在前面加 [bilingualTitle]，语言不明就不写。
+  /// 任务产物与合并旁挂的字幕共用。
+  static List<String> labelTags(Language? language, {bool bilingual = false}) =>
+      [
+        if (bilingual) bilingualTitle,
+        if (language != null) languageTag(language),
+      ];
+
+  /// 文件名里的这一段是不是双语标题。不分大小写：别的工具或用户改过名的
+  /// `ep1.bilingual.zh.srt` 也算。
+  static bool isBilingualTitle(String segment) =>
+      segment.toLowerCase() == bilingualTitle.toLowerCase();
 
   /// `interview_ep12` + 译文 → `interview_ep12.en.srt`。
   ///
@@ -106,7 +116,12 @@ abstract final class OutputNaming {
     // 源语言是「自动检测」时没得比，认得出就去掉 —— 这种片名仍会被削短。
     final source = options.sourceLanguage;
     final tagged = Languages.fromTag(stem.substring(stem.lastIndexOf('.') + 1));
-    if (!source.isAuto && tagged?.code != source.code) return stem;
+    // 按主语言比：源语言选了 `pt-br`、文件名写的是 `.pt` 也算对得上。
+    String primary(Language l) => l.code.split('-').first;
+    if (!source.isAuto &&
+        (tagged == null || primary(tagged) != primary(source))) {
+      return stem;
+    }
     final stripped = subtitleStem(fileName);
     final own = fileName.toLowerCase();
     final clash = fields(kind, options).any(
@@ -143,7 +158,8 @@ abstract final class OutputNaming {
     final tags = sub.substring(stem.length + 1).split('.');
     final ok = switch (tags) {
       [final lang] => _languageShape.hasMatch(lang),
-      [bilingualTitle, final lang] => _languageShape.hasMatch(lang),
+      [final title, final lang] =>
+        isBilingualTitle(title) && _languageShape.hasMatch(lang),
       _ => false,
     };
     return ok ? tags : null;
