@@ -632,11 +632,11 @@ void main() {
       expect(names(written), ['demo.en.srt', 'demo.zh.srt']);
     });
 
-    test('双语产物带上两种语言，与单语那份区分得开', () async {
+    test('双语产物加标题段，与单语那份区分得开', () async {
       final written = await runner().writeOutputs(
         done(kind: TaskKind.translate, bilingual: BilingualLayout.targetAbove),
       );
-      expect(names(written), ['demo.zh-en.srt']);
+      expect(names(written), ['demo.Bilingual.en.srt']);
       expect(
         File(written.single).readAsStringSync(),
         contains('Line one\n第一句'),

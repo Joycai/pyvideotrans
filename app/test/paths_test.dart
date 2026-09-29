@@ -31,9 +31,12 @@ void main() {
   });
 
   group('产物语言标签', () {
-    test('自动检测写 src，普通语言写代码', () {
-      expect(languageTag(Languages.auto), 'src');
+    test('普通语言写代码；自动检测的原文不写语言段', () {
       expect(languageTag(const Language('zh-tw', '繁体中文')), 'zh-tw');
+      expect(
+        OutputNaming.tags(SrtField.source, Languages.auto, Languages.all[1]),
+        isEmpty,
+      );
     });
 
     test('文件名不安全字符替换成下划线', () {
@@ -65,8 +68,59 @@ void main() {
           ))
             OutputNaming.fileName('ep1', f, options),
         ],
-        ['ep1.zh.srt', 'ep1.zh-en.srt'],
+        ['ep1.zh.srt', 'ep1.Bilingual.en.srt'],
       );
+    });
+
+    const translate = TaskOptions(
+      sourceLanguage: Language('en', '英语'),
+      asrProviderId: 'openai',
+      targetLanguage: Language('zh', '中文'),
+      translationProviderId: 'deepseek',
+      translate: true,
+    );
+
+    // 源字幕的语言段不去掉的话写成 `Film.en.zh.srt`，Jellyfin 把 `en` 当标题。
+    test('纯翻译任务去掉源字幕名末尾的语言段，与视频同主干', () {
+      expect(
+        OutputNaming.stemFor(TaskKind.translate, 'Film.en.srt', translate),
+        'Film',
+      );
+      expect(
+        OutputNaming.stemFor(TaskKind.translate, 'Film.chs.srt', translate),
+        'Film',
+      );
+      // 只认语言表里的码：按形状判断会把 `Cat` 削掉。
+      expect(
+        OutputNaming.stemFor(TaskKind.translate, 'The.Big.Cat.srt', translate),
+        'The.Big.Cat',
+      );
+      // 视频的主干原样用，Jellyfin 按它配字幕。
+      expect(
+        OutputNaming.stemFor(TaskKind.transcribe, 'Film.en.mp4', translate),
+        'Film.en',
+      );
+    });
+
+    test('去掉语言段后与源文件同名时保留，不盖掉源文件', () {
+      expect(
+        OutputNaming.stemFor(TaskKind.translate, 'Film.zh.srt', translate),
+        'Film.zh',
+      );
+    });
+
+    test('认得出视频旁的字幕：同名、带语言段、双语带标题段', () {
+      expect(OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep1.srt'), isEmpty);
+      expect(OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep1.en-US.srt'), [
+        'en-US',
+      ]);
+      expect(
+        OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep1.Bilingual.zh.srt'),
+        ['Bilingual', 'zh'],
+      );
+      // 上次合并旁挂的产物不是这一段的字幕。
+      expect(OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep1.merged.srt'), isNull);
+      expect(OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep10.srt'), isNull);
     });
   });
 

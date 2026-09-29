@@ -220,13 +220,13 @@ void main() {
   });
 
   group('产物与摘要', () {
-    test('仅译文只带目标语言；双语带两种，自动检测写 src', () async {
+    test('仅译文只带目标语言；双语加标题段，语言段写译文语言', () async {
       final (form, _) = await _form();
       expect(form.outputNameExample, '原文件名.en.srt');
       form.update((o) => o.copyWith(bilingual: BilingualLayout.targetAbove));
-      expect(form.outputNameExample, '原文件名.src-en.srt');
+      expect(form.outputNameExample, '原文件名.Bilingual.en.srt');
       form.update((o) => o.copyWith(sourceLanguage: Languages.resolve('zh')));
-      expect(form.outputNameExample, '原文件名.zh-en.srt');
+      expect(form.outputNameExample, '原文件名.Bilingual.en.srt');
     });
 
     test('纯文本让双语回落到仅译文，摘要与文件名都跟着回落', () async {

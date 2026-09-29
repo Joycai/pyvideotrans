@@ -191,9 +191,10 @@ void main() {
       expect(out.map((p) => p.split('/').last), ['in.zh.srt', 'in.en.srt']);
     });
 
-    test('自动检测的源语言写成 src', () async {
+    // 占位词（以前的 `src`）会被 Jellyfin 当成字幕标题，不如不写。
+    test('自动检测的源语言不写语言段', () async {
       final out = await write(testOptions(source: 'auto'));
-      expect(out.first, endsWith('in.src.srt'));
+      expect(out.first.split('/').last, 'in.srt');
     });
 
     test('导出时按单行上限折行，文档本身不动', () async {

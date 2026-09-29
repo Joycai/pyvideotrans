@@ -3,7 +3,6 @@ import 'dart:io';
 import '../domain/language.dart';
 import '../domain/line_wrap.dart';
 import '../domain/output_naming.dart';
-import '../domain/paths.dart';
 import '../domain/srt.dart';
 import '../domain/task.dart';
 import '../domain/task_control.dart';
@@ -112,7 +111,7 @@ abstract final class SubtitleOutputWriter {
       task.options.outputDirFor(task.sourcePath);
 
   static List<(String, SrtField)> _plan(SubtitleTask task, String dir) {
-    final stem = stemOf(task.fileName);
+    final stem = OutputNaming.stemFor(task.kind, task.fileName, task.options);
     return [
       for (final field in OutputNaming.fields(task.kind, task.options))
         ('$dir/${OutputNaming.fileName(stem, field, task.options)}', field),

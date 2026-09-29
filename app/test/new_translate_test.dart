@@ -234,7 +234,7 @@ void main() {
       expect(find.text('我们从第二章开始'), findsOneWidget);
     });
 
-    testWidgets('同目录时说清楚产物叫什么，双语带上两种语言', (tester) async {
+    testWidgets('同目录时说清楚产物叫什么，双语加标题段', (tester) async {
       await open(tester, paths: ['/s/a.srt']);
       await openAdvanced(tester);
       expect(find.textContaining('原文件名.en.srt'), findsOneWidget);
@@ -242,7 +242,7 @@ void main() {
       await tester.ensureVisible(find.text('双语 · 译文在上'));
       await tester.tap(find.text('双语 · 译文在上'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('原文件名.src-en.srt'), findsOneWidget);
+      expect(find.textContaining('原文件名.Bilingual.en.srt'), findsOneWidget);
     });
   });
 
