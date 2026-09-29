@@ -284,7 +284,10 @@ class Transcoder extends ChangeNotifier {
   /// 取消时杀掉进程并抛 [TaskCancelled]；失败抛 [ActionableException]，
   /// detail 是 stderr 末尾。[encoderId] 为 null 表示只搬流不编码（合并），
   /// [action] 是报错标题里的动作名。
-  Future<void> run({
+  ///
+  /// 成功时返回 stderr 末尾（`-v error` 下正常为空）：以 0 退出也可能报过错，
+  /// 拼接时某段打不开，ffmpeg 只报一句就收尾，调用方要把它记进日志。
+  Future<String> run({
     required List<String> args,
     required String? encoderId,
     String action = '转码',
@@ -337,6 +340,13 @@ class Transcoder extends ChangeNotifier {
     if (exitCode != 0) {
       throw describeFailure(stderr.toString(), encoderId, action: action);
     }
+    return _tail(stderr.toString()).trim();
+  }
+
+  /// stderr 末尾 800 字：报错详情与日志里都只放这么多。
+  static String _tail(String stderr) {
+    final tail = stderr.trimRight();
+    return tail.length > 800 ? '…${tail.substring(tail.length - 800)}' : tail;
   }
   /// ffmpeg 退出码非零时的报错。
   @visibleForTesting
@@ -345,11 +355,8 @@ class Transcoder extends ChangeNotifier {
     String? encoderId, {
     String action = '转码',
   }) {
-    final tail = stderr.trimRight();
-    final detail = tail.length > 800
-        ? '…${tail.substring(tail.length - 800)}'
-        : tail;
-    final s = tail.toLowerCase();
+    final detail = _tail(stderr);
+    final s = stderr.trimRight().toLowerCase();
     // 只搬流不编码（合并）时，页面上没有编码器、额外参数这些选项，建议换成那边做得到的。
     final copyOnly = encoderId == null;
     if (s.contains('could not find tag for codec') ||

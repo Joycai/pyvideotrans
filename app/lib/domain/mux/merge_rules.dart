@@ -9,6 +9,7 @@ import '../paths.dart';
 import '../transcode/codecs.dart';
 import '../transcode/probe.dart';
 import 'merge_options.dart';
+import 'mux_plan.dart';
 
 /// 一段的问题出在哪一类，界面据此把对应那一列标红。
 enum MergeIssueKind {
@@ -264,9 +265,8 @@ List<Cue> concatCues(List<SegmentCues> segments) {
     final length = s.length.inMilliseconds;
     final offset = s.offset.inMilliseconds;
     for (final c in s.cues ?? const <Cue>[]) {
-      if (c.startMs >= length) continue;
-      final end = c.endMs > length ? length : c.endMs;
-      if (end <= c.startMs) continue;
+      final end = _clippedEnd(c, length);
+      if (end == null) continue;
       out.add(
         c.copyWith(
           index: out.length + 1,
@@ -278,6 +278,42 @@ List<Cue> concatCues(List<SegmentCues> segments) {
   }
   return out;
 }
+
+/// 一段字幕平移截尾后还剩几条，取舍与 [concatCues] 一致；只数，不复制。
+int keptCueCount(List<Cue> cues, Duration length) {
+  final ms = length.inMilliseconds;
+  return cues.where((c) => _clippedEnd(c, ms) != null).length;
+}
+
+/// 截到段尾后的终点（毫秒）；起点在段外、或截完什么都不剩时为 null（这条丢掉）。
+int? _clippedEnd(Cue c, int lengthMs) {
+  if (c.startMs >= lengthMs) return null;
+  final end = c.endMs > lengthMs ? lengthMs : c.endMs;
+  return end <= c.startMs ? null : end;
+}
+
+/// 合并命令里三个临时文件的占位名。合并页的命令预览与任务详情里存的命令都用
+/// 它们，真正执行时换成临时目录里的路径。
+abstract final class MergeTempFiles {
+  static const list = 'list.txt';
+  static const chapters = 'chapters.txt';
+  static const subtitles = 'merged.srt';
+}
+
+/// 这份参数对应的封装计划。[list] 等是三个临时文件的路径（或 [MergeTempFiles]
+/// 的占位名）；没开章节、没有字幕可内嵌时对应的输入不出现。
+MuxPlan mergePlan(
+  MergeOptions options, {
+  required String list,
+  required String chapters,
+  required String subtitles,
+  required bool hasCues,
+}) => MuxPlan.merge(
+  concatList: list,
+  chapters: options.chapters ? chapters : null,
+  subtitles: options.embedSubtitles && hasCues ? subtitles : null,
+  container: options.container,
+);
 
 /// 视频产物旁的字幕：同名，扩展名换成 `.srt`。
 String sidecarPathFor(String video) =>

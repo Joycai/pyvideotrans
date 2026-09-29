@@ -4,7 +4,6 @@ import '../domain/cue.dart';
 import '../domain/media_job.dart';
 import '../domain/mux/merge_options.dart';
 import '../domain/mux/merge_rules.dart';
-import '../domain/mux/mux_plan.dart';
 import '../domain/srt.dart';
 import '../domain/task.dart';
 import '../domain/task_control.dart';
@@ -26,12 +25,6 @@ class MergeTaskPipeline {
 
   final Transcoder transcoder;
   final TaskStageRunner stages;
-
-  /// 命令里临时文件的占位名。详情面板与合并页的命令预览用同一套，
-  /// 真正执行时换成临时目录里的路径。
-  static const listName = 'list.txt';
-  static const chaptersName = 'chapters.txt';
-  static const subtitlesName = 'merged.srt';
 
   /// 合并阶段还没做完时，每次开跑都重跑准备：入队后、上次失败后文件都可能被
   /// 换过，各段时长、章节起点、字幕平移都得按现在的文件重算，一致性也得重新把关。
@@ -115,11 +108,7 @@ class MergeTaskPipeline {
     job.mergedCues = merged;
     job.segmentCues = [
       for (final (i, c) in raw.indexed)
-        c == null
-            ? null
-            : concatCues([
-                (cues: c, offset: Duration.zero, length: durations[i]),
-              ]).length,
+        c == null ? null : keptCueCount(c, durations[i]),
     ];
     final subtitled = raw.nonNulls.length;
     final dropped =
@@ -145,11 +134,11 @@ class MergeTaskPipeline {
         ? sidecarPathFor(job.outputPath!)
         : null;
     job.command = TranscodeCommand.display(
-      plan(
+      mergePlan(
         options,
-        list: listName,
-        chapters: chaptersName,
-        subtitles: subtitlesName,
+        list: MergeTempFiles.list,
+        chapters: MergeTempFiles.chapters,
+        subtitles: MergeTempFiles.subtitles,
         hasCues: merged.isNotEmpty,
       ).args(job.outputPath!),
     );
@@ -192,9 +181,9 @@ class MergeTaskPipeline {
     final tmp = await Directory.systemTemp.createTemp('merge_');
     var wroteSidecar = false;
     try {
-      final list = '${tmp.path}/$listName';
-      final chapters = '${tmp.path}/$chaptersName';
-      final subtitles = '${tmp.path}/$subtitlesName';
+      final list = '${tmp.path}/${MergeTempFiles.list}';
+      final chapters = '${tmp.path}/${MergeTempFiles.chapters}';
+      final subtitles = '${tmp.path}/${MergeTempFiles.subtitles}';
       await File(list).writeAsString(
         concatList([for (final s in options.segments) s.videoPath], durations),
       );
@@ -208,8 +197,8 @@ class MergeTaskPipeline {
       if (srt != null && options.embedSubtitles) {
         await File(subtitles).writeAsString(srt);
       }
-      await transcoder.run(
-        args: plan(
+      final stderr = await transcoder.run(
+        args: mergePlan(
           options,
           list: list,
           chapters: chapters,
@@ -221,6 +210,9 @@ class MergeTaskPipeline {
         token: token,
         onProgress: ffmpegProgress(task: task, job: job, onChange: onChange),
       );
+      // 某段打不开时 ffmpeg 只报一句、照样以 0 退出；记下来，完成阶段查出缺段时
+      // 用户在日志里看得到是哪一段。
+      if (stderr.isNotEmpty) task.note('FFmpeg 输出：$stderr', LogLevel.warn);
       // 旁挂先写、成片最后改名：中途失败时下面把写出的都删掉，不留下半套
       // 产物 —— 留着的成片续跑时会被当成别人的文件，另写一份 -2，它就成了孤儿。
       if (srt != null && job.sidecarPath != null) {
@@ -282,21 +274,6 @@ class MergeTaskPipeline {
     );
     task.note('已写出 ${job.outputPath}');
   });
-
-  /// 这份参数对应的封装计划。[list] 等是三个临时文件的路径（或占位名）；
-  /// 没有字幕可内嵌、没开章节时对应的输入不出现。
-  static MuxPlan plan(
-    MergeOptions options, {
-    required String list,
-    required String chapters,
-    required String subtitles,
-    required bool hasCues,
-  }) => MuxPlan.merge(
-    concatList: list,
-    chapters: options.chapters ? chapters : null,
-    subtitles: options.embedSubtitles && hasCues ? subtitles : null,
-    container: options.container,
-  );
 
   /// 完成阶段发现产物不能用：删掉它（与旁挂字幕），并把合并阶段退回待执行 ——
   /// 否则续跑只会重做完成阶段的检查，永远过不去；留着它，续跑时准备阶段又会

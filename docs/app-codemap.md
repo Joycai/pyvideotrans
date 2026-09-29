@@ -146,7 +146,7 @@ core/       domain/ ←──── services/
 | 文件 | 内容 |
 |---|---|
 | `merge_options.dart` | `MergeSegment`（视频、可选字幕、章节标题）、`MergeOptions`（有序段、容器、章节 / 内嵌 / 旁挂三个开关、输出位置与文件名、JSON 回落） |
-| `merge_rules.dart` | 纯规则：`mergeIssues`（逐段与第 1 段比参数、容器能不能装）、`offsets`（前缀和，concat / 章节 / 字幕平移共用）、`ffmetadata`、`concatList`、`concatCues`、`mergeOutputPath` 与 `sidecarPathFor`、`looksTruncated` |
+| `merge_rules.dart` | 纯规则：`mergeIssues`（逐段与第 1 段比参数、容器能不能装）、`offsets`（前缀和，concat / 章节 / 字幕平移共用）、`ffmetadata`、`concatList`、`concatCues` 与 `keptCueCount`、`mergePlan`（参数 → `MuxPlan`，页面命令预览与流水线共用，临时文件占位名在 `MergeTempFiles`）、`mergeOutputPath` 与 `sidecarPathFor`、`looksTruncated` |
 | `mux_plan.dart` | 声明式封装计划 `MuxPlan` / `MuxInput`：输入、`-map`、章节来源、字幕封装编码 → ffmpeg 参数；`MuxPlan.merge` |
 
 ## 五、服务层 `lib/services/`
@@ -184,7 +184,7 @@ core/       domain/ ←──── services/
 | `task_stage_runner.dart` | 所有阶段共用的断点跳过、active / done 状态、耗时与通知 |
 | `subtitle_output_writer.dart` | SRT / VTT / TXT 原子写出、按语言折行、双语命名、说话人标签、记产物时间戳；完成阶段与编辑器「保存」共用 |
 | `transcode_task_pipeline.dart` | 转码准备、执行 `.part` 临时文件、完成校验 |
-| `merge_task_pipeline.dart` | 合并：准备（探测、一致性二次把关、读字幕、定产物；合并没做完时每次开跑都重跑）、合并（临时目录写 concat 列表 / 章节 / 字幕，跑 ffmpeg 写 `.part`）、完成（产物非空且不缺段） |
+| `merge_task_pipeline.dart` | 合并：准备（探测、一致性二次把关、读字幕、定产物；合并没做完时每次开跑都重跑）、合并（临时目录写 concat 列表 / 章节 / 字幕，跑 ffmpeg 写 `.part`，以 0 退出时 stderr 里的话记进日志）、完成（产物非空且不缺段） |
 | `ffmpeg_progress.dart` | ffmpeg 进度区块 → 任务进度、ETA、倍速与阶段备注；转码与合并共用 |
 | `task_progress.dart` | 字幕按条目、转码按毫秒共用的 ETA 外推公式 |
 

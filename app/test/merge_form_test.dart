@@ -86,6 +86,7 @@ void main() {
         return switch (files[path]) {
           final String text => text,
           final Exception e => throw e,
+          final Error e => throw e,
           _ => throw const FileSystemException('找不到文件'),
         };
       },
@@ -391,6 +392,36 @@ void main() {
     form.clear();
     await form.addPaths(['/v/c.mp4']);
     expect(form.options.outputStem, 'c.merged');
+  });
+
+  test('第 1 段文件名带 Windows 不收的字符：默认文件名换成 _，能开始', () async {
+    await form.addPaths(['/v/Ep1: Intro.mp4', '/v/b.mp4']);
+    await settle();
+    expect(form.options.outputStem, 'Ep1_ Intro.merged');
+    expect(form.canStart, isTrue);
+    // 章节标题只是文字，不跟着换。
+    expect(form.segments.first.chapterTitle, 'Ep1: Intro');
+  });
+
+  test('拖入字幕的同名段已挂了字幕：不顶掉，也不说成找不到同名的段', () async {
+    dirs['/v'] = ['/v/a.srt'];
+    files['/v/a.srt'] = _srt;
+    await form.addPaths(['/v/a.mp4', '/v/b.mp4']);
+    await settle();
+    expect(form.segments.first.subtitlePath, '/v/a.srt');
+    await form.addPaths(['/s/a.en.srt']);
+    expect(form.segments.first.subtitlePath, '/v/a.srt');
+    expect(form.rejected, '1 个字幕的同名段已经挂了字幕；要换，点那一段上的字幕重新选');
+  });
+
+  test('字幕解析抛出别的异常时标成读不出，不会永远停在读取中', () async {
+    files['/v/a.srt'] = UnsupportedError('坏了');
+    await form.addPaths(['/v/a.mp4', '/v/b.mp4']);
+    form.attachSubtitle(0, '/v/a.srt');
+    await settle();
+    expect(form.segments.first.subtitleParsing, isFalse);
+    expect(form.segments.first.subtitleError, contains('坏了'));
+    expect(form.footer.text, '第 1 段的字幕读不出来，摘下或换一个');
   });
 
   test('多选添加按文件名自然排序', () async {

@@ -828,6 +828,8 @@ class MergeTimelineStrip extends StatelessWidget {
         for (final (i, w) in weights.indexed)
           if (!fixed.contains(i)) w,
       ].fold(0.0, (a, b) => a + b);
+      // 剩下的都是零时长（读不出时长的段）时平分，别每块都占满整条。
+      final free = weights.length - fixed.length;
       var changed = false;
       final out = <double>[];
       for (final (i, w) in weights.indexed) {
@@ -835,7 +837,7 @@ class MergeTimelineStrip extends StatelessWidget {
           out.add(minBlock);
           continue;
         }
-        final width = total <= 0 ? rest : rest * w / total;
+        final width = total <= 0 ? rest / free : rest * w / total;
         if (width < minBlock) {
           fixed.add(i);
           changed = true;

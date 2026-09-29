@@ -85,21 +85,30 @@ class MergeOptions {
   /// 本期能选的容器。mp4 / mov 的字幕都是 mov_text。
   static const containers = [OutputContainer.mp4, OutputContainer.mov];
 
-  /// 默认产物文件名：`<第 1 段文件名>.merged`。
+  /// 默认产物文件名：`<第 1 段文件名>.merged`。[stemProblem] 不收的字符换成
+  /// `_`：它们在 macOS / Linux 的文件名里合法，照搬的话程序给的默认值自己就
+  /// 过不了校验。
   static String defaultStem(String firstVideo) =>
-      '${stemOf(baseName(firstVideo))}.merged';
+      '${stemOf(baseName(firstVideo)).replaceAll(_illegalInStem, '_')}.merged';
+
+  /// Windows 的文件名不收这些字符：放过去要到合并阶段改名时才失败，续跑也
+  /// 过不去。各平台一样拦，规则只有一份。
+  static final _illegalInStem = RegExp(r'[/\\:*?"<>|]');
+
+  /// 产物文件名本身的问题，null 表示可用。页脚、文件名输入框标红与它下面的
+  /// 提示都用这一份，不各判各的。
+  static String? stemProblem(String stem) {
+    final s = stem.trim();
+    if (s.isEmpty) return '文件名不能为空';
+    if (s.contains(_illegalInStem)) return '文件名里不能有 / \\ : * ? " < > |';
+    return null;
+  }
 
   /// 不用探测就知道不行的问题。null 表示没问题。
   String? get problem {
     if (segments.length < 2) return '至少要 2 段才能合并';
     if (!containers.contains(container)) return '合并不支持 ${container.label}';
-    final stem = outputStem.trim();
-    if (stem.isEmpty) return '文件名不能为空';
-    // Windows 的文件名不收这些字符：放过去要到合并阶段改名时才失败，续跑也
-    // 过不去。各平台一样拦，规则只有一份。
-    if (stem.contains(RegExp(r'[/\\:*?"<>|]'))) {
-      return '文件名里不能有 / \\ : * ? " < > |';
-    }
+    if (stemProblem(outputStem) case final p?) return p;
     if (outputLocation == OutputLocation.custom &&
         (outputDir?.trim().isEmpty ?? true)) {
       return '还没有选择输出目录';

@@ -403,6 +403,23 @@ void main() {
       expect(out, isEmpty);
     });
 
+    test('keptCueCount 与 concatCues 的取舍一致', () {
+      const cues = [
+        Cue(index: 1, startMs: 0, endMs: 500, source: '留'),
+        Cue(index: 2, startMs: 800, endMs: 1500, source: '截到段尾'),
+        Cue(index: 3, startMs: 1000, endMs: 1200, source: '起点在段外'),
+        Cue(index: 4, startMs: 1200, endMs: 1300, source: '整条在段外'),
+      ];
+      const length = Duration(seconds: 1);
+      expect(keptCueCount(cues, length), 2);
+      expect(
+        keptCueCount(cues, length),
+        concatCues([
+          (cues: cues, offset: const Duration(seconds: 5), length: length),
+        ]).length,
+      );
+    });
+
     test('全都没字幕时是空的', () {
       expect(
         concatCues([
@@ -551,6 +568,21 @@ void main() {
       );
       expect(MergeOptions.defaultStem('/v/采访 1.mp4'), '采访 1.merged');
       expect(MergeSegment.defaultTitle('/v/采访 1.mp4'), '采访 1');
+    });
+
+    test('默认文件名换掉校验不收的字符：程序给的默认值自己能过校验', () {
+      // macOS 上文件名可以带 : * ? " < > |，照搬就会被 problem 拦下。
+      final stem = MergeOptions.defaultStem('/v/Ep1: Intro? "v2" <a|b>*.mp4');
+      expect(stem, 'Ep1_ Intro_ _v2_ _a_b__.merged');
+      expect(MergeOptions.stemProblem(stem), isNull);
+      // 章节标题只是文字，照原样。
+      expect(MergeSegment.defaultTitle('/v/Ep1: Intro.mp4'), 'Ep1: Intro');
+    });
+
+    test('文件名的问题只有一份规则：空、非法字符', () {
+      expect(MergeOptions.stemProblem('  '), '文件名不能为空');
+      expect(MergeOptions.stemProblem('a:b'), contains('不能有'));
+      expect(MergeOptions.stemProblem(' 成片 '), isNull);
     });
 
     test('JSON 往返', () {

@@ -62,13 +62,15 @@ class _OutputSection extends StatelessWidget {
     final o = form.options;
     final stem = o.outputStem.trim();
     final ext = o.container.extension;
-    final hint = form.segments.isEmpty && stem.isEmpty
+    // 还没加段、文件名也空着时是起始状态，不算错。
+    final idle = form.segments.isEmpty && stem.isEmpty;
+    final problem = idle ? null : MergeOptions.stemProblem(o.outputStem);
+    final hint = idle
         ? '默认取第 1 段的文件名加 .merged'
-        : stem.isEmpty
-        ? '文件名不能为空'
-        : o.sidecarSubtitles
-        ? '写成 $stem.$ext 与 $stem.srt；同名文件已存在时自动加序号'
-        : '写成 $stem.$ext；同名文件已存在时自动加序号';
+        : problem ??
+              (o.sidecarSubtitles
+                  ? '写成 $stem.$ext 与 $stem.srt；同名文件已存在时自动加序号'
+                  : '写成 $stem.$ext；同名文件已存在时自动加序号');
     return ParamSection(
       title: '输出',
       first: true,
@@ -127,7 +129,7 @@ class _OutputSection extends StatelessWidget {
           child: SingleLineField(
             key: const ValueKey('merge-stem'),
             value: o.outputStem,
-            error: form.segments.isNotEmpty && stem.isEmpty,
+            error: problem != null,
             style: AppTextStyles.timecode.copyWith(
               fontSize: 13,
               fontWeight: FontWeight.w400,
@@ -136,7 +138,7 @@ class _OutputSection extends StatelessWidget {
             onChanged: form.setOutputStem,
           ),
         ),
-        ParamHint(hint, error: form.segments.isNotEmpty && stem.isEmpty),
+        ParamHint(hint, error: problem != null),
       ],
     );
   }

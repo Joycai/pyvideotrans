@@ -35,6 +35,9 @@ class _FakeTranscoder extends Transcoder {
 
   int probeCount = 0;
 
+  /// 以 0 退出时 ffmpeg 留在 stderr 里的话。
+  String stderr = '';
+
   @override
   Future<MediaProbe> probe(String path) async {
     probeCount++;
@@ -58,7 +61,7 @@ class _FakeTranscoder extends Transcoder {
   }
 
   @override
-  Future<void> run({
+  Future<String> run({
     required List<String> args,
     required String? encoderId,
     String action = '转码',
@@ -73,6 +76,7 @@ class _FakeTranscoder extends Transcoder {
     }
     feed.forEach(onProgress);
     await (onRun ?? _writeOutput)(args, token);
+    return stderr;
   }
 
   static Future<void> _writeOutput(List<String> args, CancellationToken _) =>
@@ -256,6 +260,27 @@ void main() {
     expect(t.status, TaskStatus.failed);
     expect(t.stage, TaskStage.finish);
     expect(t.error?.title, '合并结果比各段加起来短，可能有一段没拼进去');
+  });
+
+  test('ffmpeg 以 0 退出但报过错时记进日志：缺段时看得到是哪一段', () async {
+    transcoder
+      ..outputDuration = const Duration(seconds: 10)
+      ..stderr = "Impossible to open '/x/v1.mp4'";
+    final t = await run(task(options()));
+    expect(t.error?.title, '合并结果比各段加起来短，可能有一段没拼进去');
+    expect(
+      t.log.where((e) => e.level == LogLevel.warn).map((e) => e.message),
+      contains("FFmpeg 输出：Impossible to open '/x/v1.mp4'"),
+    );
+  });
+
+  test('ffmpeg 没留话时不写这条日志', () async {
+    final t = await run(task(options()));
+    expect(t.status, TaskStatus.done);
+    expect(
+      t.log.map((e) => e.message),
+      isNot(contains(startsWith('FFmpeg 输出'))),
+    );
   });
 
   const hd = MediaProbe(

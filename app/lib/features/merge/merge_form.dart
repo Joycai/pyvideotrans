@@ -14,7 +14,6 @@ import '../../domain/task_options.dart';
 import '../../domain/transcode/codecs.dart';
 import '../../domain/transcode/command.dart';
 import '../../domain/transcode/probe.dart';
-import '../../pipeline/merge_task_pipeline.dart';
 import '../../services/file_io.dart';
 import '../../services/settings.dart';
 import '../../services/transcoder.dart';
@@ -262,14 +261,17 @@ class MergeFormController extends ChangeNotifier {
 
   /// 拼好后的字幕条数：时长都已知时按平移截尾后的算，与产物一致。
   int get cueCount {
-    final starts = offsets;
-    if (starts.every((o) => o != null) && totalDuration != null) {
-      return concatCues([
-        for (final (i, s) in _segments.indexed)
-          (cues: s.cues, offset: starts[i]!, length: s.duration!),
-      ]).length;
-    }
-    return _segments.fold(0, (n, s) => n + (s.cues?.length ?? 0));
+    final known = _segments.every((s) => s.duration != null);
+    return _segments.fold(
+      0,
+      (n, s) =>
+          n +
+          switch (s.cues) {
+            null => 0,
+            final cues when known => keptCueCount(cues, s.duration!),
+            final cues => cues.length,
+          },
+    );
   }
 
   /// 第 1 段的「H.264 1920×1080 · 30p」，顶栏用。
@@ -410,11 +412,11 @@ class MergeFormController extends ChangeNotifier {
   /// 命令预览：临时文件用占位名，与任务详情里存的命令同一套写法。
   String get commandPreview {
     return TranscodeCommand.display(
-      MergeTaskPipeline.plan(
+      mergePlan(
         _full,
-        list: MergeTaskPipeline.listName,
-        chapters: MergeTaskPipeline.chaptersName,
-        subtitles: MergeTaskPipeline.subtitlesName,
+        list: MergeTempFiles.list,
+        chapters: MergeTempFiles.chapters,
+        subtitles: MergeTempFiles.subtitles,
         hasCues: cueCount > 0,
       ).args(outputFileName),
     );
@@ -464,6 +466,8 @@ class MergeFormController extends ChangeNotifier {
 
     // 拖进来的字幕先配，再给还空着的新段找旁边的同名字幕：用户明确拖进来的优先。
     var unmatched = 0;
+    // 有同名的段、但都已挂了字幕：不顶掉，也别说成「找不到同名的段」。
+    var occupied = 0;
     // 同名的段可能不止一个（相机按日期分目录、文件名都叫 video.mp4）：
     // 同目录的优先，其次本次拖进来的新段，最后才是列表里别的段。
     final freshIds = {for (final s in fresh) s.id};
@@ -479,10 +483,12 @@ class MergeFormController extends ChangeNotifier {
           if (s.subtitlePath == null && _matches(sub, s.videoPath)) (i, s),
       ]..sort((a, b) => rank(a.$2).compareTo(rank(b.$2)));
       final i = candidates.firstOrNull?.$1 ?? -1;
-      if (i < 0) {
-        unmatched++;
-      } else {
+      if (i >= 0) {
         _attach(i, sub, auto: false);
+      } else if (_segments.any((s) => _matches(sub, s.videoPath))) {
+        occupied++;
+      } else {
+        unmatched++;
       }
     }
 
@@ -490,6 +496,7 @@ class MergeFormController extends ChangeNotifier {
       if (ass + other > 0)
         '忽略了 ${ass + other} 个文件：${[if (ass > 0) '$ass 个 ASS 字幕（本期只支持 SRT / VTT）', if (other > 0) '$other 个不是视频或字幕'].join('，')}',
       if (unmatched > 0) '$unmatched 个字幕找不到同名的段，请在对应段上点「挂字幕…」',
+      if (occupied > 0) '$occupied 个字幕的同名段已经挂了字幕；要换，点那一段上的字幕重新选',
     ].join('；').emptyAsNull;
     _followFirstSegment();
     _notify();
@@ -580,6 +587,10 @@ class MergeFormController extends ChangeNotifier {
       error = '编码认不出（只收 UTF-8 与带 BOM 的 UTF-16），用文本编辑器另存为 UTF-8';
     } on FileSystemException catch (e) {
       error = e.message;
+    } catch (e) {
+      // 同 [_probe]：别的异常不兜住的话，这段永远停在「读取中」，开了字幕时
+      // 开始按钮一直禁用。
+      error = '$e';
     }
     // 期间换了别的字幕或摘掉了，这份结果作废。
     if (_byId(id)?.subtitlePath != path) return;
