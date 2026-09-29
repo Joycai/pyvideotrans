@@ -346,14 +346,20 @@ void main() {
     expect(form.canStart, isTrue);
   });
 
-  test('上次合并留下的 a.merged.srt、b.backup.srt 不算同名；a.zh-Hans.srt 算', () async {
-    dirs['/v'] = ['/v/a.merged.srt', '/v/b.backup.srt', '/v/c.zh-Hans.srt'];
+  test('上次合并留下的 a.merged.srt、b.backup.srt 不算同名；c.zh-Hans.srt、d.Bilingual.en.srt 算', () async {
+    dirs['/v'] = [
+      '/v/a.merged.srt',
+      '/v/b.backup.srt',
+      '/v/c.zh-Hans.srt',
+      '/v/d.Bilingual.en.srt',
+    ];
     files['/v/c.zh-Hans.srt'] = _srt;
-    await form.addPaths(['/v/a.mp4', '/v/b.mp4', '/v/c.mp4']);
+    files['/v/d.Bilingual.en.srt'] = _srt;
+    await form.addPaths(['/v/a.mp4', '/v/b.mp4', '/v/c.mp4', '/v/d.mp4']);
     await settle();
     expect(
       [for (final s in form.segments) s.subtitlePath],
-      [null, null, '/v/c.zh-Hans.srt'],
+      [null, null, '/v/c.zh-Hans.srt', '/v/d.Bilingual.en.srt'],
     );
   });
 

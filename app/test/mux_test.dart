@@ -705,6 +705,80 @@ void main() {
     });
   });
 
+  group('合并字幕的语言', () {
+    MergeOptions withSubs(List<String?> subs) => MergeOptions(
+      segments: [
+        for (final (i, sub) in subs.indexed) _seg('/v/p$i.mp4', sub: sub),
+      ],
+      outputStem: 'out',
+      sidecarSubtitles: true,
+    );
+
+    ({String? sidecar, String? lang}) of(MergeOptions o) {
+      final plan = mergePlan(
+        o,
+        list: 'l',
+        chapters: 'c',
+        subtitles: 's',
+        hasCues: true,
+      );
+      return (
+        sidecar: mergeOutputPath(o, exists: (_) => false).sidecar,
+        lang: plan.subtitleLanguage,
+      );
+    }
+
+    test('各段语言一致：旁挂带语言段，内嵌轨写三字母码', () {
+      expect(of(withSubs(['/v/p0.zh.srt', null, '/v/p2.chs.srt'])), (
+        sidecar: '/v/out.zh.srt',
+        lang: 'chi',
+      ));
+    });
+
+    test('双语：旁挂加标题段', () {
+      final o = withSubs(['/v/p0.Bilingual.en.srt', '/v/p1.Bilingual.en.srt']);
+      expect(of(o), (sidecar: '/v/out.Bilingual.en.srt', lang: 'eng'));
+    });
+
+    // 标错比不标更糟：播放器会按错的语言自动选轨。
+    test('各段不一致或有一段看不出：不写语言', () {
+      expect(of(withSubs(['/v/p0.zh.srt', '/v/p1.en.srt'])), (
+        sidecar: '/v/out.srt',
+        lang: null,
+      ));
+      expect(of(withSubs(['/v/p0.zh.srt', '/v/p1.srt'])), (
+        sidecar: '/v/out.srt',
+        lang: null,
+      ));
+    });
+
+    test('手动挂的不同名字幕，名字里认得出语言也算', () {
+      expect(of(withSubs(['/subs/第一集.ja.srt', '/v/p1.ja.srt'])), (
+        sidecar: '/v/out.ja.srt',
+        lang: 'jpn',
+      ));
+    });
+
+    test('内嵌轨语言写给第 0 条字幕流；没有字幕输入就不写', () {
+      final args = MuxPlan.merge(
+        concatList: 'l',
+        subtitles: 's',
+        subtitleLanguage: 'chi',
+        container: OutputContainer.mp4,
+      ).args('o');
+      expect(
+        args.join(' '),
+        contains('-c:s mov_text -metadata:s:s:0 language=chi -f mp4'),
+      );
+      final none = MuxPlan.merge(
+        concatList: 'l',
+        subtitleLanguage: 'chi',
+        container: OutputContainer.mp4,
+      ).args('o');
+      expect(none, isNot(contains('-metadata:s:s:0')));
+    });
+  });
+
   group('MergeJob', () {
     final options = MergeOptions(
       segments: [

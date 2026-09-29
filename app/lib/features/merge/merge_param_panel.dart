@@ -7,6 +7,8 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/mux/merge_options.dart';
+import '../../domain/mux/merge_rules.dart';
+import '../../domain/paths.dart';
 import '../../domain/task_options.dart';
 import '../../domain/transcode/codecs.dart';
 import '../shared/command_block.dart';
@@ -153,6 +155,12 @@ class _SubtitleSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final o = form.options;
     final stem = o.outputStem.trim().isEmpty ? '<文件名>' : o.outputStem.trim();
+    final sidecar = baseName(
+      sidecarPathFor(
+        '$stem.${o.container.extension}',
+        mergedSubtitleTags(mergedSubtitleLabel(o)),
+      ),
+    );
     final n = form.segments.length;
     final subtitled = form.subtitledCount;
     final note = n == 0
@@ -177,7 +185,9 @@ class _SubtitleSection extends StatelessWidget {
         ),
         _SwitchRow(
           title: '旁挂 SRT',
-          note: '在视频旁另写一份合并后的 $stem.srt',
+          note:
+              '在视频旁另写一份合并后的 $sidecar；语言段取自各段字幕的文件名，'
+              '各段不一致时不写',
           value: o.sidecarSubtitles,
           onChanged: form.setSidecarSubtitles,
         ),

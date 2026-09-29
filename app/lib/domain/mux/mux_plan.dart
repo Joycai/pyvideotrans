@@ -22,6 +22,7 @@ class MuxPlan {
     required this.container,
     this.metadataFrom,
     this.subtitleCodec,
+    this.subtitleLanguage,
   });
 
   /// 合并：输入 0 是 concat 列表；开了章节时下一个是 FFMETADATA；
@@ -33,6 +34,7 @@ class MuxPlan {
     required String concatList,
     String? chapters,
     String? subtitles,
+    String? subtitleLanguage,
     required OutputContainer container,
   }) {
     final inputs = [
@@ -46,6 +48,7 @@ class MuxPlan {
       container: container,
       metadataFrom: chapters == null ? null : 1,
       subtitleCodec: subtitles == null ? null : container.subtitleCodec,
+      subtitleLanguage: subtitles == null ? null : subtitleLanguage,
     );
   }
 
@@ -61,6 +64,10 @@ class MuxPlan {
 
   /// 字幕流的封装编码（mp4 / mov 是 mov_text）；null 表示没有字幕流。
   final String? subtitleCodec;
+
+  /// 字幕轨的语言（ISO 639-2 三字母码）；null 时不写，播放器显示为未知。
+  /// 只有一条字幕轨，所以写给第 0 条字幕流。
+  final String? subtitleLanguage;
 
   /// 拼出 ffmpeg 参数（不含可执行文件本身）。一律 `-c copy`，再按需覆盖字幕编码。
   ///
@@ -85,6 +92,10 @@ class MuxPlan {
     '-c',
     'copy',
     if (subtitleCodec case final codec?) ...['-c:s', codec],
+    if (subtitleLanguage case final lang?) ...[
+      '-metadata:s:s:0',
+      'language=$lang',
+    ],
     '-f',
     container.extension,
     output,

@@ -104,9 +104,9 @@ core/       domain/ ←──── services/
 | 文件 | 内容 |
 |---|---|
 | `cue.dart` | `Cue`、校对状态和不可变 `SubtitleDocument`；拆分、合并、说话人操作都返回新文档；界面显示状态 `displayStateOf`、按时间定位 `cueIndexAt` |
-| `language.dart` | 统一语言表、CJK 判定、文件名语言推断 |
+| `language.dart` | 统一语言表、CJK 判定、文件名语言推断、写进视频轨道的 ISO 639-2 码（`iso6392Of`） |
 | `paths.dart` | 跨平台纯字符串路径规则：basename、dirname、stem、extension；比较用的 `sameSeparators`；文件名自然序 `naturalCompare`（`part2` 在 `part10` 前） |
-| `output_naming.dart` | 产物命名唯一来源 `OutputNaming`：任务写哪几路、语言段、文件名；流水线、编辑器导出、任务详情、建任务页示例共用；语言标签（自动检测写 `src`） |
+| `output_naming.dart` | 产物命名唯一来源 `OutputNaming`：任务写哪几路、语言段、文件名；流水线、编辑器导出、任务详情、建任务页示例共用；语言标签（自动检测不写）；按 Jellyfin 约定：双语加 `Bilingual` 标题段、纯翻译任务去掉源字幕的语言段（`stemFor`）、认视频旁的字幕（`sidecarTags`，合并页配字幕与推断合并字幕语言共用） |
 | `numbers.dart` | 千位分隔 `grouped`；取值范围 `IntRange` |
 | `srt.dart` | SRT / VTT 解析与序列化、时长格式（`formatDuration`，可固定写出小时位）、说话人标签检测、导出字段 |
 | `line_wrap.dart` | 导出时折行；CJK 与拉丁文字使用不同上限 |
@@ -146,8 +146,8 @@ core/       domain/ ←──── services/
 | 文件 | 内容 |
 |---|---|
 | `merge_options.dart` | `MergeSegment`（视频、可选字幕、章节标题）、`MergeOptions`（有序段、容器、章节 / 内嵌 / 旁挂三个开关、输出位置与文件名、JSON 回落） |
-| `merge_rules.dart` | 纯规则：`mergeIssues`（逐段与第 1 段比参数、容器能不能装）、`offsets`（前缀和，concat / 章节 / 字幕平移共用）、`ffmetadata`、`concatList`、`concatCues` 与 `keptCueCount`、`mergePlan`（参数 → `MuxPlan`，页面命令预览与流水线共用，临时文件占位名在 `MergeTempFiles`）、`mergeOutputPath` 与 `sidecarPathFor`、`looksTruncated` |
-| `mux_plan.dart` | 声明式封装计划 `MuxPlan` / `MuxInput`：输入、`-map`、章节来源、字幕封装编码 → ffmpeg 参数；`MuxPlan.merge` |
+| `merge_rules.dart` | 纯规则：`mergeIssues`（逐段与第 1 段比参数、容器能不能装）、`offsets`（前缀和，concat / 章节 / 字幕平移共用）、`ffmetadata`、`concatList`、`concatCues` 与 `keptCueCount`、`mergePlan`（参数 → `MuxPlan`，页面命令预览与流水线共用，临时文件占位名在 `MergeTempFiles`）、`mergedSubtitleLabel` / `mergedSubtitleTags`（从各段字幕名推断合并字幕的语言，旁挂名与内嵌轨语言共用）、`mergeOutputPath` 与 `sidecarPathFor`、`looksTruncated` |
+| `mux_plan.dart` | 声明式封装计划 `MuxPlan` / `MuxInput`：输入、`-map`、章节来源、字幕封装编码与语言 → ffmpeg 参数；`MuxPlan.merge` |
 
 ## 五、服务层 `lib/services/`
 
