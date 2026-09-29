@@ -93,9 +93,11 @@ abstract final class SubtitleOutputWriter {
     } catch (_) {
       // 改名阶段失败时，已经换成新内容的产物留着新内容；不重新记时间戳的话，
       // 下次保存会把应用自己刚写的当成「在别处被改过」。
+      // 首次写出的那一路也要记：计划时它没人占着，现在有文件就是这次换进去的；
+      // 不记的话重试会把它当成别人的，另起一个带序号的名字。
       if (dir == null) {
         for (final path in contents.keys) {
-          if (task.outputs.containsKey(path)) {
+          if (task.outputs.containsKey(path) || await fileExists(path)) {
             task.outputs[path] = await stampOf(path);
           }
         }
@@ -155,16 +157,24 @@ abstract final class SubtitleOutputWriter {
     final preferred = '$dir/$stem$rest';
     final legacy =
         '$dir/${OutputNaming.legacyFileName(task.fileName, field, options)}';
-    final numbered = RegExp(
-      '^${RegExp.escape('$dir/$stem.')}\\d+${RegExp.escape(rest)}\$',
-    );
+    // 带序号的名字：`<目录>/<主干>.<n>.<语言段>.<扩展名>`，中间那段全是数字。
+    final head = '$dir/$stem.';
+    bool numbered(String path) =>
+        path.length > head.length + rest.length &&
+        path.startsWith(head) &&
+        path.endsWith(rest) &&
+        _digits.hasMatch(
+          path.substring(head.length, path.length - rest.length),
+        );
     for (final path in task.outputs.keys) {
-      if (path == preferred || path == legacy || numbered.hasMatch(path)) {
+      if (path == preferred || path == legacy || numbered(path)) {
         return path;
       }
     }
     return null;
   }
+
+  static final _digits = RegExp(r'^\d+$');
 
   /// 首次写出的那一路若已有文件，就是别人的（用户自己下的字幕、别的任务的
   /// 产物）：换成 `<主干>.2.<语言>.<扩展名>`、`.3.`… 直到没人占着，不盖掉它。

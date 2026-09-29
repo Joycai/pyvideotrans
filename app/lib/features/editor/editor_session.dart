@@ -471,11 +471,11 @@ final class FileSession extends EditorSession {
     final tag = languageTag(targetLanguage);
     final sourceExt = extensionOf(sourcePath);
     final ext = sourceExt.isEmpty ? 'srt' : sourceExt;
-    var path = '$dir$sep$exportStem.$tag.$ext';
-    // 序号作单独一段放在语言码前面：拼进主干（`ep1-2.zh.srt`）的话，
-    // Jellyfin 按主干找视频就配不上 `ep1.mp4` 了；单独一段只会被当成标题。
+    String pathOf([int? copy]) =>
+        '$dir$sep${OutputNaming.compose(exportStem, [tag], ext, copy: copy)}';
+    var path = pathOf();
     for (var n = 2; await fileExists(path); n++) {
-      path = '$dir$sep$exportStem.$n.$tag.$ext';
+      path = pathOf(n);
     }
     return path;
   }

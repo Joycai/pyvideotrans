@@ -752,6 +752,13 @@ void main() {
       ));
     });
 
+    test('手动挂的字幕只看扩展名前那一段，前面的词不当语言', () {
+      expect(
+        of(withSubs(['/subs/The.It.Crowd.S01.srt', '/subs/The.It.Crowd.S02.srt'])),
+        (sidecar: '/v/out.srt', lang: null),
+      );
+    });
+
     test('手动挂的不同名字幕，名字里认得出语言也算', () {
       expect(of(withSubs(['/subs/第一集.ja.srt', '/v/p1.ja.srt'])), (
         sidecar: '/v/out.ja.srt',

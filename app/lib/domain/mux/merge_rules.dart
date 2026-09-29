@@ -327,12 +327,12 @@ MergedSubtitleLabel mergedSubtitleLabel(MergeOptions options) {
 MergedSubtitleLabel _labelOf(String video, String subtitle) {
   final tags = OutputNaming.sidecarTags(video, subtitle);
   if (tags == null) {
-    // 手动挂的、不与视频同名的字幕：名字里认得出语言也算。
+    // 手动挂的、不与视频同名的字幕：只看扩展名前那一段，与播放器取语言的
+    // 位置一致。往前找的话 `The.It.Crowd.S01.srt` 会被认成意大利语。
+    final parts = stemOf(baseName(subtitle)).split('.');
     return (
-      language: Languages.fromFileName(subtitle),
-      bilingual: baseName(
-        subtitle,
-      ).split('.').contains(OutputNaming.bilingualTitle),
+      language: parts.length > 1 ? Languages.fromTag(parts.last) : null,
+      bilingual: parts.contains(OutputNaming.bilingualTitle),
     );
   }
   return (

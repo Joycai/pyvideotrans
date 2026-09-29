@@ -8,8 +8,11 @@ import 'task_options.dart';
 ///
 /// 用语言代码而不是中文名 —— 中文名带不进跨平台安全的文件名。
 /// 「自动检测」没有代码可写，调用方应当略过语言段，见 [OutputNaming.tags]。
-String languageTag(Language language) =>
-    language.code.replaceAll(RegExp(r'[^\w-]+'), '_');
+String languageTag(Language language) {
+  // 写成 `auto` 会被 Jellyfin 当成字幕标题，与以前的 `src` 是同一个问题。
+  assert(!language.isAuto, '自动检测没有语言段可写');
+  return language.code.replaceAll(RegExp(r'[^\w-]+'), '_');
+}
 
 /// 产物命名规则。流水线写产物、编辑器导出、任务详情与建任务页的文件名示例
 /// 都从这里取 —— 各写一份的话，界面上说的文件名迟早与实际写出的对不上。
@@ -53,12 +56,21 @@ abstract final class OutputNaming {
     SrtField field,
     TaskOptions options, {
     int? copy,
-  }) => [
+  }) => compose(
     stem,
-    ?copy?.toString(),
-    ...tags(field, options.sourceLanguage, options.targetLanguage),
+    tags(field, options.sourceLanguage, options.targetLanguage),
     options.format.extension,
-  ].join('.');
+    copy: copy,
+  );
+
+  /// 拼文件名：`<主干>[.<序号>].<各段>.<扩展名>`。流水线产物与编辑器给本地
+  /// 字幕新开的译文文件共用，序号放哪只定一处。
+  static String compose(
+    String stem,
+    List<String> tags,
+    String extension, {
+    int? copy,
+  }) => [stem, ?copy?.toString(), ...tags, extension].join('.');
 
   /// 改成 Jellyfin 约定之前的产物名：主干照搬源文件，语言段是 `src`、`zh-en`
   /// 这类写法。只用来认出老任务已经写出的文件，接着写回原处 —— 不然升级后

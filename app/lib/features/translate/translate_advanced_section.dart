@@ -302,7 +302,7 @@ class _OutputLocationRadios extends StatelessWidget {
             children: [
               const TextSpan(text: '双语时在语言段前加 '),
               TextSpan(text: OutputNaming.bilingualTitle, style: mono),
-              const TextSpan(text: '；原文件名末尾的语言段（如 '),
+              const TextSpan(text: '；原文件名末尾与源语言相同的语言段（如 '),
               TextSpan(text: '.en', style: mono),
               const TextSpan(text: '）先去掉，与视频同名，Jellyfin 等播放器能自动挂上'),
             ],
