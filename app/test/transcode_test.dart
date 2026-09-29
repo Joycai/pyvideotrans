@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:subtitle_studio/domain/media_job.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/domain/transcode/codecs.dart';
@@ -419,7 +420,7 @@ Encoders:
         sourcePath: '/m/a.mkv',
         kind: TaskKind.transcode,
         options: testOptions(),
-        transcode: TranscodeJob(
+        media: TranscodeJob(
           options: _opts(
             encoder: 'hevc_videotoolbox',
             codec: VideoCodec.hevc,
@@ -437,11 +438,11 @@ Encoders:
       );
       expect(back.kind, TaskKind.transcode);
       expect(back.resumeStage, TaskStage.queued);
-      final job = back.transcode!;
+      final job = back.media! as TranscodeJob;
       expect(job.options.encoderId, 'hevc_videotoolbox');
       expect(job.options.resolvedParams['quality'], 72);
       expect(job.outputPath, '/m/a.hevc.mp4');
-      expect(job.direction, 'H.264 → HEVC · MP4');
+      expect(job.summary, 'H.264 → HEVC · MP4');
     });
 
     test('旧存档里的编码器与编码对不上时回落到默认编码器', () {

@@ -53,6 +53,12 @@ enum OutputContainer {
     },
   }.contains(codecName);
 
+  /// 文本字幕封装进这个容器时用的编码。mp4 / mov 只收 mov_text（不保留样式）。
+  /// 以后加 mkv 时这里给 `srt`，ASS 原样内嵌也从这里分出去。
+  String get subtitleCodec => switch (this) {
+    mp4 || mov => 'mov_text',
+  };
+
   /// 原样复制时，源文件里的这路音频能不能放进来。
   bool acceptsAudioCopy(String codecName) => !switch (this) {
     mp4 => const {

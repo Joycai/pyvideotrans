@@ -1,7 +1,7 @@
 # app/ 源码结构索引（app/lib）
 
 `app/` 是 Flutter 桌面客户端（macOS / Windows / Linux）的全部实现。
-当前 `lib/` 共 146 个 Dart 文件、约 3.2 万行；`test/` 共 50 个 Dart 文件、约 1.2 万行。
+当前 `lib/` 共 180 个 Dart 文件、约 3.7 万行；`test/` 共 70 个 Dart 文件、约 1.8 万行。
 本文路径一律相对 `app/`。
 
 - 设计决定与产品约束 → [`README.md`](../app/README.md)
@@ -23,8 +23,8 @@ core/       domain/ ←──── services/
 | 层 | 目录 | 责任 |
 |---|---|---|
 | 装配 | `lib/main.dart` | 初始化服务、持有根级表单控制器、页面切换、顶栏与状态栏快照 |
-| 界面 | `lib/features/` | 按功能分 `shell / tasks / transcribe / translate / transcode / editor / settings`；跨功能 UI 放 `shared/` |
-| 流水线 | `lib/pipeline/` | 串行队列、任务编排、阶段壳、字幕写出与转码任务执行 |
+| 界面 | `lib/features/` | 按功能分 `shell / tasks / transcribe / translate / transcode / merge / editor / settings`；跨功能 UI 放 `shared/` |
+| 流水线 | `lib/pipeline/` | 串行队列、任务编排、阶段壳、字幕写出与转码 / 合并任务执行 |
 | 服务 | `lib/services/` | 网络、ffmpeg / ffprobe、文件持久化、shared_preferences、provider 构造 |
 | 领域 | `lib/domain/` | 数据模型与纯规则；不依赖 Flutter，不执行网络或外部进程 |
 | 视觉基座 | `lib/core/` | 主题令牌和无业务语义的通用控件 |
@@ -49,7 +49,7 @@ core/       domain/ ←──── services/
 2. 载入 `AppSettings`，创建应用支持目录。
 3. 构造 `Ffmpeg`、`Transcoder`、`TaskRunner`、`TaskQueue`、`TaskStore`、`EditorStore`。
 4. 恢复任务后启动 `SubtitleStudioApp`。
-5. 持有任务页的 `TasksController`、转写 / 翻译 / 转码的表单控制器和编辑器的 `EditorWorkspace`，保证切页不丢状态。
+5. 持有任务页的 `TasksController`、转写 / 翻译 / 转码 / 合并的表单控制器和编辑器的 `EditorWorkspace`，保证切页不丢状态。
 6. 用 `Listenable.merge` 只驱动顶栏、状态栏和需要实时更新的页面，避免进度回调重建整棵应用树。
 
 只做接线：各页的顶栏内容由各自的 `xxxChrome()` 给出，状态栏快照由
@@ -61,7 +61,7 @@ core/       domain/ ←──── services/
 
 | 文件 | 内容 |
 |---|---|
-| `nav_rail.dart` | `AppSection` 六个导航项和 72px 导航栏 |
+| `nav_rail.dart` | `AppSection` 七个导航项和 72px 导航栏 |
 | `app_shell.dart` | Rail + 顶栏 + 内容区 + 状态栏的总体栅格 |
 | `status_bar.dart` | `StatusSnapshot`（`from` 按设置、ffmpeg 与队列拼出快照；后台任务数按 `TaskFilter.running` 算）与底部状态栏；控件只画快照 |
 
@@ -105,7 +105,7 @@ core/       domain/ ←──── services/
 |---|---|
 | `cue.dart` | `Cue`、校对状态和不可变 `SubtitleDocument`；拆分、合并、说话人操作都返回新文档；界面显示状态 `displayStateOf`、按时间定位 `cueIndexAt` |
 | `language.dart` | 统一语言表、CJK 判定、文件名语言推断 |
-| `paths.dart` | 跨平台纯字符串路径规则：basename、dirname、stem、extension；比较用的 `sameSeparators` |
+| `paths.dart` | 跨平台纯字符串路径规则：basename、dirname、stem、extension；比较用的 `sameSeparators`；文件名自然序 `naturalCompare`（`part2` 在 `part10` 前） |
 | `output_naming.dart` | 产物命名唯一来源 `OutputNaming`：任务写哪几路、语言段、文件名；流水线、编辑器导出、任务详情、建任务页示例共用；语言标签（自动检测写 `src`） |
 | `numbers.dart` | 千位分隔 `grouped`；取值范围 `IntRange` |
 | `srt.dart` | SRT / VTT 解析与序列化、时长格式（`formatDuration`，可固定写出小时位）、说话人标签检测、导出字段 |
@@ -115,10 +115,11 @@ core/       domain/ ←──── services/
 | `subtitle_pairing.dart` | 本地原文与译文字幕的配对模式、统计与合并 |
 | `speech_segments.dart` | 静音区间 → 可逐段识别的语音区间 |
 | `recognition_checkpoint.dart` | 段级识别检查点，支持失败、取消和重启后的续跑 |
-| `task_kind.dart` | `TaskStage` 与 `TaskKind`；独立放置以避免 `TaskOptions ↔ SubtitleTask` 循环 |
+| `task_kind.dart` | `TaskStage` 与 `TaskKind`（`isMedia`、各种任务走的阶段）；独立放置以避免 `TaskOptions ↔ SubtitleTask` 循环 |
 | `task_filter.dart` | `TaskFilter` 状态分组（排队算进行中、取消算失败）；任务页筛选 chip、顶栏副标题与状态栏计数共用 |
 | `task_options.dart` | 入队时冻结的全部参数、产物目录规则、JSON；各项取值范围 `*Range`；换服务的规则 `withAsrProvider` / `withTranslationProvider` |
-| `task.dart` | `SubtitleTask`、阶段记录、日志、错误、产物和 JSON；续跑点 `resumeStage` 与「续跑会不会盖掉编辑」`resumeOverwritesEdits`；export `task_kind.dart` |
+| `task.dart` | `SubtitleTask`、阶段记录、日志、错误、产物和 JSON；媒体任务状态 `media`；续跑点 `resumeStage` 与「续跑会不会盖掉编辑」`resumeOverwritesEdits`；export `task_kind.dart` |
+| `media_job.dart` | sealed `MediaJob` 及其子类 `TranscodeJob`、`MergeJob`（sealed 要求同库，所以都在这个文件）：产物、命令、倍速等通用接口，存档键 `'transcode'` / `'merge'` |
 | `media_kinds.dart` | 按扩展名判断媒体 / 音频 / 字幕 |
 | `app_branding.dart` | 应用名的中英两份；另有五份在各平台的清单与 runner 里，见 `packaging/README.md` |
 | `file_stamp.dart` | 文件大小 + 修改时间，判断字幕文件是否在外部被改过；`FileChange` |
@@ -135,8 +136,18 @@ core/       domain/ ←──── services/
 | `encoder_params.dart` | 编码器参数模型：Choice / Int / Bool 与 `VideoEncoder` |
 | `encoder_catalog.dart` | x264 / x265 / AV1 / VideoToolbox / NVENC / QSV / AMF 参数目录 |
 | `options.dart` | `TranscodeOptions`、分辨率限制、参数 JSON |
-| `probe.dart` | `MediaProbe` 与音视频流信息 |
-| `command.dart` | `TranscodeJob`、ffmpeg 命令拼装、产物命名、进度解析 |
+| `probe.dart` | `MediaProbe` 与音视频流信息（含 profile、采样率、旋转，合并比对用） |
+| `command.dart` | ffmpeg 命令拼装、产物命名、进度解析（`TranscodeJob` 在 `domain/media_job.dart`） |
+
+### `domain/mux/`
+
+「只搬流、不转码」的子域：合并是第一个用法，以后的重混流是第二个。
+
+| 文件 | 内容 |
+|---|---|
+| `merge_options.dart` | `MergeSegment`（视频、可选字幕、章节标题）、`MergeOptions`（有序段、容器、章节 / 内嵌 / 旁挂三个开关、输出位置与文件名、JSON 回落） |
+| `merge_rules.dart` | 纯规则：`mergeIssues`（逐段与第 1 段比参数、容器能不能装）、`offsets`（前缀和，concat / 章节 / 字幕平移共用）、`ffmetadata`、`concatList`、`concatCues` 与 `keptCueCount`、`mergePlan`（参数 → `MuxPlan`，页面命令预览与流水线共用，临时文件占位名在 `MergeTempFiles`）、`mergeOutputPath` 与 `sidecarPathFor`、`looksTruncated` |
+| `mux_plan.dart` | 声明式封装计划 `MuxPlan` / `MuxInput`：输入、`-map`、章节来源、字幕封装编码 → ffmpeg 参数；`MuxPlan.merge` |
 
 ## 五、服务层 `lib/services/`
 
@@ -156,11 +167,11 @@ core/       domain/ ←──── services/
 
 - `ffmpeg.dart`：`Ffmpeg` 定位 ffmpeg / ffprobe、探测文件、抽音、静音检测、切音频、取消时杀进程树。
   不叫 `Media`：会和 media_kit 的 `Media` 撞名。
-- `transcoder.dart`：编码器检测、试编码、ffprobe、执行转码和错误解释。
+- `transcoder.dart`：编码器检测、试编码、ffprobe、执行 ffmpeg（转码与合并共用）和错误解释。
 - `settings.dart`：shared_preferences 设置和 provider 连接配置；不依赖 Registry，由调用方传 provider id。
 - `task_store.dart`：一个任务一份 JSON，进度更新时只重写变化的任务。
 - `editor_store.dart`：本地会话的附加状态与编辑进度草稿、媒体关联和最近打开。
-- `file_io.dart`：界面层用到的文件系统小操作（存在、读文本、大小、建目录、`findSiblingMedia` 找同名音视频）；读文件时间戳；原子写（先写临时文件再改名），多份文件成组写，要么全成要么都不留。
+- `file_io.dart`：界面层用到的文件系统小操作（存在、读文本、读字幕文本 `readSubtitleText`（UTF-8 / 带 BOM 的 UTF-16）、列目录 `listFiles`、大小、建目录、`findSiblingMedia` 找同名音视频）；读文件时间戳；原子写（先写临时文件再改名），多份文件成组写，要么全成要么都不留。
 - `reveal.dart`：Finder / Explorer 中定位文件或打开目录。
 - `local/local_backend.dart`：本地 Python 后端客户端占位，第一期未实施。
 
@@ -169,10 +180,12 @@ core/       domain/ ←──── services/
 | 文件 | 内容 |
 |---|---|
 | `task_queue.dart` | 串行队列；入队、取消、继续、优先、删除、恢复；脏任务攒 300ms 批量写盘 |
-| `task_runner.dart` | 选择字幕 / 转码分支、统一捕获取消 / provider / 未知错误；字幕的准备、识别、断句、翻译编排 |
+| `task_runner.dart` | 按 `task.media` 分派字幕 / 转码 / 合并、统一捕获取消 / provider / 未知错误；字幕的准备、识别、断句、翻译编排 |
 | `task_stage_runner.dart` | 所有阶段共用的断点跳过、active / done 状态、耗时与通知 |
 | `subtitle_output_writer.dart` | SRT / VTT / TXT 原子写出、按语言折行、双语命名、说话人标签、记产物时间戳；完成阶段与编辑器「保存」共用 |
 | `transcode_task_pipeline.dart` | 转码准备、执行 `.part` 临时文件、完成校验 |
+| `merge_task_pipeline.dart` | 合并：准备（探测、一致性二次把关、读字幕、定产物；合并没做完时每次开跑都重跑）、合并（临时目录写 concat 列表 / 章节 / 字幕，跑 ffmpeg 写 `.part`，以 0 退出时 stderr 里的话记进日志）、完成（产物非空且不缺段） |
+| `ffmpeg_progress.dart` | ffmpeg 进度区块 → 任务进度、ETA、倍速与阶段备注；转码与合并共用 |
 | `task_progress.dart` | 字幕按条目、转码按毫秒共用的 ETA 外推公式 |
 
 关键承诺仍由 `TaskRunner` 统一维护：失败或取消时保留已完成阶段；重试从
@@ -181,12 +194,13 @@ core/       domain/ ←──── services/
 ## 七、跨 feature 公共件 `lib/features/shared/`
 
 - `provider_fields.dart`：服务分组、模型字段、readiness 行、服务 / 模型摘要。
-- `command_block.dart`：转码页与任务详情共用的可复制命令块。
-- `enqueued_banner.dart`：三个建任务页面共用的入队成功横幅。
-- `step_dots.dart`：三个建任务页面共用的三步说明。
+- `command_block.dart`：转码页、合并页与任务详情共用的可复制命令块。
+- `param_section.dart`：参数面板里的分段 `ParamSection` 与小字 `ParamHint`，转码页与合并页共用。
+- `enqueued_banner.dart`：各建任务页面共用的入队成功横幅。
+- `step_dots.dart`：各建任务页面共用的三步说明。
 - `page_chrome.dart`：页面交给顶栏的稳定契约：标题、副标题、尾随标签、操作区。Shell 与各页都依赖它，
   放在这里而不是 `shell/`，各页就不必 import 另一个 feature。
-- `new_task_page.dart`：`NewTaskPageState`，三个建任务页的页面状态基类 —— 拖放、入队横幅、
+- `new_task_page.dart`：`NewTaskPageState`，四个建任务页（含合并）的页面状态基类 —— 拖放、入队横幅、
   快捷键、960 / 1100 两栏布局；各页只说明表单、怎么入队、两栏各放什么。
 - `submit_shortcuts.dart`：`SubmitShortcuts`，建任务入口（工作台页与两个对话框）共用的键盘约定：
   Enter 提交但让给多行框与按钮，⌘Enter 一律提交，Esc 先失焦再关闭。
@@ -227,7 +241,8 @@ core/       domain/ ←──── services/
 
 - `task_detail_panel.dart`：选择与组合区块。
 - `task_detail_header.dart`、`task_detail_error.dart`、`task_detail_stages.dart`。
-- `task_detail_outputs.dart`、`task_detail_log.dart`、`task_detail_section.dart`。
+- `task_detail_outputs.dart`（字幕产物 / 媒体产物）、`task_detail_log.dart`、`task_detail_section.dart`。
+- `task_detail_chapters.dart`：合并任务的「章节」分区（每段起点、标题、字幕条数）。
 
 ### 新建转写 `lib/features/transcribe/`
 
@@ -257,9 +272,16 @@ core/       domain/ ←──── services/
   这里只给列定义（窄窗口收起视频、音频列）与单元格。
 - `transcode_param_panel.dart`：输出、音频、高级区及开始按钮，装进共享参数面板外框。
 - `transcode_video_section.dart`：编码器卡片和每家自己的参数控件。
-- `transcode_widgets.dart`：转码页内共用的 Section / Hint。
 
-## 十、编辑器 `lib/features/editor/`
+## 十、合并功能 `lib/features/merge/`
+
+- `merge_form.dart`：`MergeFormController`（**不**继承 `NewTaskFormBase`：合并是 N 行成一个任务）——
+  有序段列表 `StagedSegment`、异步探测与字幕解析按段 id 回写、同名字幕配对、页脚优先级、命令预览、提交。
+- `merge_page.dart`：顶栏内容、入队（页面行为在 `shared/new_task_page.dart`）。
+- `merge_segment_list.dart`：分段面板、可拖动排序的段列表与行、章节起点条。
+- `merge_param_panel.dart`：输出、章节与字幕开关、方式说明、命令预览与开始按钮。
+
+## 十一、编辑器 `lib/features/editor/`
 
 ### 会话与状态
 
@@ -314,7 +336,7 @@ core/       domain/ ←──── services/
 
 其余：`editor_widgets.dart`（编辑器专用小件；`AnchoredPopover` 打开时焦点进浮层自己的作用域，Esc 关闭，关闭后焦点还回去）、`speaker_badge.dart`、`speaker_manager.dart`。
 
-## 十一、设置 `lib/features/settings/`
+## 十二、设置 `lib/features/settings/`
 
 - `settings_page.dart`：滚动监听、目录高亮、恢复默认和布局组合。
 - `section_outline.dart`：宽窗口 Rail / 窄窗口 Tabs。
@@ -326,18 +348,18 @@ core/       domain/ ←──── services/
 
 每个分区组件统一接收 `settings / stacked / saved / onChanged`；页面不再内联数百行表单。
 
-## 十二、运行主线
+## 十三、运行主线
 
 1. **启动**：`main()` → 设置与目录 → 服务装配 → `TaskQueue.restore()` → `runApp()`。
-2. **建任务**：表单控制器把参数冻结为 `TaskOptions` / `TranscodeOptions` → `TaskQueue` 入队。
-3. **执行**：`TaskRunner` 选择字幕或转码分支；`TaskStageRunner` 统一阶段状态和续跑。
+2. **建任务**：表单控制器把参数冻结为 `TaskOptions` / `TranscodeOptions` / `MergeOptions` → `TaskQueue` 入队。
+3. **执行**：`TaskRunner` 按 `task.media` 选择字幕、转码或合并分支；`TaskStageRunner` 统一阶段状态和续跑。
 4. **识别**：`Registry.buildAsr()` → provider；逐段渠道把检查点写回任务。
 5. **翻译**：已有译文跳过；条数不符只对可信的 `batchTooLarge` 错误减半重试。
 6. **写字幕**：`SubtitleOutputWriter` 在落盘时折行；文档内始终保持无硬换行文本。
-7. **转码**：先写 `.part`，成功后改名；失败和取消清理临时文件。
+7. **转码 / 合并**：先写 `.part`，成功后改名；失败和取消清理临时文件。合并另在临时目录写 concat 列表、章节与拼好的字幕，完事删掉。
 8. **编辑器**：编辑进度自动存（任务 JSON / 本地草稿）；字幕文件只在保存时写，任务会话写产物，文件会话写回原文件。
 
-## 十三、按功能反查
+## 十四、按功能反查
 
 | 要改什么 | 从这里开始 |
 |---|---|
@@ -350,6 +372,10 @@ core/       domain/ ←──── services/
 | 阶段断点、状态与耗时 | `pipeline/task_stage_runner.dart` |
 | 字幕任务执行 | `pipeline/task_runner.dart` |
 | 转码任务执行 | `pipeline/transcode_task_pipeline.dart` |
+| 合并任务执行 | `pipeline/merge_task_pipeline.dart` |
+| 合并的一致性检查、章节、字幕平移 | `domain/mux/merge_rules.dart` |
+| 合并 / 重混流的 ffmpeg 参数 | `domain/mux/mux_plan.dart` |
+| 加一种媒体任务（重混流、mkv） | `domain/media_job.dart` 加子类，按编译器提示补各处 `switch (task.media)` |
 | 翻译条数协议 | `services/translation_protocol.dart` + `task_runner.dart` 的翻译阶段 |
 | 断句 | `domain/segmenter.dart` |
 | 折行 | `domain/line_wrap.dart`；调用在 `pipeline/subtitle_output_writer.dart` |
@@ -374,7 +400,7 @@ core/       domain/ ←──── services/
 | 预览播放 | `features/editor/editor_media.dart` + `preview_playback.dart` + `inspector_preview.dart` |
 | 保存 / 离开前询问 / 冲突 | `features/editor/editor_controller.dart`（`confirmLeave` / `writeFiles`）+ `editor_prompts.dart` + `editor_leave_dialog.dart` |
 
-## 十四、验证
+## 十五、验证
 
 ```bash
 cd app
@@ -383,7 +409,9 @@ flutter test
 flutter test --tags golden --run-skipped
 ```
 
-- 常规测试覆盖 domain、provider、队列、续跑、表单、编辑器与转码。
+- 常规测试覆盖 domain、provider、队列、续跑、表单、编辑器、转码与合并。
+- 合并：`test/mux_test.dart`（纯规则与 `MuxPlan`）、`merge_pipeline_test.dart`（假 Transcoder 的流水线）、
+  `merge_ffmpeg_test.dart`（实跑 ffmpeg，没装时跳过）、`merge_form_test.dart`、`merge_page_test.dart`、`merge_tasks_test.dart`。
 - `test/paths_test.dart` 钉死 POSIX / Windows 路径、盘符根目录与产物语言标签。
 - `test/editor_workspace_test.dart` 覆盖换会话、入口页开合、「最近打开」的串行写盘、换会话 / 退出前的询问与保存（用 `ScriptedPrompts`，不需要 widget 树）；
   `test/editor_save_test.dart` 的「写入流程」组覆盖离开前写草稿、覆盖 / 另存为 / 取消与目标被拒的提示；
@@ -395,5 +423,5 @@ flutter test --tags golden --run-skipped
 - `test/status_snapshot_test.dart` 钉死状态栏快照的服务文案（未选择 / 未配置 / 已配置）与任务计数。
 - `test/task_filter_test.dart` 钉死状态分组；`test/tasks_controller_test.dart` 覆盖筛选、选中、拖入分流，
   以及拆掉任务页再装回来后选中与筛选仍在。
-- golden 测试共 46 张场景图；拆 UI 文件后必须保持逐像素一致。
+- golden 测试共 55 张场景图；拆 UI 文件后必须保持逐像素一致。
 - `live` 测试需要真实密钥，默认跳过；ffmpeg / 平台硬件编码用例会按本机能力跳过。

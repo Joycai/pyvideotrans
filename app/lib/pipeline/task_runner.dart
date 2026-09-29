@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../domain/cue.dart';
+import '../domain/media_job.dart';
 import '../domain/recognition_checkpoint.dart';
 import '../domain/segmenter.dart';
 import '../domain/srt.dart';
@@ -12,6 +13,7 @@ import '../services/provider_api.dart';
 import '../services/registry.dart';
 import '../services/settings.dart';
 import '../services/transcoder.dart';
+import 'merge_task_pipeline.dart';
 import 'subtitle_output_writer.dart';
 import 'task_progress.dart';
 import 'task_stage_runner.dart';
@@ -68,7 +70,7 @@ class TaskRunner {
 
   final Ffmpeg media;
 
-  /// 转码任务用它探测源文件与跑 ffmpeg。
+  /// 转码、合并任务用它探测源文件与跑 ffmpeg。
   final Transcoder transcoder;
 
   final AsrFactory? _asrOverride;
@@ -78,6 +80,9 @@ class TaskRunner {
 
   late final TranscodeTaskPipeline _transcodePipeline =
       TranscodeTaskPipeline(transcoder: transcoder, stages: _stages);
+
+  late final MergeTaskPipeline _mergePipeline =
+      MergeTaskPipeline(transcoder: transcoder, stages: _stages);
 
   /// 任务参数里的模型与提示词覆盖设置里的值 —— 参数在入队时就定死了。
   /// 默认实现把本实例的 [media] 交给需要切分音频的服务，共用同一份 ffmpeg 定位。
@@ -118,16 +123,28 @@ class TaskRunner {
 
     try {
       await _stages.run(task, TaskStage.queued, onChange, () async {});
-      if (task.kind == TaskKind.transcode) {
-        await _transcodePipeline.prepare(task, onChange);
-        await _transcodePipeline.run(task, token, onChange);
-        await _transcodePipeline.finish(task, onChange);
-      } else {
-        await _prepare(task, token, onChange);
-        await _recognize(task, token, onChange);
-        await _segment(task, onChange);
-        await _translate(task, token, onChange);
-        await _finish(task, onChange);
+      switch (task.media) {
+        case TranscodeJob():
+          await _transcodePipeline.prepare(task, onChange);
+          await _transcodePipeline.run(task, token, onChange);
+          await _transcodePipeline.finish(task, onChange);
+        case MergeJob():
+          await _mergePipeline.prepare(task, onChange);
+          await _mergePipeline.run(task, token, onChange);
+          await _mergePipeline.finish(task, onChange);
+        case null:
+          // 存档残缺（媒体任务丢了参数）时别落进字幕流水线去调付费识别。
+          if (task.kind.isMedia) {
+            throw ActionableException(
+              '${task.kind.label}任务缺少参数',
+              hint: '删除这个任务后重新建。',
+            );
+          }
+          await _prepare(task, token, onChange);
+          await _recognize(task, token, onChange);
+          await _segment(task, onChange);
+          await _translate(task, token, onChange);
+          await _finish(task, onChange);
       }
 
       task.status = TaskStatus.done;

@@ -76,4 +76,22 @@ void main() {
       sameSeparators(r'C:\out\ep1.zh.srt'),
     );
   });
+
+  test('naturalCompare：数字段按数值，其余不分大小写', () {
+    final names = [
+      'part10.mp4',
+      'Part1.mp4',
+      'part2.mp4',
+      'part02.mp4',
+      'b.mp4',
+    ];
+    names.sort(naturalCompare);
+    expect(names, [
+      'b.mp4',
+      'Part1.mp4',
+      'part2.mp4',
+      'part02.mp4',
+      'part10.mp4',
+    ]);
+  });
 }

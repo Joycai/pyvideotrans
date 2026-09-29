@@ -9,6 +9,7 @@ enum TaskStage {
   segment('断句'),
   translate('翻译'),
   transcode('转码'),
+  merge('合并'),
   finish('完成');
 
   const TaskStage(this.label);
@@ -27,7 +28,10 @@ enum TaskKind {
   translate('翻译'),
 
   /// 视频 → 另一种编码或容器的视频。FFmpeg 跑，不产字幕。
-  transcode('转码');
+  transcode('转码'),
+
+  /// 几段视频 → 首尾相接的一个视频，带章节与平移后的字幕。不转码。
+  merge('合并');
 
   const TaskKind(this.label);
 
@@ -38,21 +42,39 @@ enum TaskKind {
   bool get needsTranslation =>
       this == TaskKind.transcribeAndTranslate || this == TaskKind.translate;
 
+  /// 产出媒体文件、不产字幕的任务。这类任务的 `SubtitleTask.media` 一定非空，
+  /// 反之亦然 —— 两者只在入队时一起赋值。
+  bool get isMedia => switch (this) {
+    TaskKind.transcode || TaskKind.merge => true,
+    TaskKind.transcribe ||
+    TaskKind.transcribeAndTranslate ||
+    TaskKind.translate => false,
+  };
+
   /// 这种任务走的阶段。字幕任务是固定的六段（不需要的那段记为跳过，
-  /// 阶段条上画成虚线）；转码只有四段。
-  List<TaskStage> get stages => this == TaskKind.transcode
-      ? const [
-          TaskStage.queued,
-          TaskStage.prepare,
-          TaskStage.transcode,
-          TaskStage.finish,
-        ]
-      : const [
-          TaskStage.queued,
-          TaskStage.prepare,
-          TaskStage.recognize,
-          TaskStage.segment,
-          TaskStage.translate,
-          TaskStage.finish,
-        ];
+  /// 阶段条上画成虚线）；转码、合并只有四段。
+  List<TaskStage> get stages => switch (this) {
+    TaskKind.transcode => const [
+      TaskStage.queued,
+      TaskStage.prepare,
+      TaskStage.transcode,
+      TaskStage.finish,
+    ],
+    TaskKind.merge => const [
+      TaskStage.queued,
+      TaskStage.prepare,
+      TaskStage.merge,
+      TaskStage.finish,
+    ],
+    TaskKind.transcribe ||
+    TaskKind.transcribeAndTranslate ||
+    TaskKind.translate => const [
+      TaskStage.queued,
+      TaskStage.prepare,
+      TaskStage.recognize,
+      TaskStage.segment,
+      TaskStage.translate,
+      TaskStage.finish,
+    ],
+  };
 }

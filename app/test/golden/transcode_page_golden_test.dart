@@ -9,10 +9,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
+import 'package:subtitle_studio/domain/media_job.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/task_filter.dart';
 import 'package:subtitle_studio/domain/transcode/codecs.dart';
-import 'package:subtitle_studio/domain/transcode/command.dart';
 import 'package:subtitle_studio/domain/transcode/encoder_catalog.dart';
 import 'package:subtitle_studio/domain/transcode/encoder_params.dart';
 import 'package:subtitle_studio/domain/transcode/options.dart';
@@ -315,7 +315,7 @@ void main() {
       progress: 0.42,
       mediaDuration: const Duration(minutes: 48, seconds: 12),
       eta: const Duration(minutes: 6),
-      transcode: TranscodeJob(
+      media: TranscodeJob(
         options: TranscodeOptions(
           videoCodec: VideoCodec.hevc,
           encoderId: 'hevc_videotoolbox',
@@ -359,7 +359,7 @@ void main() {
       stage: TaskStage.finish,
       progress: 1,
       mediaDuration: const Duration(minutes: 6, seconds: 40),
-      transcode: TranscodeJob(
+      media: TranscodeJob(
         options: const TranscodeOptions(mode: TranscodeMode.remux),
         sourceVideo: 'H.264',
         outputPath: '/Users/mia/Movies/产品/product_demo.remux.mp4',

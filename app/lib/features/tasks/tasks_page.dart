@@ -120,7 +120,7 @@ class TasksPageState extends State<TasksPage> {
       case TaskAction.openEditor:
         widget.onOpenEditor(task);
       case TaskAction.reveal:
-        if (task.transcode?.outputPath case final path?) Reveal.show(path);
+        if (task.media?.outputPath case final path?) Reveal.show(path);
     }
   }
 

@@ -253,8 +253,8 @@ class Transcoder extends ChangeNotifier {
         '-v', 'error',
         '-show_entries',
         'format=duration:stream=index,codec_type,codec_name,width,height,'
-            'avg_frame_rate,r_frame_rate,pix_fmt,channels:'
-            'stream_disposition=attached_pic',
+            'avg_frame_rate,r_frame_rate,pix_fmt,profile,channels,sample_rate:'
+            'stream_disposition=attached_pic:stream_side_data=rotation',
         '-of', 'json',
         path,
       ], stdoutEncoding: utf8, stderrEncoding: utf8);
@@ -280,11 +280,17 @@ class Transcoder extends ChangeNotifier {
     return probe;
   }
 
-  /// 跑一次转码。[onProgress] 在每个进度区块到达时调用。取消时杀掉进程并
-  /// 抛 [TaskCancelled]；失败抛 [ActionableException]，detail 是 stderr 末尾。
-  Future<void> run({
+  /// 跑一次 ffmpeg（转码或合并）。[onProgress] 在每个进度区块到达时调用。
+  /// 取消时杀掉进程并抛 [TaskCancelled]；失败抛 [ActionableException]，
+  /// detail 是 stderr 末尾。[encoderId] 为 null 表示只搬流不编码（合并），
+  /// [action] 是报错标题里的动作名。
+  ///
+  /// 成功时返回 stderr 末尾（`-v error` 下正常为空）：以 0 退出也可能报过错，
+  /// 拼接时某段打不开，ffmpeg 只报一句就收尾，调用方要把它记进日志。
+  Future<String> run({
     required List<String> args,
-    required String encoderId,
+    required String? encoderId,
+    String action = '转码',
     required CancellationToken token,
     required void Function(TranscodeProgress) onProgress,
   }) async {
@@ -331,30 +337,47 @@ class Transcoder extends ChangeNotifier {
     }
     await outDone.catchError((_) {});
     await errDone.catchError((_) {});
-    if (exitCode != 0) throw describeFailure(stderr.toString(), encoderId);
+    if (exitCode != 0) {
+      throw describeFailure(stderr.toString(), encoderId, action: action);
+    }
+    return _tail(stderr.toString()).trim();
+  }
+
+  /// stderr 末尾 800 字：报错详情与日志里都只放这么多。
+  static String _tail(String stderr) {
+    final tail = stderr.trimRight();
+    return tail.length > 800 ? '…${tail.substring(tail.length - 800)}' : tail;
   }
   /// ffmpeg 退出码非零时的报错。
   @visibleForTesting
-  static ActionableException describeFailure(String stderr, String encoderId) {
-    final tail = stderr.trimRight();
-    final detail = tail.length > 800
-        ? '…${tail.substring(tail.length - 800)}'
-        : tail;
-    final s = tail.toLowerCase();
+  static ActionableException describeFailure(
+    String stderr,
+    String? encoderId, {
+    String action = '转码',
+  }) {
+    final detail = _tail(stderr);
+    final s = stderr.trimRight().toLowerCase();
+    // 只搬流不编码（合并）时，页面上没有编码器、额外参数这些选项，建议换成那边做得到的。
+    final copyOnly = encoderId == null;
     if (s.contains('could not find tag for codec') ||
         s.contains('only supported in mp4') ||
         s.contains('not currently supported in container')) {
       return ActionableException(
         '容器装不下其中一路流',
         detail: detail,
-        hint: '换一个容器，或把那一路改为重新编码而不是复制。',
+        hint: copyOnly
+            ? '换一个容器，或先用「转码」把那一段转成容器装得下的编码。'
+            : '换一个容器，或把那一路改为重新编码而不是复制。',
       );
     }
-    if (s.contains('error while opening encoder') ||
+    // 不编码时没有「编码器初始化失败」这回事，同样的字样（initializing output
+    // stream）多是封装出错，落到下面的通用说明。
+    if (encoderId != null &&
+        (s.contains('error while opening encoder') ||
         s.contains('could not open encoder') ||
         s.contains('initializing output stream') ||
         s.contains('no capable devices') ||
-        s.contains('unknown encoder')) {
+        s.contains('unknown encoder'))) {
       return ActionableException(
         '$encoderId 初始化失败',
         detail: detail,
@@ -365,18 +388,22 @@ class Transcoder extends ChangeNotifier {
       return ActionableException(
         'FFmpeg 不认识其中一个参数',
         detail: detail,
-        hint: '检查「额外参数」的写法，或者这份 FFmpeg 版本过旧。',
+        hint: copyOnly
+            ? '这份 FFmpeg 版本可能过旧，换一个新版本后重试。'
+            : '检查「额外参数」的写法，或者这份 FFmpeg 版本过旧。',
       );
     }
     if (s.contains('no space left')) {
       return ActionableException(
         '磁盘空间不足',
         detail: detail,
-        hint: '清理输出目录所在磁盘，或在高级里换一个输出目录。',
+        hint: copyOnly
+            ? '清理输出目录所在磁盘，或回合并页换一个输出位置后重新建任务。'
+            : '清理输出目录所在磁盘，或在高级里换一个输出目录。',
       );
     }
     return ActionableException(
-      'FFmpeg 转码失败',
+      'FFmpeg $action失败',
       detail: detail.isEmpty ? '退出码非零，没有输出报错' : detail,
       hint: '查看报错原文；多为源文件损坏或参数组合不受支持。',
     );

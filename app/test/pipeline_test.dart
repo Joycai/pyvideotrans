@@ -193,6 +193,21 @@ void main() {
   }
 
   group('流水线', () {
+    test('媒体任务丢了参数时直接失败，不落进字幕流水线', () async {
+      final (_, runner, _) = await translateTask();
+      final task = SubtitleTask(
+        id: 'broken',
+        sourcePath: '${work.path}/a.mp4',
+        kind: TaskKind.transcode,
+        options: testOptions(asr: 'fake_asr', mt: 'fake_mt'),
+      );
+      await runner.run(task, token: CancellationToken(), onChange: () {});
+
+      expect(task.status, TaskStatus.failed);
+      expect(task.error?.title, '转码任务缺少参数');
+      expect(task.stages[TaskStage.recognize]!.state, StageState.pending);
+    });
+
     test('翻译任务跑完，识别与断句被跳过', () async {
       final (task, runner, _) = await translateTask();
       await runner.run(task, token: CancellationToken(), onChange: () {});

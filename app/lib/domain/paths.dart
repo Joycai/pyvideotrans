@@ -34,3 +34,23 @@ String extensionOf(String path) {
 /// 分隔符统一成 `/`，只用来比较两条路径是否指向同一处：同一个目录，有的地方
 /// 按平台分隔符拼、有的用 `/` 拼，Windows 上字面上就对不上。
 String sameSeparators(String path) => path.replaceAll('\\', '/');
+
+/// 按「人读的顺序」比较文件名：数字段按数值比，`part2` 排在 `part10` 前面。
+/// 合并时列表顺序就是成片顺序，按字典序排 `part10` 会跑到 `part2` 前面。
+int naturalCompare(String a, String b) {
+  final pa = _chunks.allMatches(a).map((m) => m[0]!).toList();
+  final pb = _chunks.allMatches(b).map((m) => m[0]!).toList();
+  for (var i = 0; i < pa.length && i < pb.length; i++) {
+    final x = pa[i], y = pb[i];
+    final nx = int.tryParse(x), ny = int.tryParse(y);
+    final c = nx != null && ny != null
+        ? nx != ny
+              ? nx.compareTo(ny)
+              : x.length.compareTo(y.length)
+        : x.toLowerCase().compareTo(y.toLowerCase());
+    if (c != 0) return c;
+  }
+  return pa.length.compareTo(pb.length);
+}
+
+final _chunks = RegExp(r'\d+|\D+');

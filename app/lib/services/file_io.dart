@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import '../domain/file_stamp.dart';
@@ -24,6 +25,37 @@ Future<int> fileLength(String path) async {
 
 /// 按 UTF-8 读整份文本。编码不对时抛 [FileSystemException]。
 Future<String> readText(String path) => File(path).readAsString();
+
+/// 读字幕文本：UTF-8（带不带 BOM 都行），或带 BOM 的 UTF-16（Windows 记事本的
+/// 「Unicode」）。别的编码抛 [FormatException]，不猜 —— GBK / Big5 按 Latin-1
+/// 兜底时间码照样能解析，正文却会静默变成乱码写进产物。
+Future<String> readSubtitleText(String path) async {
+  final bytes = await File(path).readAsBytes();
+  if (bytes.length >= 2) {
+    final le = bytes[0] == 0xFF && bytes[1] == 0xFE;
+    final be = bytes[0] == 0xFE && bytes[1] == 0xFF;
+    if (le || be) {
+      if (bytes.length.isOdd) throw const FormatException('UTF-16 字节数不对');
+      return String.fromCharCodes([
+        for (var i = 2; i + 1 < bytes.length; i += 2)
+          le ? bytes[i] | bytes[i + 1] << 8 : bytes[i] << 8 | bytes[i + 1],
+      ]);
+    }
+  }
+  return utf8.decode(bytes);
+}
+
+/// 目录里的文件（不含子目录），读不了时为空。合并页据此找视频旁的同名字幕。
+Future<List<String>> listFiles(String dir) async {
+  try {
+    return [
+      await for (final e in Directory(dir).list())
+        if (e is File) e.path,
+    ];
+  } on FileSystemException {
+    return const [];
+  }
+}
 
 Future<void> ensureDir(String path) async {
   await Directory(path).create(recursive: true);

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/enum_by_name.dart';
 import '../domain/language.dart';
+import '../domain/mux/merge_options.dart';
 import '../domain/task_options.dart';
 import '../domain/transcode/options.dart';
 import 'provider_api.dart';
@@ -84,6 +85,7 @@ class AppSettings extends ChangeNotifier {
   static const _kLastTranscribe = 'lastTranscribeOptions';
   static const _kLastTranslate = 'lastTranslateOptions';
   static const _kLastTranscode = 'lastTranscodeOptions';
+  static const _kLastMerge = 'lastMergeOptions';
 
   Map<String, ProviderConfig> _configs = {};
 
@@ -237,6 +239,36 @@ class AppSettings extends ChangeNotifier {
       _prefs.remove(_kLastTranscode);
     } else {
       _prefs.setString(_kLastTranscode, jsonEncode(v.toJson()));
+    }
+  }
+
+  /// 最近一次成功提交的「合并」参数：只有容器与三个开关，段与输出位置不记
+  /// （下一批的第 1 段决定默认位置与文件名）。
+  MergeOptions? get lastMergeOptions {
+    final raw = _prefs.getString(_kLastMerge);
+    if (raw == null) return null;
+    try {
+      return MergeOptions.fromJson(jsonDecode(raw) as Map<String, Object?>);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  set lastMergeOptions(MergeOptions? v) {
+    if (v == null) {
+      _prefs.remove(_kLastMerge);
+    } else {
+      _prefs.setString(
+        _kLastMerge,
+        jsonEncode(
+          MergeOptions(
+            container: v.container,
+            chapters: v.chapters,
+            embedSubtitles: v.embedSubtitles,
+            sidecarSubtitles: v.sidecarSubtitles,
+          ).toJson(),
+        ),
+      );
     }
   }
 

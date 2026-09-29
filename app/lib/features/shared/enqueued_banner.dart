@@ -7,7 +7,7 @@ import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/indicators.dart';
 
-/// 入队成功的横幅：三个建任务页共用一份。
+/// 入队成功的横幅：各建任务页共用一份。
 ///
 /// 用 success 而不是 primary —— 这一步是「已经排上了」，不是「继续往下走」。
 class EnqueuedBanner extends StatelessWidget {

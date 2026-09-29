@@ -17,6 +17,8 @@ import 'features/editor/editor_page.dart';
 import 'features/editor/editor_prompts.dart';
 import 'features/editor/editor_shortcuts.dart';
 import 'features/editor/editor_workspace.dart';
+import 'features/merge/merge_form.dart';
+import 'features/merge/merge_page.dart';
 import 'features/settings/settings_page.dart';
 import 'features/shared/page_chrome.dart';
 import 'features/shell/app_shell.dart';
@@ -151,6 +153,12 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     transcoder: widget.transcoder,
   );
 
+  /// 「合并」页的表单，同样挂在根节点上；与转码页共用同一个 Transcoder。
+  late final _mergeForm = MergeFormController(
+    settings: widget.settings,
+    transcoder: widget.transcoder,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -200,6 +208,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     _transcribeForm.dispose();
     _translateForm.dispose();
     _transcodeForm.dispose();
+    _mergeForm.dispose();
     super.dispose();
   }
 
@@ -221,6 +230,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     _transcribeForm,
     _translateForm,
     _transcodeForm,
+    _mergeForm,
     _workspace.form,
     ?_workspace.current,
   ]);
@@ -253,6 +263,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     AppSection.newTranscribe => newTranscribeChrome(_transcribeForm),
     AppSection.newTranslate => newTranslateChrome(_translateForm),
     AppSection.transcode => transcodeChrome(_transcodeForm),
+    AppSection.merge => mergeChrome(_mergeForm),
     AppSection.settings => settingsChrome(
       onReset: () => _settingsKey.currentState?.confirmReset(),
     ),
@@ -337,6 +348,11 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     ),
     AppSection.transcode => TranscodePage(
       form: _transcodeForm,
+      queue: widget.queue,
+      onOpenTasks: () => _go(AppSection.tasks),
+    ),
+    AppSection.merge => MergePage(
+      form: _mergeForm,
       queue: widget.queue,
       onOpenTasks: () => _go(AppSection.tasks),
     ),

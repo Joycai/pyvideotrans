@@ -122,10 +122,14 @@ class FileAppendStrip extends StatelessWidget {
     super.key,
     required this.icon,
     required this.dragging,
+    this.label = '继续拖入可追加文件',
   });
 
   final IconData icon;
   final bool dragging;
+
+  /// 没在拖放时的说明；拖放中统一换成「松开以添加文件」。
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -142,10 +146,13 @@ class FileAppendStrip extends StatelessWidget {
           children: [
             Icon(icon, size: 20, weight: 400, color: cs.onSurfaceVariant),
             const SizedBox(width: AppSpacing.s2),
-            Text(
-              dragging ? '松开以添加文件' : '继续拖入可追加文件',
-              style: context.texts.bodyMedium?.copyWith(
-                color: cs.onSurfaceVariant,
+            Flexible(
+              child: Text(
+                dragging ? '松开以添加文件' : label,
+                overflow: TextOverflow.ellipsis,
+                style: context.texts.bodyMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
               ),
             ),
           ],

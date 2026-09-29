@@ -5,11 +5,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../domain/media_job.dart';
 import '../domain/media_kinds.dart';
+import '../domain/mux/merge_options.dart';
 import '../domain/recognition_checkpoint.dart';
 import '../domain/task.dart';
 import '../domain/task_options.dart';
-import '../domain/transcode/command.dart';
 import '../domain/transcode/options.dart';
 import '../services/provider_api.dart';
 import '../services/settings.dart';
@@ -171,10 +172,23 @@ class TaskQueue extends ChangeNotifier {
           kind: TaskKind.transcode,
           // 字幕参数对转码任务无意义，只是占位，免得存档读回时缺字段。
           options: settings.defaultTaskOptions(),
-          transcode: TranscodeJob(options: options),
+          media: TranscodeJob(options: options),
         ),
       ),
   ];
+
+  /// 把几段视频合并成一个的任务入队。第 1 段当作任务的源文件（任务行图标、
+  /// 排序与存档都按它）。
+  SubtitleTask enqueueMerge(MergeOptions options) => _add(
+    SubtitleTask(
+      id: const Uuid().v4(),
+      sourcePath: options.segments.first.videoPath,
+      kind: TaskKind.merge,
+      // 同转码：字幕参数对合并任务无意义，只是占位。
+      options: settings.defaultTaskOptions(),
+      media: MergeJob(options: options),
+    ),
+  );
 
   SubtitleTask _add(SubtitleTask task) {
     task.note('任务已加入队列（位置 ${_tasks.where((t) => t.isActive).length + 1}）');

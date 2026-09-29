@@ -1,72 +1,7 @@
 import '../paths.dart';
 import '../task_options.dart';
 import 'codecs.dart';
-import 'encoder_params.dart';
 import 'options.dart';
-
-/// 挂在转码任务上的状态：参数、准备阶段读出的源信息、定下来的产物路径与命令。
-class TranscodeJob {
-  TranscodeJob({
-    required this.options,
-    this.sourceVideo,
-    this.sourceAudio,
-    this.outputPath,
-    this.command,
-    this.outputBytes,
-  });
-
-  final TranscodeOptions options;
-
-  /// 「HEVC」「3840×2160 · 60p」这类摘要，准备阶段填。
-  String? sourceVideo;
-  String? sourceAudio;
-
-  /// 准备阶段定下。续跑沿用同一个路径，不会越跑越多 `-2`、`-3`。
-  String? outputPath;
-
-  /// 实际执行的命令（给人看的形式），详情面板里可复制。
-  String? command;
-
-  /// 完成后的产物大小。
-  int? outputBytes;
-
-  /// 转码中的倍速，运行时状态，不存。任务行里显示成「转码 · 2.4x」。
-  double? speed;
-
-  /// 「HEVC → MP4」：源视频编码 → 目标。
-  String get direction {
-    final target = options.remux
-        ? options.container.label
-        : options.effectiveVideo == VideoCodec.copy
-        ? options.container.label
-        : '${options.videoCodec.label} · ${options.container.label}';
-    return '${sourceVideo ?? '视频'} → $target';
-  }
-
-  /// 用的是哪个编码器；复制视频时为 null。
-  VideoEncoder? get encoder =>
-      options.effectiveVideo == VideoCodec.copy ? null : options.encoder;
-
-  Map<String, Object?> toJson() => {
-    'options': options.toJson(),
-    'sourceVideo': sourceVideo,
-    'sourceAudio': sourceAudio,
-    'outputPath': outputPath,
-    'command': command,
-    'outputBytes': outputBytes,
-  };
-
-  factory TranscodeJob.fromJson(Map<String, Object?> json) => TranscodeJob(
-    options: TranscodeOptions.fromJson(
-      (json['options'] as Map? ?? const {}).cast<String, Object?>(),
-    ),
-    sourceVideo: json['sourceVideo'] as String?,
-    sourceAudio: json['sourceAudio'] as String?,
-    outputPath: json['outputPath'] as String?,
-    command: json['command'] as String?,
-    outputBytes: json['outputBytes'] as int?,
-  );
-}
 
 // ═══════════════════════════════════════════════════════════════════════
 // 命令

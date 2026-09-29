@@ -4,8 +4,10 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/glass_panel.dart';
+import '../../domain/media_job.dart';
 import '../../domain/task.dart';
 import '../shared/command_block.dart';
+import 'task_detail_chapters.dart';
 import 'task_detail_error.dart';
 import 'task_detail_header.dart';
 import 'task_detail_log.dart';
@@ -30,7 +32,7 @@ class TaskDetailPanel extends StatefulWidget {
   final VoidCallback onResume;
   final VoidCallback onOpenEditor;
 
-  /// 在文件管理器里显示产物。只有转码任务用。
+  /// 在文件管理器里显示产物。只有媒体任务（转码、合并）用。
   final VoidCallback? onReveal;
 
   /// 「自动重试并跳过失败段」。只对识别阶段有意义，为 null 就不显示。
@@ -62,13 +64,18 @@ class _TaskDetailPanelState extends State<TaskDetailPanel> {
               title: '各阶段耗时',
               child: TaskStageTimings(task: task),
             ),
+            if (task.media case final MergeJob job)
+              TaskDetailSection(
+                title: TaskMergeChapters.titleOf(job),
+                child: TaskMergeChapters(job: job),
+              ),
             TaskDetailSection(
               title: '产物',
-              child: task.transcode == null
+              child: task.media == null
                   ? TaskOutputs(task: task)
-                  : TaskTranscodeOutput(task: task, onReveal: widget.onReveal),
+                  : TaskMediaOutput(task: task, onReveal: widget.onReveal),
             ),
-            if (task.transcode?.command case final command?)
+            if (task.media?.command case final command?)
               TaskDetailSection(
                 title: 'FFmpeg 命令',
                 trailing: QuietButton(

@@ -8,6 +8,8 @@ class VideoStreamInfo {
     this.height,
     this.fps,
     this.pixFmt,
+    this.profile,
+    this.rotation = 0,
   });
 
   final String codec;
@@ -15,6 +17,13 @@ class VideoStreamInfo {
   final int? height;
   final double? fps;
   final String? pixFmt;
+
+  /// 「High」「Main 10」。转码不看它；合并时 profile 不同的两段拼起来多半花屏。
+  final String? profile;
+
+  /// 显示时顺时针转多少度（0 / 90 / 180 / 270），来自 Display Matrix。
+  /// 手机横拍竖拍的片段编码尺寸可以一样，区别只在这里。
+  final int rotation;
 
   /// 「3840×2160 · 60p」。
   String get shape => [
@@ -24,10 +33,21 @@ class VideoStreamInfo {
 }
 
 class AudioStreamInfo {
-  const AudioStreamInfo({required this.codec, this.channels});
+  const AudioStreamInfo({
+    required this.codec,
+    this.channels,
+    this.sampleRate,
+    this.profile,
+  });
 
   final String codec;
   final int? channels;
+
+  /// Hz。ffprobe 给的是字符串「48000」。
+  final int? sampleRate;
+
+  /// 「LC」「HE-AAC」。
+  final String? profile;
 }
 
 /// ffprobe 读出的流信息。附图（封面）不算视频流。
@@ -68,11 +88,18 @@ class MediaProbe {
               height: s['height'] as int?,
               fps: _rate(s['avg_frame_rate']) ?? _rate(s['r_frame_rate']),
               pixFmt: s['pix_fmt'] as String?,
+              profile: s['profile'] as String?,
+              rotation: _rotation(s['side_data_list']),
             ),
           );
         case 'audio':
           audio.add(
-            AudioStreamInfo(codec: codec, channels: s['channels'] as int?),
+            AudioStreamInfo(
+              codec: codec,
+              channels: s['channels'] as int?,
+              sampleRate: int.tryParse('${s['sample_rate'] ?? ''}'),
+              profile: s['profile'] as String?,
+            ),
           );
         case 'subtitle':
           subs++;
@@ -89,6 +116,17 @@ class MediaProbe {
       audio: audio,
       subtitleCount: subs,
     );
+  }
+
+  /// side_data_list 里 Display Matrix 的 rotation，归一到 0..359。
+  static int _rotation(Object? sideData) {
+    if (sideData is! List) return 0;
+    for (final d in sideData) {
+      if (d is Map && d['rotation'] is num) {
+        return ((d['rotation'] as num).round() % 360 + 360) % 360;
+      }
+    }
+    return 0;
   }
 
   /// 「30000/1001」→ 29.97；「0/0」→ null。
