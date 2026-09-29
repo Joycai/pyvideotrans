@@ -3,7 +3,7 @@ description: "Joycai Subtitle Studio：语音转写、字幕翻译与视频转�
 publish_to: 'none'
 
 # 改版本号用 bump-versions skill，打包脚本里还有几处硬编码的副本。
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.13.2
