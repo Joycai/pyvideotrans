@@ -766,6 +766,17 @@ void main() {
       ));
     });
 
+    // 双语标题段只认紧挨在语言段前面的那一段，片名里的词不算。
+    test('手动挂的字幕片名里有 Bilingual 不当双语', () {
+      final o = withSubs(['/subs/Bilingual.Education.S01.zh.srt', '/v/p1.zh.srt']);
+      expect(of(o), (sidecar: '/v/out.zh.srt', lang: 'chi'));
+    });
+
+    test('双语而语言不明的旁挂也认得出是双语', () {
+      final o = withSubs(['/v/p0.Bilingual.srt', '/subs/x.Bilingual.srt']);
+      expect(of(o), (sidecar: '/v/out.Bilingual.srt', lang: null));
+    });
+
     test('内嵌轨语言写给第 0 条字幕流；没有字幕输入就不写', () {
       final args = MuxPlan.merge(
         concatList: 'l',

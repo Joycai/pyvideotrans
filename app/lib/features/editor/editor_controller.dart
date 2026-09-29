@@ -1217,6 +1217,18 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
       if (content.trim().isEmpty) continue;
       contents[pathOf(field)] = content;
     }
+    // 导出到产物所在的目录（选目录时默认打开的就是它）：那里已有的同名文件
+    // 不是这个会话的字幕，就是用户自己的 —— 保存时为它带序号避让开的
+    // `demo.zh.srt`、自动检测原文导出成的 `Film.srt` 撞上的源字幕，一律不盖。
+    // 别的目录照旧覆盖：另存一份时盖掉上次导出的是预期行为。
+    String folder(String p) => sameSeparators(p).replaceAll(RegExp(r'/+$'), '');
+    if (folder(dir) == folder(session.exportDir)) {
+      for (final path in contents.keys) {
+        if (await fileExists(path)) {
+          throw TargetRejected('${baseName(path)} 已存在，请换一个目录');
+        }
+      }
+    }
     // 几份一起写，失败时不留半套。
     await writeFilesAtomically(contents);
     return contents.keys.toList();

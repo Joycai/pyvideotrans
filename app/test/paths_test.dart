@@ -128,6 +128,20 @@ void main() {
       );
     });
 
+    // 留着 Bilingual 的话，单语译文写成 `Film.Bilingual.zh.srt`，被当成双语。
+    test('源字幕是双语产物时标题段一并去掉', () {
+      expect(
+        OutputNaming.stemFor(
+          TaskKind.translate,
+          'Film.Bilingual.en.srt',
+          translate,
+        ),
+        'Film',
+      );
+      expect(OutputNaming.subtitleStem('/v/ep1.Bilingual.zh.srt'), 'ep1');
+      expect(OutputNaming.subtitleStem('/v/Bilingual.srt'), 'Bilingual');
+    });
+
     test('认得出视频旁的字幕：同名、带语言段、双语带标题段', () {
       expect(OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep1.srt'), isEmpty);
       expect(OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep1.en-US.srt'), [
@@ -141,6 +155,10 @@ void main() {
         OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep1.bilingual.zh.srt'),
         ['bilingual', 'zh'],
       );
+      // 合并时各段语言不一致写出的双语字幕，没有语言段。
+      expect(OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep1.Bilingual.srt'), [
+        'Bilingual',
+      ]);
       // 上次合并旁挂的产物不是这一段的字幕。
       expect(OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep1.merged.srt'), isNull);
       expect(OutputNaming.sidecarTags('/v/ep1.mp4', '/v/ep10.srt'), isNull);

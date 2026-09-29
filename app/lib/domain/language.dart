@@ -20,6 +20,9 @@ class Language {
 
   bool get isAuto => code == Languages.autoCode;
 
+  /// 主语言子标签：`zh-tw` → `zh`。文件名里的语言段、视频轨道语言都按它比 / 查。
+  String get primaryCode => code.split('-').first;
+
   @override
   String toString() => '$name($code)';
 }
@@ -172,10 +175,8 @@ abstract final class Languages {
   };
 
   /// 写进视频文件轨道元数据的语言码。
-  static String iso6392Of(Language language) {
-    final base = language.code.split('-').first;
-    return _iso6392[base] ?? base;
-  }
+  static String iso6392Of(Language language) =>
+      _iso6392[language.primaryCode] ?? language.primaryCode;
 
   /// 文件名里常见、但不是标准代码的语言段。
   static const _fileTagAliases = {

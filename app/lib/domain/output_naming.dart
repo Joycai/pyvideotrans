@@ -117,9 +117,8 @@ abstract final class OutputNaming {
     final source = options.sourceLanguage;
     final tagged = Languages.fromTag(stem.substring(stem.lastIndexOf('.') + 1));
     // 按主语言比：源语言选了 `pt-br`、文件名写的是 `.pt` 也算对得上。
-    String primary(Language l) => l.code.split('-').first;
     if (!source.isAuto &&
-        (tagged == null || primary(tagged) != primary(source))) {
+        (tagged == null || tagged.primaryCode != source.primaryCode)) {
       return stem;
     }
     final stripped = subtitleStem(fileName);
@@ -133,18 +132,30 @@ abstract final class OutputNaming {
   /// 字幕文件名去掉扩展名与末尾的语言段：`interview_ep12.zh.srt` →
   /// `interview_ep12`。语言段只认语言表里的代码与常见别名 —— 按「两三个字母」
   /// 的形状判断的话，`The.Big.Cat.srt` 会被削成 `The.Big`。
+  ///
+  /// 双语标题段也去掉：`ep1.Bilingual.en.srt` 译成单语时留着它，写出的
+  /// `ep1.Bilingual.zh.srt` 会被播放器和合并页当成双语。
   static String subtitleStem(String fileName) {
-    final stem = stemOf(baseName(fileName));
-    final dot = stem.lastIndexOf('.');
-    if (dot > 0 && Languages.fromTag(stem.substring(dot + 1)) != null) {
-      return stem.substring(0, dot);
+    var stem = stemOf(baseName(fileName));
+    if (_lastSegment(stem) case final tag? when Languages.fromTag(tag) != null) {
+      stem = stemOf(stem);
+    }
+    if (_lastSegment(stem) case final title? when isBilingualTitle(title)) {
+      stem = stemOf(stem);
     }
     return stem;
   }
 
+  /// 主干的最后一段；只有一段（或 `.` 打头）时为 null，整个主干不能削掉。
+  static String? _lastSegment(String stem) {
+    final dot = stem.lastIndexOf('.');
+    return dot > 0 ? stem.substring(dot + 1) : null;
+  }
+
   /// 字幕 [subtitle] 相对视频 [video] 多出来的那几段：`ep1.mp4` 配
   /// `ep1.zh.srt` 是 `[zh]`，配 `ep1.Bilingual.zh.srt` 是 `[Bilingual, zh]`，
-  /// 同名的 `ep1.srt` 是空列表；不是它的字幕返回 null。
+  /// 同名的 `ep1.srt` 是空列表；不是它的字幕返回 null。双语而语言不明的
+  /// `ep1.Bilingual.srt`（合并时各段语言不一致就这样写）是 `[Bilingual]`。
   ///
   /// 多出来的段限定成语言代码的样子（双语产物前面可以多一个标题段）：上次
   /// 合并旁挂的 `a.merged.srt` 不是 `a.mp4` 的字幕，配上去会把整份时间轴压到
@@ -157,7 +168,7 @@ abstract final class OutputNaming {
     if (!sub.startsWith('$stem.')) return null;
     final tags = sub.substring(stem.length + 1).split('.');
     final ok = switch (tags) {
-      [final lang] => _languageShape.hasMatch(lang),
+      [final tag] => _languageShape.hasMatch(tag) || isBilingualTitle(tag),
       [final title, final lang] =>
         isBilingualTitle(title) && _languageShape.hasMatch(lang),
       _ => false,

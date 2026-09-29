@@ -93,8 +93,9 @@ abstract final class SubtitleOutputWriter {
     } catch (_) {
       // 改名阶段失败时，已经换成新内容的产物留着新内容；不重新记时间戳的话，
       // 下次保存会把应用自己刚写的当成「在别处被改过」。
-      // 首次写出的那一路也要记：计划时它没人占着，现在有文件就是这次换进去的；
-      // 不记的话重试会把它当成别人的，另起一个带序号的名字。
+      // 这次新建的文件会被 writeFilesAtomically 删掉；删不掉留下来的也是这次
+      // 写的内容（计划时那里没人占着），一并记上 —— 不记的话重试会把它当成
+      // 别人的，另起一个带序号的名字。
       if (dir == null) {
         for (final path in contents.keys) {
           if (task.outputs.containsKey(path) || await fileExists(path)) {

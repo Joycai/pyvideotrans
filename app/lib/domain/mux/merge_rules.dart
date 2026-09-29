@@ -325,19 +325,21 @@ MergedSubtitleLabel mergedSubtitleLabel(MergeOptions options) {
 }
 
 MergedSubtitleLabel _labelOf(String video, String subtitle) {
-  final tags = OutputNaming.sidecarTags(video, subtitle);
-  if (tags == null) {
-    // 手动挂的、不与视频同名的字幕：只看扩展名前那一段，与播放器取语言的
-    // 位置一致。往前找的话 `The.It.Crowd.S01.srt` 会被认成意大利语。
-    final parts = stemOf(baseName(subtitle)).split('.');
+  if (OutputNaming.sidecarTags(video, subtitle) case final tags?) {
     return (
-      language: parts.length > 1 ? Languages.fromTag(parts.last) : null,
-      bilingual: parts.any(OutputNaming.isBilingualTitle),
+      language: tags.isEmpty ? null : Languages.fromTag(tags.last),
+      bilingual: tags.any(OutputNaming.isBilingualTitle),
     );
   }
+  // 手动挂的、不与视频同名的字幕：只看末尾，与播放器取语言的位置一致。往前找
+  // 的话 `The.It.Crowd.S01.srt` 会被认成意大利语，`Bilingual.Education.zh.srt`
+  // 会被当成双语。双语标题段紧挨在语言段前面，认不出语言时就是最后一段。
+  final parts = stemOf(baseName(subtitle)).split('.').skip(1).toList();
+  final language = parts.isEmpty ? null : Languages.fromTag(parts.last);
+  final titles = language == null ? parts : parts.sublist(0, parts.length - 1);
   return (
-    language: tags.isEmpty ? null : Languages.fromTag(tags.last),
-    bilingual: tags.length == 2,
+    language: language,
+    bilingual: titles.isNotEmpty && OutputNaming.isBilingualTitle(titles.last),
   );
 }
 

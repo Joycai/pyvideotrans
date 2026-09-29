@@ -530,11 +530,11 @@ class MergeFormController extends ChangeNotifier {
     }
   }
 
-  /// 视频旁的同名字幕：完全同名优先，其次带语言后缀的按文件名排第一个。
+  /// 视频旁的同名字幕：完全同名优先，其次带语言后缀的单语，最后双语；
+  /// 同一档里按文件名排第一个。
   Future<void> _findSibling(String id) async {
     final seg = _byId(id);
     if (seg == null || seg.subtitlePath != null) return;
-    final stem = stemOf(seg.fileName);
     final List<String> listing;
     try {
       listing = await _listDir(seg.directory);
@@ -542,27 +542,31 @@ class MergeFormController extends ChangeNotifier {
       // 找不到同名字幕不算错，用户可以自己挂。
       return;
     }
-    final candidates = [
-      for (final p in listing)
-        if (mergeSubtitleExtensions.contains(extensionOf(p)) &&
-            _matches(p, seg.videoPath))
-          p,
-    ];
     // 单语的排在双语前面：双语那份文件名以大写的 Bilingual 开头，单按文件名
     // 排会抢到前面，合并出来就成了两行字幕。
-    int rank(String p) =>
-        OutputNaming.sidecarTags(seg.videoPath, p)?.length ?? 0;
-    candidates.sort(
-      (a, b) => rank(a) != rank(b)
-          ? rank(a) - rank(b)
-          : baseName(a).compareTo(baseName(b)),
-    );
-    if (candidates.isEmpty) return;
-    final exact = candidates.where((p) => stemOf(baseName(p)) == stem);
+    final candidates = [
+      for (final p in listing)
+        if (mergeSubtitleExtensions.contains(extensionOf(p)))
+          if (OutputNaming.sidecarTags(seg.videoPath, p) case final tags?)
+            (
+              path: p,
+              rank: tags.isEmpty
+                  ? 0
+                  : tags.any(OutputNaming.isBilingualTitle)
+                  ? 2
+                  : 1,
+            ),
+    ]..sort(
+        (a, b) => a.rank != b.rank
+            ? a.rank - b.rank
+            : baseName(a.path).compareTo(baseName(b.path)),
+      );
+    final best = candidates.firstOrNull?.path;
+    if (best == null) return;
     final i = _indexOf(id);
     // 期间用户自己挂了字幕或移除了这段，就不动。
     if (i < 0 || _segments[i].subtitlePath != null) return;
-    _attach(i, exact.firstOrNull ?? candidates.first, auto: true);
+    _attach(i, best, auto: true);
   }
 
   void _attach(int i, String path, {required bool auto}) {
