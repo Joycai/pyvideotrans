@@ -134,6 +134,20 @@ class _SpeakerMenuState extends State<_SpeakerMenu> {
   bool _adding = false;
   final _name = TextEditingController();
 
+  /// 打着对勾的那一行。人多时列表会滚，打开时把它滚进视野。
+  final _checkedRow = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final row = _checkedRow.currentContext;
+      if (mounted && row != null) {
+        Scrollable.ensureVisible(row, alignment: 0.5);
+      }
+    });
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -195,29 +209,34 @@ class _SpeakerMenuState extends State<_SpeakerMenu> {
           ),
         ),
         const MenuDivider(),
-        for (final s in controller.speakers)
-          MenuRow(
-            leading: SpeakerBadge(id: s.id, name: s.name, named: s.named),
-            label: s.name,
-            labelColor: s.named ? null : cs.onSurfaceVariant,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Timecode(
-                  '${s.cueCount}',
-                  fontSize: 12,
-                  color: cs.onSurfaceVariant,
+        MenuScrollSection(
+          children: [
+            for (final s in controller.speakers)
+              MenuRow(
+                key: s.id == checked ? _checkedRow : null,
+                leading: SpeakerBadge(id: s.id, name: s.name, named: s.named),
+                label: s.name,
+                labelColor: s.named ? null : cs.onSurfaceVariant,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Timecode(
+                      '${s.cueCount}',
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    SizedBox(
+                      width: 26,
+                      child: s.id == checked
+                          ? Icon(Symbols.check, size: 18, weight: 400, color: cs.primary)
+                          : null,
+                    ),
+                  ],
                 ),
-                SizedBox(
-                  width: 26,
-                  child: s.id == checked
-                      ? Icon(Symbols.check, size: 18, weight: 400, color: cs.primary)
-                      : null,
-                ),
-              ],
-            ),
-            onTap: () => _assign(s.id),
-          ),
+                onTap: () => _assign(s.id),
+              ),
+          ],
+        ),
         const MenuDivider(),
         if (_adding)
           Padding(
