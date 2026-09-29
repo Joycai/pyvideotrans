@@ -46,11 +46,41 @@ abstract final class OutputNaming {
       };
 
   /// `interview_ep12` + 译文 → `interview_ep12.en.srt`。
-  static String fileName(String stem, SrtField field, TaskOptions options) => [
+  ///
+  /// [copy] 是避让已有文件时的序号，单独成段放在主干后面（`ep12.2.en.srt`）：
+  /// 拼进主干（`ep12-2`）的话，播放器按主干就配不上视频了；单独一段只会被
+  /// 当成标题。
+  static String fileName(
+    String stem,
+    SrtField field,
+    TaskOptions options, {
+    int? copy,
+  }) => [
     stem,
+    ?copy?.toString(),
     ...tags(field, options.sourceLanguage, options.targetLanguage),
     options.format.extension,
   ].join('.');
+
+  /// 改成 Jellyfin 约定之前的产物名：主干照搬源文件，语言段是 `src`、`zh-en`
+  /// 这类写法。只用来认出老任务已经写出的文件，接着写回原处 —— 不然升级后
+  /// 一保存就换了名字，旧文件留在磁盘上，播放器里同一条字幕出现两遍。
+  static String legacyFileName(
+    String fileName,
+    SrtField field,
+    TaskOptions options,
+  ) {
+    String tag(Language l) => l.isAuto ? 'src' : languageTag(l);
+    final source = tag(options.sourceLanguage);
+    final target = tag(options.targetLanguage);
+    final lang = switch (field) {
+      SrtField.source => source,
+      SrtField.translation => target,
+      SrtField.bilingualTargetAbove ||
+      SrtField.bilingualTargetBelow => '$source-$target',
+    };
+    return '${stemOf(fileName)}.$lang.${options.format.extension}';
+  }
 
   /// 产物名的主干。
   ///
@@ -61,6 +91,11 @@ abstract final class OutputNaming {
   static String stemFor(TaskKind kind, String fileName, TaskOptions options) {
     final stem = stemOf(fileName);
     if (kind != TaskKind.translate) return stem;
+    // 只去掉与源语言对得上的那一段：`The.Big.It.srt` 的 `It` 形同意大利语，
+    // 照单全收会削成 `The.Big`，反倒与视频 `The.Big.It.mkv` 不同主干了。
+    final source = options.sourceLanguage;
+    final tagged = Languages.fromTag(stem.substring(stem.lastIndexOf('.') + 1));
+    if (!source.isAuto && tagged?.code != source.code) return stem;
     final stripped = subtitleStem(fileName);
     final own = fileName.toLowerCase();
     final clash = fields(

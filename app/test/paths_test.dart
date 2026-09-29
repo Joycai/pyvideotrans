@@ -87,7 +87,7 @@ void main() {
         'Film',
       );
       expect(
-        OutputNaming.stemFor(TaskKind.translate, 'Film.chs.srt', translate),
+        OutputNaming.stemFor(TaskKind.translate, 'Film.eng.srt', translate),
         'Film',
       );
       // 只认语言表里的码：按形状判断会把 `Cat` 削掉。
@@ -99,6 +99,18 @@ void main() {
       expect(
         OutputNaming.stemFor(TaskKind.transcribe, 'Film.en.mp4', translate),
         'Film.en',
+      );
+    });
+
+    test('只去掉与源语言对得上的那一段', () {
+      // `It` 形同意大利语，但源语言是英语：这是片名的一部分。
+      expect(
+        OutputNaming.stemFor(TaskKind.translate, 'The.Big.It.srt', translate),
+        'The.Big.It',
+      );
+      expect(
+        OutputNaming.stemFor(TaskKind.translate, 'Film.fr.srt', translate),
+        'Film.fr',
       );
     });
 

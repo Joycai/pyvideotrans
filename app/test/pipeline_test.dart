@@ -8,9 +8,11 @@ import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
+import 'package:subtitle_studio/pipeline/subtitle_output_writer.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
+import 'package:subtitle_studio/services/file_io.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
@@ -664,6 +666,36 @@ void main() {
       );
       expect(names(written), ['demo.en.txt']);
       expect(File(written.single).readAsStringSync().trim(), 'Line one');
+    });
+
+    // 按 Jellyfin 约定改名后 `demo.en.srt` 这类名字很容易与用户已有的字幕同名。
+    test('首次写出时同名文件是别人的：带序号避让，之后保存沿用这个名字', () async {
+      final theirs = File('${work.path}/demo.en.srt')
+        ..writeAsStringSync('official');
+      final task = done(kind: TaskKind.translate);
+      final first = await runner().writeOutputs(task);
+      expect(names(first), ['demo.2.en.srt']);
+      expect(theirs.readAsStringSync(), 'official');
+
+      expect(SubtitleOutputWriter.targets(task), first);
+      final again = await SubtitleOutputWriter.write(task);
+      expect(again, first);
+      expect(theirs.readAsStringSync(), 'official');
+    });
+
+    test('改名之前写出的产物接着写回原处，不换名字', () async {
+      final task = done(
+        kind: TaskKind.translate,
+        bilingual: BilingualLayout.targetAbove,
+      );
+      final legacy = '${work.path}/demo.zh-en.srt';
+      File(legacy).writeAsStringSync('old');
+      task.outputs = {legacy: await stampOf(legacy)};
+      expect(SubtitleOutputWriter.targets(task), [legacy]);
+      final written = await SubtitleOutputWriter.write(task);
+      expect(written, [legacy]);
+      expect(File(legacy).readAsStringSync(), contains('Line one'));
+      expect(File('${work.path}/demo.Bilingual.en.srt').existsSync(), isFalse);
     });
   });
 }

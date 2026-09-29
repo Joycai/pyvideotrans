@@ -328,7 +328,12 @@ MergedSubtitleLabel _labelOf(String video, String subtitle) {
   final tags = OutputNaming.sidecarTags(video, subtitle);
   if (tags == null) {
     // 手动挂的、不与视频同名的字幕：名字里认得出语言也算。
-    return (language: Languages.fromFileName(subtitle), bilingual: false);
+    return (
+      language: Languages.fromFileName(subtitle),
+      bilingual: baseName(
+        subtitle,
+      ).split('.').contains(OutputNaming.bilingualTitle),
+    );
   }
   return (
     language: tags.isEmpty ? null : Languages.fromTag(tags.last),

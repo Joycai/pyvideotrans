@@ -194,7 +194,8 @@ void main() {
     // 占位词（以前的 `src`）会被 Jellyfin 当成字幕标题，不如不写。
     test('自动检测的源语言不写语言段', () async {
       final out = await write(testOptions(source: 'auto'));
-      expect(out.first.split('/').last, 'in.srt');
+      // 这里的源文件恰好就是 `in.srt`：不写语言段就与它同名，带序号避让。
+      expect(out.first.split('/').last, 'in.2.srt');
     });
 
     test('导出时按单行上限折行，文档本身不动', () async {
