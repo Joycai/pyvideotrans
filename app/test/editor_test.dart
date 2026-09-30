@@ -716,6 +716,18 @@ void main() {
       expect(provider.glossary, [frozen]);
     });
 
+    // 翻译任务的模型是用户在翻译页上选的，同样是冻结的那一份。
+    test('翻译任务的会话：用任务里冻结的', () {
+      final task = SubtitleTask(
+        id: 't',
+        sourcePath: '/v/demo.srt',
+        kind: TaskKind.translate,
+        status: TaskStatus.done,
+        options: testOptions(mt: 'deepseek', translationModel: 'then'),
+      );
+      expect(providerOf(TaskSession(task)).endpoint.model, 'then');
+    });
+
     // 只转写的任务，翻译模型是入队时顺手从设置里抄的，用户没选过它。
     // 那时还没配模型的话抄下来的是空的：之后配好了，在编辑器里补翻得用得上。
     test('只转写的任务会话：翻译模型现取设置里的，词表仍用任务里冻结的', () {

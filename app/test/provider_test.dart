@@ -954,6 +954,37 @@ void main() {
       expect(_endpointOf(reloaded, openai).apiKey, 'new');
     });
 
+    test('改地址或密钥不丢模型列表，调过的参数也在', () async {
+      final settings = await _settings();
+      final deepseek = ProviderCatalog.translationInfo('deepseek')!;
+      const models = [
+        ChatModelSpec(name: 'deepseek-chat'),
+        ChatModelSpec(
+          name: 'deepseek-reasoner',
+          options: ModelOptions({'temperature': null}),
+        ),
+      ];
+      settings.setModels(deepseek.id, models);
+
+      // 设置页改密钥、改地址走的就是这条：整份配置存回去。
+      settings
+        ..setConfig(
+          deepseek.id,
+          settings.configFor(deepseek.id).copyWith(apiKey: 'sk-new'),
+        )
+        ..setConfig(
+          deepseek.id,
+          settings.configFor(deepseek.id).copyWith(baseUrl: 'https://x/v1'),
+        );
+
+      for (final s in [settings, await AppSettings.load()]) {
+        expect(s.ownModels(deepseek), models);
+        final endpoint = s.endpointFor(deepseek, s.defaultChatModel(deepseek));
+        expect(endpoint.apiKey, 'sk-new');
+        expect(endpoint.baseUrl, 'https://x/v1');
+      }
+    });
+
     test('存模型列表：第一个是默认，参数一起落盘，旧的那串模型名不再用', () async {
       SharedPreferences.setMockInitialValues({
         'providerConfigs': jsonEncode({
