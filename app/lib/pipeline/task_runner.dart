@@ -84,15 +84,16 @@ class TaskRunner {
   late final MergeTaskPipeline _mergePipeline =
       MergeTaskPipeline(transcoder: transcoder, stages: _stages);
 
-  /// 任务参数里的模型与提示词覆盖设置里的值 —— 参数在入队时就定死了。
+  /// 提示词取任务参数里的，不读设置 —— 参数在入队时就定死了。
   /// 默认实现把本实例的 [media] 交给需要切分音频的服务，共用同一份 ffmpeg 定位。
   AsrFactory get _asrFactory =>
       _asrOverride ??
       (id, settings, options) => Registry.buildAsr(
         id,
         settings,
-        // 过渡：任务里眼下只有模型名，经设置补成声明（分片 5 起任务里
-        // 就是整份声明，不再回头读设置）。
+        // 过渡：任务里眼下只有模型名，运行时经设置补成声明；没有模型名的
+        // 任务用的是运行时设置里的默认模型，和重构前一样还没有真正冻结。
+        // 分片 5 起任务里就是整份声明，不再回头读设置。
         model: settings.asrModelNamed(id, options.asrModel),
         prompt: options.asrPrompt,
         media: media,

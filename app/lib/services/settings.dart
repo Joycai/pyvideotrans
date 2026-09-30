@@ -78,10 +78,10 @@ class ProviderConfig {
       baseUrl: json['baseUrl'] as String?,
       apiKey: json['apiKey'] as String?,
       // 读不出来的那一条丢掉，其余照常。
-      models: [
+      models: List.unmodifiable([
         if (models is List)
           for (final model in models) ?ModelSpec.fromJson(model),
-      ],
+      ]),
       legacyModelText: json['model'] as String?,
     );
   }

@@ -964,6 +964,24 @@ void main() {
       expect(provider.options, options);
       expect(provider.prompt, '百炼\n任务的提示');
 
+      // 报文族照声明传，不是写死的：另两族各建一次。
+      for (final dialect in [
+        DashScopeDialect.qwenAudio3,
+        DashScopeDialect.funAsr,
+      ]) {
+        final other = Registry.buildAsr(
+          info.id,
+          settings,
+          model: AsrModelSpec(
+            name: 'my-model',
+            transport: AsrTransport.dashscopeSync,
+            dialect: dialect,
+          ),
+        );
+        expect((other as DashScopeAsrProvider).dialect, dialect);
+        expect(other.options, ModelOptions.none);
+      }
+
       // 什么都没配时的默认模型就是同步逐段的 qwen3-asr-flash。
       final byDefault = Registry.buildAsr(
         info.id,

@@ -626,18 +626,17 @@ void main() {
       final settings = await AppSettings.load()
         ..setConfig('dashscope_qwen_asr', const ProviderConfig(apiKey: 'sk'));
 
-      AsrProvider build(String name, AsrTransport transport) =>
-          Registry.buildAsr(
-            'dashscope_qwen_asr',
-            settings,
-            model: AsrModelSpec(
-              name: name,
-              transport: transport,
-              dialect: DashScopeDialect.qwenAudio3,
-            ),
-            diarize: true,
-            media: _FakeFfmpeg(),
-          );
+      AsrProvider build(
+        String name,
+        AsrTransport transport, [
+        DashScopeDialect dialect = DashScopeDialect.qwenAudio3,
+      ]) => Registry.buildAsr(
+        'dashscope_qwen_asr',
+        settings,
+        model: AsrModelSpec(name: name, transport: transport, dialect: dialect),
+        diarize: true,
+        media: _FakeFfmpeg(),
+      );
 
       // 自填的名字没有 -filetrans 后缀，声明是异步整文件：走录音文件转写。
       final async = build('my-model', AsrTransport.dashscopeFileTrans);
@@ -646,6 +645,12 @@ void main() {
       expect(async.endpoint.model, 'my-model');
       expect(async.dialect, DashScopeDialect.qwenAudio3);
       expect(async.diarize, isTrue);
+
+      // 报文族照声明传，不是写死的。
+      for (final dialect in DashScopeDialect.values) {
+        final p = build('my-model', AsrTransport.dashscopeFileTrans, dialect);
+        expect((p as DashScopeFileTransProvider).dialect, dialect);
+      }
 
       // 名字带着后缀，声明是同步逐段：照声明走同步接口。
       expect(
