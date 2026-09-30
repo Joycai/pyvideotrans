@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import '../domain/enum_by_name.dart';
 import '../domain/glossary.dart';
@@ -390,6 +391,21 @@ class AppSettings extends ChangeNotifier {
         i == at ? cleaned : existing,
       if (at < 0) cleaned,
     ]);
+  }
+
+  /// 新建一份空词表并存下，返回建好的那份。
+  ///
+  /// 名字取「词表 N」里第一个没被占用的；新词表默认启用 —— 建它多半
+  /// 就是为了马上用。
+  Glossary addGlossary() {
+    final taken = {for (final glossary in _glossaries) glossary.name};
+    var n = _glossaries.length + 1;
+    while (taken.contains('词表 $n')) {
+      n++;
+    }
+    final glossary = Glossary(id: const Uuid().v4(), name: '词表 $n');
+    setGlossary(glossary);
+    return glossary;
   }
 
   void removeGlossary(String id) {

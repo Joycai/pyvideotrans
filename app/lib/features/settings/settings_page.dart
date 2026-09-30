@@ -13,6 +13,7 @@ import '../shared/page_chrome.dart';
 import 'appearance_section.dart';
 import 'defaults_section.dart';
 import 'environment_section.dart';
+import 'glossary_section.dart';
 import 'language_section.dart';
 import 'local_backend_section.dart';
 import 'output_section.dart';
@@ -33,7 +34,7 @@ PageChrome settingsChrome({required VoidCallback onReset}) => PageChrome(
 
 /// 设置页（设计稿 M-SettingsPage）。
 ///
-/// 内容面板左侧是 208px 的分区目录，右侧内容列限宽 880 靠左，八个分区
+/// 内容面板左侧是 208px 的分区目录，右侧内容列限宽 880 靠左，各分区
 /// 竖排、间距 32。没有「保存 / 取消」：改动即写入，只在改动的分区标题
 /// 右侧闪一下「已保存」。
 ///
@@ -237,6 +238,9 @@ class SettingsPageState extends State<SettingsPage> {
     SettingsSectionKey.appearance => SettingsGroup.appearance,
     SettingsSectionKey.asr => SettingsGroup.asr,
     SettingsSectionKey.mt => SettingsGroup.translation,
+    // 词表是用户数据，不是设置：不参与恢复默认，于是对话框里也没有
+    // 「仅「词表」」这个选项。
+    SettingsSectionKey.glossary => null,
     SettingsSectionKey.lang => SettingsGroup.language,
     SettingsSectionKey.defaults => SettingsGroup.defaults,
     SettingsSectionKey.output => SettingsGroup.output,
@@ -364,6 +368,16 @@ class SettingsPageState extends State<SettingsPage> {
             setState(() => _mtKeyVisible = !_mtKeyVisible),
         onChanged: ({bool typed = false}) =>
             _touch(SettingsSectionKey.mt, typed: typed),
+      ),
+    ),
+    _anchor(
+      SettingsSectionKey.glossary,
+      GlossarySection(
+        settings: s,
+        stacked: stacked,
+        saved: _saved == SettingsSectionKey.glossary,
+        onChanged: ({bool typed = false}) =>
+            _touch(SettingsSectionKey.glossary, typed: typed),
       ),
     ),
     _anchor(SettingsSectionKey.lang, LanguageSection(

@@ -4,11 +4,12 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 
-/// 设置页的七个分区。目录、锚点、「恢复默认」都按它索引。
+/// 设置页的分区。目录、锚点、「恢复默认」都按它索引，先后就是页面上的顺序。
 enum SettingsSectionKey {
   appearance('外观', '外观', Symbols.palette),
   asr('识别服务', '识别服务', Symbols.graphic_eq),
   mt('翻译服务', '翻译服务', Symbols.translate),
+  glossary('词表', '词表', Symbols.dictionary),
   lang('语言', '语言', Symbols.language),
   defaults('任务默认值', '任务默认值', Symbols.tune),
   output('输出', '输出', Symbols.folder),

@@ -335,6 +335,32 @@ void main() {
       expect(settings.glossaryEntries(const []), isEmpty);
     });
 
+    test('新建：名字取第一个没被占用的「词表 N」，默认启用，id 各不相同', () async {
+      final settings = await load();
+      var notified = 0;
+      settings.addListener(() => notified++);
+
+      final first = settings.addGlossary();
+      expect(first.name, '词表 1');
+      expect(first.enabledByDefault, isTrue);
+      expect(first.entries, isEmpty);
+      expect(notified, 1);
+
+      // 「词表 2」被改名占了：跳过它。
+      settings.setGlossary(first.copyWith(name: '词表 2'));
+      final second = settings.addGlossary();
+      expect(second.name, '词表 3');
+      expect(second.id, isNot(first.id));
+      expect(
+        [for (final g in settings.glossaries) g.id],
+        [first.id, second.id],
+      );
+
+      // 存下来了。
+      final reloaded = await AppSettings.load();
+      expect([for (final g in reloaded.glossaries) g.name], ['词表 2', '词表 3']);
+    });
+
     test('恢复默认不动词表：单个分区与全部恢复都一样', () async {
       final settings = await load();
       settings

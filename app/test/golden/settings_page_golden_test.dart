@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
+import 'package:subtitle_studio/domain/glossary.dart';
 import 'package:subtitle_studio/domain/providers/model_params.dart';
 import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
@@ -48,6 +49,35 @@ ThemeData _readable(ThemeData theme) => theme.copyWith(
   primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'Noto Sans SC'),
 );
 
+/// 设计稿「词表」画板里的三份：一份术语、一份人名、一份还空着且没启用。
+const _glossaries = [
+  Glossary(
+    id: 'terms',
+    name: '术语 · 产品',
+    entries: [
+      GlossaryEntry(term: 'Kubernetes', translation: 'Kubernetes'),
+      GlossaryEntry(term: '缓存穿透', translation: 'cache penetration'),
+      GlossaryEntry(term: '布隆过滤器', translation: 'Bloom filter'),
+      GlossaryEntry(term: 'SenseVoice'),
+      GlossaryEntry(term: '字幕组', translation: 'fansub group'),
+      GlossaryEntry(term: '向量数据库', translation: 'vector database'),
+      GlossaryEntry(term: 'whisper-large-v3'),
+    ],
+  ),
+  Glossary(
+    id: 'people',
+    name: '人名',
+    entries: [
+      GlossaryEntry(term: '陈嘉行', translation: 'Chen Jiaxing'),
+      GlossaryEntry(term: 'Aaron Patterson'),
+      GlossaryEntry(term: '李雪琴', translation: 'Li Xueqin'),
+      GlossaryEntry(term: 'Mia'),
+      GlossaryEntry(term: '周鸣', translation: 'Zhou Ming'),
+    ],
+  ),
+  Glossary(id: 'season3', name: '第 3 季新词', enabledByDefault: false),
+];
+
 void main() {
   setUpAll(_loadCjkFont);
 
@@ -62,9 +92,12 @@ void main() {
     double width = 1440,
     SettingsSectionKey? saved,
     bool expand = false,
+    SettingsSectionKey? jump,
+    bool glossaries = false,
   }) async {
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
+    if (glossaries) _glossaries.forEach(settings.setGlossary);
     if (variant == 'B') {
       settings
         ..asrProviderId = 'groq'
@@ -146,8 +179,9 @@ void main() {
     await tester.pump();
 
     final state = tester.state<SettingsPageState>(find.byType(SettingsPage));
-    if (variant == 'B') {
-      state.jumpTo(SettingsSectionKey.asr);
+    final target = jump ?? (variant == 'B' ? SettingsSectionKey.asr : null);
+    if (target != null) {
+      state.jumpTo(target);
       await tester.pump(const Duration(milliseconds: 400));
     }
     if (expand) {
@@ -202,6 +236,39 @@ void main() {
       brightness: Brightness.light,
       variant: 'A',
       width: 960,
+    );
+  });
+
+  testWidgets('设置页 · 词表 · 浅色', (tester) async {
+    await shoot(
+      tester,
+      file: 'settings_glossary_light',
+      brightness: Brightness.light,
+      variant: 'A',
+      jump: SettingsSectionKey.glossary,
+      glossaries: true,
+    );
+  });
+
+  testWidgets('设置页 · 词表 · 深色 · 还没有词表', (tester) async {
+    await shoot(
+      tester,
+      file: 'settings_glossary_empty_dark',
+      brightness: Brightness.dark,
+      variant: 'A',
+      jump: SettingsSectionKey.glossary,
+    );
+  });
+
+  testWidgets('设置页 · 词表 · 960 窄窗', (tester) async {
+    await shoot(
+      tester,
+      file: 'settings_glossary_narrow_light',
+      brightness: Brightness.light,
+      variant: 'A',
+      width: 960,
+      jump: SettingsSectionKey.glossary,
+      glossaries: true,
     );
   });
 
