@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,6 +40,7 @@ void main() {
     ProviderKind kind, {
     double width = 880,
     bool stacked = false,
+    Widget Function(Widget child)? wrap,
   }) async {
     tester.view
       ..physicalSize = Size(width + 48, 1400)
@@ -52,14 +54,17 @@ void main() {
             padding: const EdgeInsets.all(24),
             child: ListenableBuilder(
               listenable: settings,
-              builder: (context, _) => ProviderSection(
-                kind: kind,
-                settings: settings,
-                stacked: stacked,
-                keyVisible: false,
-                onToggleKeyVisible: () {},
-                onChanged: ({bool typed = false}) {},
-              ),
+              builder: (context, _) {
+                final section = ProviderSection(
+                  kind: kind,
+                  settings: settings,
+                  stacked: stacked,
+                  keyVisible: false,
+                  onToggleKeyVisible: () {},
+                  onChanged: ({bool typed = false}) {},
+                );
+                return wrap?.call(section) ?? section;
+              },
             ),
           ),
         ),
@@ -187,8 +192,10 @@ void main() {
 
     testWidgets('打字途中不写设置，确认了才写', (tester) async {
       await load();
+      settings.translationProviderId = 'lmstudio';
+      writes = 0;
       await pump(tester, ProviderKind.mt);
-      for (final partial in ['d', 'deep', 'deepseek-v', 'deepseek-v3']) {
+      for (final partial in ['q', 'qwen', 'qwen2.5:1', 'qwen2.5:14b']) {
         await type(tester, partial);
       }
       // 建任务表单按「模型还等于设置里的默认」判断要不要跟着设置走：
@@ -198,11 +205,14 @@ void main() {
       await tester.tap(find.text('添加'));
       await tester.pump();
       expect(writes, 1);
-      expect(stored('deepseek'), const [ChatModelSpec(name: 'deepseek-v3')]);
+      expect(stored('lmstudio'), const [ChatModelSpec(name: 'qwen2.5:14b')]);
+      // 点按钮添加之后焦点也回到框里，接着加下一个。
+      expect(tester.widget<TextField>(nameField).focusNode!.hasFocus, isTrue);
     });
 
     testWidgets('回车添加并清空，焦点留在框里接着加；首尾空白去掉', (tester) async {
       await load();
+      settings.translationProviderId = 'lmstudio';
       await pump(tester, ProviderKind.mt);
       await type(tester, '  model-a ');
       await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -222,9 +232,19 @@ void main() {
       expect(inRow('model-b', find.text('默认')), findsNothing);
     });
 
-    testWidgets('Esc 清空输入与错误', (tester) async {
+    testWidgets('Esc 清空输入与错误；框里没东西时不拦，留给外层', (tester) async {
       await load();
-      await pump(tester, ProviderKind.mt);
+      var outer = 0;
+      await pump(
+        tester,
+        ProviderKind.mt,
+        wrap: (child) => CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.escape): () => outer++,
+          },
+          child: child,
+        ),
+      );
       await type(tester, 'a b');
       expect(find.text('模型名不能含空格或逗号'), findsOneWidget);
 
@@ -233,6 +253,12 @@ void main() {
       expect(tester.widget<TextField>(nameField).controller!.text, isEmpty);
       expect(find.text('模型名不能含空格或逗号'), findsNothing);
       expect(writes, 0);
+      expect(outer, 0);
+
+      // 再按一次：框已经空了，这一下该关对话框的关对话框。
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(outer, 1);
     });
 
     testWidgets('旧版本存的那串模型名照样列出来，第一次改动后存成声明', (tester) async {
@@ -256,6 +282,60 @@ void main() {
   });
 
   group('常用', () {
+    testWidgets('列表空着时加第一个：常用模型一起落进列表，默认模型不变', (tester) async {
+      await load();
+      settings.asrProviderId = 'groq';
+      final groq = ProviderCatalog.asrInfo('groq')!;
+      await pump(tester, ProviderKind.asr);
+      expect(settings.defaultAsrModel(groq), groq.presets[0]);
+
+      // 点的是第二个常用。只存它的话，默认模型会被换成它，第一个常用
+      // 也从新建任务的下拉里消失 —— 而用户只是想把它加进来。
+      await tester.tap(inEditor(find.text(groq.presets[1].name)));
+      await tester.pump();
+
+      expect(stored('groq'), groq.presets);
+      expect(settings.defaultAsrModel(groq), groq.presets[0]);
+      expect(rows(tester), [for (final p in groq.presets) p.name]);
+      expect(find.text('常用'), findsNothing);
+      expect(find.text('未添加模型，新建任务时使用常用列表'), findsNothing);
+    });
+
+    testWidgets('列表空着时手填一个：加在常用模型后面，默认模型不变', (tester) async {
+      await load();
+      final deepseek = ProviderCatalog.translationInfo('deepseek')!;
+      await pump(tester, ProviderKind.mt);
+      await add(tester, 'deepseek-v3');
+
+      expect(stored('deepseek'), [
+        ...deepseek.presets,
+        const ChatModelSpec(name: 'deepseek-v3'),
+      ]);
+      expect(settings.defaultChatModel(deepseek), deepseek.presets.first);
+    });
+
+    testWidgets('列表里已经有模型：加在末尾，默认模型不变', (tester) async {
+      await load({
+        'openai': {
+          'models': [
+            const AsrModelSpec(
+              name: 'my-whisper',
+              transport: AsrTransport.openaiTranscription,
+            ).toJson(),
+          ],
+        },
+      });
+      await pump(tester, ProviderKind.asr);
+      await tester.tap(inEditor(find.text('gpt-4o-transcribe')));
+      await tester.pump();
+
+      expect(rows(tester), ['my-whisper', 'gpt-4o-transcribe']);
+      expect(inRow('my-whisper', find.text('默认')), findsOneWidget);
+      // 其余常用的还在那一行等着。
+      expect(inEditor(find.text('whisper-1')), findsOneWidget);
+      expect(inEditor(find.text('gpt-4o-mini-transcribe')), findsOneWidget);
+    });
+
     testWidgets('点一下按预置声明加到末尾，加过的不再列出；全加完整行消失', (tester) async {
       await load();
       settings.asrProviderId = 'siliconflow';
@@ -389,13 +469,14 @@ void main() {
 
       await tester.tap(find.text('添加'));
       await tester.pump();
-      expect(stored(_bailian), const [
-        AsrModelSpec(
+      expect(
+        stored(_bailian).last,
+        const AsrModelSpec(
           name: 'fun-asr-2026-filetrans',
           transport: AsrTransport.dashscopeFileTrans,
           dialect: DashScopeDialect.funAsr,
         ),
-      ]);
+      );
       // 加完回到初始的分段，下一个名字重新预填。
       expect(transport().value, AsrTransport.dashscopeSync);
       expect(dialect().value, DashScopeDialect.qwen3Asr);
@@ -422,15 +503,29 @@ void main() {
       );
       await tester.tap(find.text('添加'));
       await tester.pump();
-      expect(stored(_bailian), const [
-        AsrModelSpec(
+      expect(
+        stored(_bailian).last,
+        const AsrModelSpec(
           name: 'my-model',
           transport: AsrTransport.dashscopeFileTrans,
           dialect: DashScopeDialect.funAsr,
         ),
-      ]);
+      );
       // 自填的名字不合命名规律，照样按声明得出能力。
       expect(inRow('my-model', find.text('说话人分离')), findsOneWidget);
+
+      // 加完之后「手动点过」不再算数：下一个名字重新按名字预填。
+      await type(tester, 'fun-asr-next-filetrans');
+      expect(find.text('已按名字预填「异步整文件 · Fun-ASR」，不对可以改'), findsOneWidget);
+      await type(tester, 'qwen3-asr-next');
+      expect(
+        tester
+            .widget<PillSegments<AsrTransport>>(
+              find.byType(PillSegments<AsrTransport>),
+            )
+            .value,
+        AsrTransport.dashscopeSync,
+      );
     });
 
     testWidgets('默认模型不接受上下文提示：提示框下说一声，框不禁用', (tester) async {
@@ -602,6 +697,10 @@ void main() {
       await tester.tap(inRow('deepseek-reasoner', find.byTooltip('参数')));
       await tester.pumpAndSettle();
       final number = inRow('deepseek-reasoner', find.byType(TextField));
+      // 先改成别的值：取消「不发送」之后框里得是默认值，不是这个旧值。
+      await tester.enterText(number, '0.7');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
 
       await tester.tap(find.text('不发送'));
       await tester.pump();
@@ -680,6 +779,66 @@ void main() {
       );
     }
   });
+
+  testWidgets('删掉展开着的那一行再加回同名的：不会一出现就是展开的', (tester) async {
+    await load({
+      'deepseek': {
+        'models': [
+          for (final name in ['deepseek-chat', 'deepseek-reasoner'])
+            ChatModelSpec(name: name).toJson(),
+        ],
+      },
+    });
+    await pump(tester, ProviderKind.mt);
+    await tester.tap(inRow('deepseek-reasoner', find.byTooltip('参数')));
+    await tester.pumpAndSettle();
+    await tester.tap(inRow('deepseek-reasoner', find.byTooltip('删除')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(inEditor(find.text('deepseek-reasoner')));
+    await tester.pumpAndSettle();
+    expect(rows(tester), ['deepseek-chat', 'deepseek-reasoner']);
+    expect(inRow('deepseek-reasoner', find.text('temperature')), findsNothing);
+  });
+
+  testWidgets('数字框失焦提交与紧跟着的点击落在同一帧：前一次的改动不被盖掉', (tester) async {
+    await load({
+      'deepseek': {
+        'models': [
+          for (final name in ['a', 'b', 'c'])
+            ChatModelSpec(name: name).toJson(),
+        ],
+      },
+    });
+    await pump(tester, ProviderKind.mt);
+    await tester.tap(inRow('a', find.byTooltip('参数')));
+    await tester.pumpAndSettle();
+    await tester.enterText(inRow('a', find.byType(TextField)), '0.9');
+    await tester.pump();
+
+    // 桌面上按下的那一刻输入框就失焦并提交；按下与抬起之间没有新的一帧
+    // （触控板轻点就是这样），抬起触发的还是上一帧的回调。
+    await tester.tap(
+      inRow('c', find.byTooltip('设为默认')),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+
+    final models = stored('deepseek').cast<ChatModelSpec>();
+    expect([for (final m in models) m.name], ['c', 'a', 'b']);
+    expect(models[1].options.number(ModelParams.chatTemperature), 0.9);
+
+    await tester.enterText(inRow('a', find.byType(TextField)), '1.1');
+    await tester.pump();
+    await tester.tap(
+      inRow('b', find.byTooltip('删除')),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    final after = stored('deepseek').cast<ChatModelSpec>();
+    expect([for (final m in after) m.name], ['c', 'a']);
+    expect(after[1].options.number(ModelParams.chatTemperature), 1.1);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
   testWidgets('换服务：添加行里打到一半的名字不带到另一家', (tester) async {
     await load();

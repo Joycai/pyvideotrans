@@ -25,7 +25,7 @@ import 'settings_section.dart';
 enum ProviderKind {
   asr(
     section: SettingsSectionKey.asr,
-    note: '音视频转字幕。改动立即生效，下一个任务开始时采用新配置。',
+    note: '音视频转字幕。地址与密钥改动后，下一个开始的任务就用新的；模型与参数在新建任务时定下。',
     service: '识别服务',
     task: '转写',
     modelExample: 'whisper-1',
@@ -134,13 +134,6 @@ class ProviderSection extends StatelessWidget {
   final VoidCallback onToggleKeyVisible;
   final bool stacked;
   final bool saved;
-
-  /// 模型列表的每一种改动都是「算出新列表，整份存回去」。存过之后旧版本
-  /// 那串模型名就完成了迁移。
-  void _setModels(ProviderInfo info, List<ModelSpec> models) {
-    settings.setModels(info.id, models);
-    onChanged();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -262,35 +255,39 @@ class ProviderSection extends StatelessWidget {
             suggest: info is AsrProviderInfo && info.multiTransport
                 ? info.guess
                 : null,
+            // 各个回调都在被调用时读设置里现在的列表（见
+            // [AppSettings.addModel]），不用这次 build 拿到的 models。
             validate: (name) => ModelName.validate(
               name,
-              existing: models.map((m) => m.name),
+              existing: settings.ownModels(info).map((m) => m.name),
             ),
-            onAdd: (name, transport, dialect) => _setModels(info, [
-              ...models,
-              switch (info) {
+            onAdd: (name, transport, dialect) {
+              settings.addModel(info, switch (info) {
                 AsrProviderInfo() => info.declare(
                   name,
                   transport: transport,
                   dialect: dialect,
                 ),
                 ChatProviderInfo() => info.guess(name),
-              },
-            ]),
-            onAddPreset: (preset) => _setModels(info, [...models, preset]),
-            onSetDefault: (index) => _setModels(info, [
-              models[index],
-              for (final (i, model) in models.indexed)
-                if (i != index) model,
-            ]),
-            onRemove: (index) => _setModels(info, [
-              for (final (i, model) in models.indexed)
-                if (i != index) model,
-            ]),
-            onOptionChanged: (index, key, value) => _setModels(info, [
-              for (final (i, model) in models.indexed)
-                i == index ? model.withOption(key, value) : model,
-            ]),
+              });
+              onChanged();
+            },
+            onAddPreset: (preset) {
+              settings.addModel(info, preset);
+              onChanged();
+            },
+            onSetDefault: (model) {
+              settings.setDefaultModel(info, model.name);
+              onChanged();
+            },
+            onRemove: (model) {
+              settings.removeModel(info, model.name);
+              onChanged();
+            },
+            onOptionChanged: (model, key, value) {
+              settings.setModelOption(info, model.name, key, value);
+              onChanged();
+            },
           ),
         ),
         if (info.needsApiKey)

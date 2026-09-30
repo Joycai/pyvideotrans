@@ -75,13 +75,19 @@ class ProviderConfig {
 
   factory ProviderConfig.fromJson(Map<String, Object?> json) {
     final models = json['models'];
+    // 同一种模型里重名的只留前一个：第二个永远选不中，界面按名字认行，
+    // 存档被手改出重名时不该让设置页起不来。
+    final seen = <(Type, String)>{};
     return ProviderConfig(
       baseUrl: json['baseUrl'] as String?,
       apiKey: json['apiKey'] as String?,
       // 读不出来的那一条丢掉，其余照常。
       models: List.unmodifiable([
         if (models is List)
-          for (final model in models) ?ModelSpec.fromJson(model),
+          for (final model in models)
+            if (ModelSpec.fromJson(model) case final spec?
+                when seen.add((spec.runtimeType, spec.name)))
+              spec,
       ]),
       legacyModelText: json['model'] as String?,
     );
@@ -606,6 +612,57 @@ class AppSettings extends ChangeNotifier {
       ),
     );
   }
+
+  // —— 改模型列表 ——————————————————————————————————————————————
+  //
+  // 设置页的每一种改动都走下面四个入口。它们在被调用的那一刻读现在的
+  // 列表，算出新的，整份存回去 —— 界面不自己拿着一份列表算：数字框失焦
+  // 提交与紧跟着的一次点击可能落在同一帧里，后一次拿旧列表算，前一次的
+  // 改动就被盖掉了。行按模型名认，不按下标。
+
+  /// 加一个模型；已有同名的就地换掉。
+  ///
+  /// 列表还空着时，这家服务一直在用登记表的常用模型。这时先把它们落进
+  /// 列表再加：不然「多加一个」会把默认模型换成刚加的这个，其余常用的
+  /// 也从新建任务的下拉里消失，而用户只是想多一个选择。
+  void addModel(ProviderInfo info, ModelSpec model) {
+    final own = ownModels(info);
+    final base = own.isEmpty ? info.presets : own;
+    final at = base.indexWhere((m) => m.name == model.name);
+    setModels(info.id, [
+      for (final (i, existing) in base.indexed) i == at ? model : existing,
+      if (at < 0) model,
+    ]);
+  }
+
+  /// 删掉一个模型。删光之后回到「没配过」，候选重新来自常用模型。
+  void removeModel(ProviderInfo info, String name) => setModels(info.id, [
+    for (final model in ownModels(info))
+      if (model.name != name) model,
+  ]);
+
+  /// 把一个模型挪到第一位（第一个是默认），其余顺延。
+  void setDefaultModel(ProviderInfo info, String name) {
+    final own = ownModels(info);
+    final chosen = own.where((m) => m.name == name).firstOrNull;
+    if (chosen == null) return;
+    setModels(info.id, [
+      chosen,
+      for (final model in own)
+        if (model.name != name) model,
+    ]);
+  }
+
+  /// 改一个模型的一项参数；[value] 为 null 表示「不发送」。
+  void setModelOption(
+    ProviderInfo info,
+    String name,
+    String key,
+    Object? value,
+  ) => setModels(info.id, [
+    for (final model in ownModels(info))
+      model.name == name ? model.withOption(key, value) : model,
+  ]);
 
   /// 发请求用的连接参数：地址与密钥取用户填的，没填地址就用登记表的默认；
   /// 模型名取 [model] 的。

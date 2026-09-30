@@ -69,11 +69,15 @@ class ModelListEditor extends StatefulWidget {
   onAdd;
 
   final ValueChanged<ModelSpec> onAddPreset;
-  final ValueChanged<int> onSetDefault;
-  final ValueChanged<int> onRemove;
+
+  // 下面三个回调交出的是那一行的模型，不是下标：同一帧里前一次改动
+  // 已经挪动了行的话，下标指的就不是用户点的那一行了。
+  final ValueChanged<ModelSpec> onSetDefault;
+  final ValueChanged<ModelSpec> onRemove;
 
   /// 改某一行的一项参数。[value] 为 null 表示「不发送」。
-  final void Function(int index, String key, Object? value) onOptionChanged;
+  final void Function(ModelSpec model, String key, Object? value)
+  onOptionChanged;
 
   @override
   State<ModelListEditor> createState() => _ModelListEditorState();
@@ -103,6 +107,14 @@ class _ModelListEditorState extends State<ModelListEditor> {
     super.initState();
     _nameFocus.addListener(_refresh);
     _prefill('');
+  }
+
+  @override
+  void didUpdateWidget(ModelListEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 展开的那一行被删了就忘掉它：不然以后加回一个同名的，它一出现
+    // 就是展开的。
+    if (!widget.models.any((m) => m.name == _expanded)) _expanded = null;
   }
 
   @override
@@ -188,10 +200,10 @@ class _ModelListEditorState extends State<ModelListEditor> {
               showDeclaration: _multi,
               open: _expanded == model.name,
               onToggle: () => _toggle(model.name),
-              onSetDefault: i == 0 ? null : () => widget.onSetDefault(i),
-              onRemove: () => widget.onRemove(i),
+              onSetDefault: i == 0 ? null : () => widget.onSetDefault(model),
+              onRemove: () => widget.onRemove(model),
               onOptionChanged: (key, value) =>
-                  widget.onOptionChanged(i, key, value),
+                  widget.onOptionChanged(model, key, value),
             ),
           _addRow(context),
           if (commons.isNotEmpty)

@@ -838,6 +838,104 @@ void main() {
       expect(settings.asrModelsFor(openai), same(openai.presets));
     });
 
+    test('加模型：列表空着时先把常用模型落进来，默认模型不变', () async {
+      final settings = await _settings();
+      final groq = ProviderCatalog.asrInfo('groq')!;
+      const custom = AsrModelSpec(
+        name: 'my-whisper',
+        transport: AsrTransport.openaiTranscription,
+      );
+
+      // 只存新加的那个的话，默认模型会被换成它，其余常用的也从新建任务
+      // 的下拉里消失。
+      settings.addModel(groq, custom);
+      expect(settings.ownModels(groq), [...groq.presets, custom]);
+      expect(settings.defaultAsrModel(groq), groq.presets.first);
+
+      // 加的就是常用里的某一个：落进来的列表里已经有它，不重复。
+      final other = await _settings();
+      other.addModel(groq, groq.presets[1]);
+      expect(other.ownModels(groq), groq.presets);
+
+      // 没有常用模型的服务：列表里就是加的这一个。
+      final customInfo = ProviderCatalog.asrInfo('asr_custom')!;
+      settings.addModel(customInfo, custom);
+      expect(settings.ownModels(customInfo), [custom]);
+    });
+
+    test('加模型：已有列表时加在末尾，同名的就地换掉', () async {
+      final settings = await _settings();
+      final dashscope = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+      const a = AsrModelSpec(
+        name: 'a',
+        transport: AsrTransport.dashscopeSync,
+        dialect: DashScopeDialect.qwen3Asr,
+      );
+      const b = AsrModelSpec(
+        name: 'b',
+        transport: AsrTransport.dashscopeSync,
+        dialect: DashScopeDialect.funAsr,
+      );
+      const aAsync = AsrModelSpec(
+        name: 'a',
+        transport: AsrTransport.dashscopeFileTrans,
+        dialect: DashScopeDialect.qwenAudio3,
+      );
+      settings.setModels(dashscope.id, const [a]);
+
+      settings.addModel(dashscope, b);
+      expect(settings.ownModels(dashscope), const [a, b]);
+      settings.addModel(dashscope, aAsync);
+      expect(settings.ownModels(dashscope), const [aAsync, b]);
+    });
+
+    test('设为默认、删除、改参数：按名字认行，读的是此刻的列表', () async {
+      final settings = await _settings();
+      final deepseek = ProviderCatalog.translationInfo('deepseek')!;
+      const a = ChatModelSpec(name: 'a');
+      const b = ChatModelSpec(name: 'b');
+      const c = ChatModelSpec(name: 'c');
+      settings.setModels(deepseek.id, const [a, b, c]);
+
+      settings.setModelOption(deepseek, 'a', 'temperature', 0.9);
+      settings.setDefaultModel(deepseek, 'c');
+      expect([for (final m in settings.ownModels(deepseek)) m.name], [
+        'c',
+        'a',
+        'b',
+      ]);
+      // 前一步改的参数还在：每一步都是在上一步的结果上算的。
+      expect(
+        settings.ownModels(deepseek)[1].options.number(
+          ModelParams.chatTemperature,
+        ),
+        0.9,
+      );
+
+      settings.removeModel(deepseek, 'c');
+      expect(settings.defaultChatModel(deepseek).name, 'a');
+      // 改回默认值等于没动过。
+      settings.setModelOption(deepseek, 'a', 'temperature', 0.3);
+      expect(settings.ownModels(deepseek), const [a, b]);
+
+      // 列表里没有的名字：什么都不变。
+      var notified = 0;
+      settings.addListener(() => notified++);
+      settings.setDefaultModel(deepseek, '不存在');
+      expect(notified, 0);
+      settings
+        ..removeModel(deepseek, '不存在')
+        ..setModelOption(deepseek, '不存在', 'temperature', 1.0);
+      expect(settings.ownModels(deepseek), const [a, b]);
+
+      // 删光：回到「没配过」。
+      settings
+        ..removeModel(deepseek, 'a')
+        ..removeModel(deepseek, 'b');
+      expect(settings.ownModels(deepseek), isEmpty);
+      expect(settings.chatModelsFor(deepseek), same(deepseek.presets));
+    });
+
     test('改别的字段不丢旧存档里的模型名', () async {
       SharedPreferences.setMockInitialValues({
         'providerConfigs': jsonEncode({
@@ -919,9 +1017,30 @@ void main() {
             ],
           },
           'deepseek': {'models': '不是列表', 'model': 'fallback-chat'},
+          // 存档被手改出重名：只留前一个。界面按名字认行，两个同名的
+          // 会让设置页起不来。
+          'openai_chat': {
+            'models': [
+              const ChatModelSpec(name: 'gpt-4o').toJson(),
+              const ChatModelSpec(
+                name: 'gpt-4o',
+                options: ModelOptions({'temperature': 1.0}),
+              ).toJson(),
+              const ChatModelSpec(name: 'gpt-4o-mini').toJson(),
+            ],
+          },
         }),
       });
       final settings = await AppSettings.load();
+      expect(
+        settings.chatModelsFor(
+          ProviderCatalog.translationInfo('openai_chat')!,
+        ),
+        const [
+          ChatModelSpec(name: 'gpt-4o'),
+          ChatModelSpec(name: 'gpt-4o-mini'),
+        ],
+      );
 
       expect(settings.asrModelsFor(ProviderCatalog.asrInfo('openai')!), [
         _whisper,
