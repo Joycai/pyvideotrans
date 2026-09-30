@@ -91,7 +91,9 @@ class TaskRunner {
       (id, settings, options) => Registry.buildAsr(
         id,
         settings,
-        model: options.asrModel,
+        // 过渡：任务里眼下只有模型名，经设置补成声明（分片 5 起任务里
+        // 就是整份声明，不再回头读设置）。
+        model: settings.asrModelNamed(id, options.asrModel),
         prompt: options.asrPrompt,
         media: media,
         diarize: options.diarize,
@@ -104,7 +106,7 @@ class TaskRunner {
   ) => Registry.buildTranslation(
     id,
     settings,
-    model: options.translationModel,
+    model: settings.chatModelNamed(id, options.translationModel),
     guidance: options.translationGuidance,
   );
 

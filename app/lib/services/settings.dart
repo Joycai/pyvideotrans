@@ -7,25 +7,39 @@ import '../domain/enum_by_name.dart';
 import '../domain/glossary.dart';
 import '../domain/language.dart';
 import '../domain/mux/merge_options.dart';
+import '../domain/providers/model_spec.dart';
+import '../domain/providers/provider_catalog.dart';
 import '../domain/task_options.dart';
 import '../domain/transcode/options.dart';
 import 'provider_api.dart';
 
 /// 单个服务的连接配置。
 class ProviderConfig {
-  const ProviderConfig({this.baseUrl, this.model, this.apiKey});
+  const ProviderConfig({
+    this.baseUrl,
+    this.apiKey,
+    this.models = const [],
+    this.legacyModelText,
+  });
 
   final String? baseUrl;
-
-  /// 模型名。可以用逗号写多个（中英文逗号都认），第一个是默认值，
-  /// 其余在「新建转写」「新建翻译」的模型下拉里可选。
-  final String? model;
   final String? apiKey;
 
-  /// [model] 拆成的列表：去空白、去空项、去重，保持书写顺序。
-  List<String> get models => splitModels(model);
+  /// 用户给这家服务配的模型声明，第一个是默认。空表示没配过，
+  /// 用 [legacyModelText]，再没有就用登记表的预置。
+  final List<ModelSpec> models;
 
-  /// 逗号分隔的模型名 → 列表。中英文逗号都认。
+  /// 旧版本存的模型名：一串逗号分隔的文本（中英文逗号都认）。
+  ///
+  /// 只在 [models] 为空时有意义。留着原文而不是读的时候就转成声明：
+  /// 转换要知道这家服务有哪些接入方式，这里不知道；而且不写盘就不会
+  /// 把推断的结果固化下来。见 [AppSettings.asrModelsFor]。
+  final String? legacyModelText;
+
+  /// [legacyModelText] 拆成的名字列表。
+  List<String> get legacyModelNames => splitModels(legacyModelText);
+
+  /// 逗号分隔的模型名 → 列表：去空白、去空项、去重，保持书写顺序。
   static List<String> splitModels(String? raw) {
     if (raw == null) return const [];
     final seen = <String>{};
@@ -35,24 +49,42 @@ class ProviderConfig {
     ];
   }
 
-  ProviderConfig copyWith({String? baseUrl, String? model, String? apiKey}) =>
-      ProviderConfig(
-        baseUrl: baseUrl ?? this.baseUrl,
-        model: model ?? this.model,
-        apiKey: apiKey ?? this.apiKey,
-      );
+  ProviderConfig copyWith({
+    String? baseUrl,
+    String? apiKey,
+    List<ModelSpec>? models,
+    String? legacyModelText,
+  }) => ProviderConfig(
+    baseUrl: baseUrl ?? this.baseUrl,
+    apiKey: apiKey ?? this.apiKey,
+    models: models ?? this.models,
+    legacyModelText: legacyModelText ?? this.legacyModelText,
+  );
 
   Map<String, Object?> toJson() => {
     if (baseUrl != null) 'baseUrl': baseUrl,
-    if (model != null) 'model': model,
+    // 有了声明就只写声明；旧的那串文本到此为止。还没有声明时照旧写回去，
+    // 否则用户只是改了一下密钥，以前填的模型名就丢了。
+    if (models.isNotEmpty)
+      'models': [for (final model in models) model.toJson()]
+    else if (legacyModelText != null)
+      'model': legacyModelText,
     if (apiKey != null) 'apiKey': apiKey,
   };
 
-  factory ProviderConfig.fromJson(Map<String, Object?> json) => ProviderConfig(
-    baseUrl: json['baseUrl'] as String?,
-    model: json['model'] as String?,
-    apiKey: json['apiKey'] as String?,
-  );
+  factory ProviderConfig.fromJson(Map<String, Object?> json) {
+    final models = json['models'];
+    return ProviderConfig(
+      baseUrl: json['baseUrl'] as String?,
+      apiKey: json['apiKey'] as String?,
+      // 读不出来的那一条丢掉，其余照常。
+      models: [
+        if (models is List)
+          for (final model in models) ?ModelSpec.fromJson(model),
+      ],
+      legacyModelText: json['model'] as String?,
+    );
+  }
 }
 
 /// 设置页上的分区，「恢复默认」按它分组作用。
@@ -443,22 +475,98 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 用户填的值优先，没填就用登记表里的默认值。
-  /// 模型框里写了多个时，取第一个作为默认模型。
-  Endpoint endpointFor(ProviderInfo info) {
+  /// 这家识别服务可选的模型声明，第一个是默认。
+  ///
+  /// 三层来源，前面的有就不看后面的：用户配的声明 → 旧版本存的那串模型名
+  /// （逐个按名字补成声明）→ 登记表的预置。旧存档是**读的时候**补，不写盘：
+  /// 升级后什么都不碰的用户，发出去的请求与升级前一样。
+  List<AsrModelSpec> asrModelsFor(AsrProviderInfo info) {
+    final config = configFor(info.id);
+    final own = config.models.whereType<AsrModelSpec>().toList();
+    if (own.isNotEmpty) return own;
+    final legacy = config.legacyModelNames;
+    if (legacy.isNotEmpty) return [for (final name in legacy) info.guess(name)];
+    return info.presets;
+  }
+
+  /// 这家翻译服务可选的模型声明，规则同 [asrModelsFor]。
+  List<ChatModelSpec> chatModelsFor(ChatProviderInfo info) {
+    final config = configFor(info.id);
+    final own = config.models.whereType<ChatModelSpec>().toList();
+    if (own.isNotEmpty) return own;
+    final legacy = config.legacyModelNames;
+    if (legacy.isNotEmpty) return [for (final name in legacy) info.guess(name)];
+    return info.presets;
+  }
+
+  /// 默认模型：列表里的第一个。一个都没有时是空名的占位。
+  AsrModelSpec defaultAsrModel(AsrProviderInfo info) =>
+      asrModelsFor(info).firstOrNull ?? info.unsetModel;
+
+  ChatModelSpec defaultChatModel(ChatProviderInfo info) =>
+      chatModelsFor(info).firstOrNull ?? ChatModelSpec.unset;
+
+  ModelSpec defaultModel(ProviderInfo info) => switch (info) {
+    AsrProviderInfo() => defaultAsrModel(info),
+    ChatProviderInfo() => defaultChatModel(info),
+  };
+
+  // 过渡：任务参数里的模型眼下还只是个名字（分片 5 换成整份声明）。
+  // 这两个函数把名字变回声明：没给名字用默认的；设置里有同名的用那份
+  // （带着用户调过的参数）；都没有才按名字推断。
+  AsrModelSpec asrModelNamed(String providerId, String? name) {
+    final wanted = name?.trim() ?? '';
+    final info = ProviderCatalog.asrInfo(providerId);
+    if (info == null) return ProviderCatalog.legacyAsrSpec(providerId, wanted);
+    if (wanted.isEmpty) return defaultAsrModel(info);
+    return asrModelsFor(info).where((m) => m.name == wanted).firstOrNull ??
+        info.guess(wanted);
+  }
+
+  ChatModelSpec chatModelNamed(String providerId, String? name) {
+    final wanted = name?.trim() ?? '';
+    final info = ProviderCatalog.translationInfo(providerId);
+    if (info == null) return ProviderCatalog.legacyChatSpec(providerId, wanted);
+    if (wanted.isEmpty) return defaultChatModel(info);
+    return chatModelsFor(info).where((m) => m.name == wanted).firstOrNull ??
+        info.guess(wanted);
+  }
+
+  /// 存这家服务的模型列表。存过之后旧版本那串模型名就不再用了。
+  void setModels(String providerId, List<ModelSpec> models) {
+    final config = configFor(providerId);
+    setConfig(
+      providerId,
+      ProviderConfig(
+        baseUrl: config.baseUrl,
+        apiKey: config.apiKey,
+        models: List.unmodifiable(models),
+      ),
+    );
+  }
+
+  /// 发请求用的连接参数：地址与密钥取用户填的，没填地址就用登记表的默认；
+  /// 模型名取 [model] 的。
+  ///
+  /// 过渡：不给 [model] 时用这家的默认模型（分片 5 起调用方都给）。
+  Endpoint endpointFor(ProviderInfo info, [ModelSpec? model]) {
     final config = configFor(info.id);
     return Endpoint(
       baseUrl: _firstNonEmpty(config.baseUrl, info.defaultBaseUrl) ?? '',
-      model: _firstNonEmpty(config.models.firstOrNull, info.defaultModel) ?? '',
+      model: (model ?? defaultModel(info)).name,
       apiKey: config.apiKey ?? '',
     );
   }
 
-  /// 「新建转写」「新建翻译」模型下拉的候选：用户在设置里填的那串优先，
-  /// 没填才用登记表里的常用列表。为空表示没有候选，只能手填。
+  /// 过渡（分片 5 删）：「新建转写」「新建翻译」模型下拉的候选名字。
+  /// 用户配过的优先，没配才用登记表里的常用列表；为空表示只能手填。
   List<String> modelsFor(ProviderInfo info) {
-    final own = configFor(info.id).models;
-    return own.isNotEmpty ? own : info.models;
+    final config = configFor(info.id);
+    if (config.models.isNotEmpty) {
+      return [for (final model in config.models) model.name];
+    }
+    final legacy = config.legacyModelNames;
+    return legacy.isNotEmpty ? legacy : info.models;
   }
 
   /// 配置是否足以发起请求。设置页用它来标注「未配置」。

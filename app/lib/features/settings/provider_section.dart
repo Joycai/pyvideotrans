@@ -158,12 +158,15 @@ class ProviderSection extends StatelessWidget {
           stacked: stacked,
           child: SettingsTextField(
             key: ValueKey('${info.id}-model'),
-            value: config.model ?? info.defaultModel ?? '',
+            value: config.legacyModelText ?? info.defaultModel ?? '',
             hint: '模型名',
             mono: true,
             error: info.implemented && endpoint.model.isEmpty,
             onChanged: (v) {
-              settings.setConfig(info.id, config.copyWith(model: v));
+              settings.setConfig(
+                info.id,
+                config.copyWith(legacyModelText: v),
+              );
               onChanged(typed: true);
             },
           ),

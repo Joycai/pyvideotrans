@@ -54,13 +54,16 @@ void main() {
       final candidates = models.isEmpty
           ? [for (final preset in info.presets) preset.name]
           : models;
-      for (final model in candidates.where(
-        (m) => info.guess(m).transport == AsrTransport.dashscopeSync,
-      )) {
+      // 环境变量里只有名字，接法按名字推断（预置里有的用预置的声明）。
+      for (final spec in candidates
+          .map(info.guess)
+          .where((m) => m.transport == AsrTransport.dashscopeSync)) {
+        final model = spec.name;
         final notes = <String>[];
         final provider = DashScopeAsrProvider(
           info: info,
           endpoint: Endpoint(baseUrl: baseUrl, model: model, apiKey: key),
+          dialect: spec.dialect!,
           splitter: FfmpegAudioSplitter(media),
         );
         final cues = await provider.transcribe(
@@ -116,15 +119,20 @@ void main() {
       ]);
       expect(concat.exitCode, 0, reason: concat.stderr.toString());
 
-      final model = models
-          .where(DashScopeFileTransProvider.isFileTransModel)
-          .firstOrNull ?? 'qwen-audio-3.0-asr-flash-filetrans';
+      final info = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+      final spec = models
+              .map(info.guess)
+              .where((m) => m.transport == AsrTransport.dashscopeFileTrans)
+              .firstOrNull ??
+          info.guess('qwen-audio-3.0-asr-flash-filetrans');
+      final model = spec.name;
       final notes = <String>[];
       final List<Cue> cues;
       try {
         cues = await DashScopeFileTransProvider(
-          info: ProviderCatalog.asrInfo('dashscope_qwen_asr')!,
+          info: info,
           endpoint: Endpoint(baseUrl: baseUrl, model: model, apiKey: key),
+          dialect: spec.dialect!,
           media: media,
           diarize: true,
         ).transcribe(

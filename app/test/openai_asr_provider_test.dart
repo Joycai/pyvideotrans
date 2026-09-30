@@ -100,12 +100,14 @@ void main() {
     MockClient client, {
     String prompt = '',
     String language = 'auto',
+    double? temperature,
     CancellationToken? token,
     String? path,
   }) => OpenAiCompatibleAsrProvider(
     info: _info,
     endpoint: _endpoint,
     prompt: prompt,
+    temperature: temperature,
     client: client,
   ).transcribe(
     audioPath: path ?? audio,
@@ -163,6 +165,22 @@ void main() {
       expect(await languageOf('EN'), 'en');
       expect(await languageOf('auto'), isNull);
       expect(await languageOf(''), isNull);
+    });
+
+    test('温度给了才带：多出的只有这一个字段', () async {
+      final seen = _Captured();
+      await run(_client(seen), temperature: 0.2);
+      expect(seen.fields, {
+        'model': 'whisper-1',
+        'response_format': 'verbose_json',
+        'timestamp_granularities[]': 'segment',
+        'temperature': '0.2',
+      });
+
+      // 0 是一个明确的取值，不是「没给」。
+      final zero = _Captured();
+      await run(_client(zero), temperature: 0);
+      expect(zero.fields['temperature'], '0.0');
     });
 
     test('提示词与语言都有时一共五个字段', () async {

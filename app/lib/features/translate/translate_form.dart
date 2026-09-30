@@ -197,7 +197,10 @@ class TranslateFormController extends TaskOptionsFormBase<StagedSubtitle> {
   Readiness get readiness => ProviderReadiness.translation(
     options.translationProviderId,
     settings,
-    model: options.translationModel,
+    model: settings.chatModelNamed(
+      options.translationProviderId,
+      options.translationModel,
+    ),
   );
 
   bool get canStart => enqueueable.isNotEmpty && !readiness.isBlocked;

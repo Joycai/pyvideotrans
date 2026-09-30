@@ -1035,7 +1035,10 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     return Registry.buildTranslation(
       options.translationProviderId,
       settings,
-      model: options.translationModel,
+      model: settings.chatModelNamed(
+        options.translationProviderId,
+        options.translationModel,
+      ),
       guidance: options.translationGuidance,
     );
   }

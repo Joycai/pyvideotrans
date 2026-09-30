@@ -44,7 +44,9 @@ void main() {
     final info = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
     settings.setConfig(
       info.id,
-      const ProviderConfig(model: 'qwen-audio-3.0-asr-flash, fun-asr-flash'),
+      const ProviderConfig(
+        legacyModelText: 'qwen-audio-3.0-asr-flash, fun-asr-flash',
+      ),
     );
     await pump(
       tester,
@@ -66,7 +68,10 @@ void main() {
 
   testWidgets('设置里只填一个模型时，下拉也只列这一个，不再显示登记表默认值', (tester) async {
     final info = ProviderCatalog.asrInfo('openai')!;
-    settings.setConfig(info.id, const ProviderConfig(model: 'my-whisper'));
+    settings.setConfig(
+      info.id,
+      const ProviderConfig(legacyModelText: 'my-whisper'),
+    );
     await pump(
       tester,
       modelField(
@@ -143,7 +148,10 @@ void main() {
     expect(find.byType(AppDropdown<String>), findsNothing);
     expect(find.byType(SingleLineField), findsOneWidget);
 
-    settings.setConfig(info.id, const ProviderConfig(model: 'whisper-x'));
+    settings.setConfig(
+      info.id,
+      const ProviderConfig(legacyModelText: 'whisper-x'),
+    );
     await pump(
       tester,
       modelField(

@@ -66,7 +66,7 @@ void main() {
         ..translationBatchSize = 12
         ..setConfig(
           'ollama',
-          const ProviderConfig(model: 'qwen2.5:14b-instruct'),
+          const ProviderConfig(legacyModelText: 'qwen2.5:14b-instruct'),
         );
     } else {
       settings

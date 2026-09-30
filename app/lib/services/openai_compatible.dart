@@ -20,6 +20,7 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
     required this.info,
     required this.endpoint,
     this.prompt = '',
+    this.temperature,
     http.Client? client,
   }) : _client = client ?? http.Client();
 
@@ -30,6 +31,9 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
 
   /// 交给模型的领域提示（专有名词、术语），提高识别准确率。
   final String prompt;
+
+  /// 采样温度。null 表示不发这个字段，由服务端用它自己的默认值。
+  final double? temperature;
 
   final http.Client _client;
 
@@ -63,6 +67,9 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
           ..files.add(await http.MultipartFile.fromPath('file', audioPath));
 
     if (prompt.trim().isNotEmpty) request.fields['prompt'] = prompt.trim();
+    if (temperature case final value?) {
+      request.fields['temperature'] = '$value';
+    }
     // `auto` 表示交给服务端自动判定，不下发 language 参数。
     final code = language.split('-').first.toLowerCase();
     if (code.isNotEmpty && code != 'auto') request.fields['language'] = code;
@@ -210,7 +217,8 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
   /// 任务勾选的词表展开后的条目，进系统提示的「术语表」段。
   final List<GlossaryEntry> glossary;
 
-  final double temperature;
+  /// 采样温度。null 表示不发这个字段：有的推理模型不接受它。
+  final double? temperature;
   final http.Client _client;
 
   @override
@@ -225,7 +233,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
 
     final payload = jsonEncode({
       'model': endpoint.model,
-      'temperature': temperature,
+      'temperature': ?temperature,
       'messages': [
         {
           'role': 'system',

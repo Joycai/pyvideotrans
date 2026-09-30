@@ -5,6 +5,9 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/glossary.dart';
+import 'package:subtitle_studio/domain/providers/asr_transport.dart';
+import 'package:subtitle_studio/domain/providers/model_params.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/services/openai_compatible.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
@@ -67,6 +70,13 @@ const _englishSystemPrompt = r'''
 §2§ ...whether Ollama is running.
 §3§ Mm-hm.
 ''';
+
+const _whisper = AsrModelSpec(
+  name: 'whisper-1',
+  transport: AsrTransport.openaiTranscription,
+);
+
+const _chat = ChatModelSpec(name: 'm');
 
 Future<AppSettings> _settings() async {
   SharedPreferences.setMockInitialValues({});
@@ -185,6 +195,34 @@ void main() {
           'content': '<INPUT>\n${_m}1$_m 你好\n${_m}2$_m 世界\n</INPUT>',
         },
       ]);
+    });
+
+    test('温度选了不发送：请求体里没有这个键，其余不变', () async {
+      // 不走上面的 sentBody：那个不传温度，钉的是构造默认值 0.3。
+      Future<Map<String, Object?>> bodyWith(double? temperature) async {
+        late http.Request sent;
+        await OpenAiCompatibleTranslationProvider(
+          info: _info,
+          endpoint: _endpoint,
+          temperature: temperature,
+          client: MockClient((r) async {
+            sent = r;
+            return http.Response(reply('${_m}1$_m Hello'), 200);
+          }),
+        ).translateBatch(
+          lines: ['你好'],
+          sourceLanguage: '中文',
+          targetLanguage: '英文',
+          token: CancellationToken(),
+        );
+        return jsonDecode(utf8.decode(sent.bodyBytes)) as Map<String, Object?>;
+      }
+
+      final omitted = await bodyWith(null);
+      expect(omitted.keys, unorderedEquals(['model', 'messages']));
+      final sent = await bodyWith(1.2);
+      expect(sent['temperature'], 1.2);
+      expect(omitted['messages'], sent['messages']);
     });
 
     test('补充要求只在填了的时候进系统提示，位置在「示例」之前', () async {
@@ -360,7 +398,7 @@ void main() {
     test('未实施的服务给出可行动的提示，而不是默默失败', () async {
       final settings = await _settings();
       expect(
-        () => Registry.buildAsr('local_backend', settings),
+        () => Registry.buildAsr('local_backend', settings, model: _whisper),
         throwsA(
           isA<ActionableException>()
               .having((e) => e.message, 'message', contains('尚未实施'))
@@ -372,14 +410,14 @@ void main() {
     test('未知 id 也报可行动的错', () async {
       final settings = await _settings();
       expect(
-        () => Registry.buildTranslation('不存在', settings),
+        () => Registry.buildTranslation('不存在', settings, model: _chat),
         throwsA(isA<ActionableException>()),
       );
     });
 
-    // 「设置 → 连接参数」与「连接参数 → 请求」两头各有测试，中间这道
-    // 「任务级参数盖过设置」的接缝以前只断言了返回类型。任务参数在入队时
-    // 定死，建实例时拿错了来源，排着队的任务就会被后来的设置改动影响。
+    // 「设置 → 连接参数」与「连接参数 → 请求」两头各有测试，这一组钉中间
+    // 那道接缝：模型、提示词、词表都是任务入队时定死的，建实例时只从设置
+    // 拿地址与密钥。拿错了来源，排着队的任务就会被后来的设置改动影响。
     group('任务级参数', () {
       late AppSettings settings;
 
@@ -402,62 +440,177 @@ void main() {
         settings = await AppSettings.load();
       });
 
-      OpenAiCompatibleAsrProvider asr({String? model, String? prompt}) =>
-          Registry.buildAsr('openai', settings, model: model, prompt: prompt)
+      OpenAiCompatibleAsrProvider asr({
+        AsrModelSpec model = _whisper,
+        String prompt = '',
+        List<GlossaryEntry> glossary = const [],
+      }) =>
+          Registry.buildAsr(
+                'openai',
+                settings,
+                model: model,
+                prompt: prompt,
+                glossary: glossary,
+              )
               as OpenAiCompatibleAsrProvider;
 
       OpenAiCompatibleTranslationProvider mt({
-        String? model,
-        String? guidance,
+        ChatModelSpec model = _chat,
+        String guidance = '',
+        List<GlossaryEntry> glossary = const [],
       }) =>
           Registry.buildTranslation(
                 'deepseek',
                 settings,
                 model: model,
                 guidance: guidance,
+                glossary: glossary,
               )
               as OpenAiCompatibleTranslationProvider;
 
-      test('识别：任务里的模型与提示词盖过设置，地址与密钥来自设置', () {
-        final p = asr(model: ' gpt-4o-transcribe ', prompt: '任务的提示');
+      test('识别：声明里的模型与任务的提示词原样进实例，地址与密钥来自设置', () {
+        final p = asr(
+          model: const AsrModelSpec(
+            name: 'gpt-4o-transcribe',
+            transport: AsrTransport.openaiTranscription,
+          ),
+          prompt: '任务的提示',
+        );
         expect(p.endpoint.model, 'gpt-4o-transcribe');
         expect(p.prompt, '任务的提示');
         expect(p.endpoint.baseUrl, 'https://proxy.example/v1');
         expect(p.endpoint.apiKey, 'sk-asr');
-        // 任务里明确给了空提示词就是不要提示词，不回落到设置。
-        expect(asr(prompt: '').prompt, '');
+        // 任务里没有提示词就是不要提示词，不回头读设置里的那份。
+        expect(asr().prompt, '');
       });
 
-      test('识别：任务没给时用设置里的第一个模型与提示词', () {
-        expect(asr().endpoint.model, 'my-whisper');
-        expect(asr(model: '  ').endpoint.model, 'my-whisper');
-        expect(asr().prompt, '设置里的提示');
+      test('识别：词表的原文拼在提示词前面', () {
+        const glossary = [
+          GlossaryEntry(term: 'Ollama'),
+          GlossaryEntry(term: 'LM Studio', translation: '不发给识别'),
+        ];
+        expect(
+          asr(prompt: '技术访谈', glossary: glossary).prompt,
+          'Ollama, LM Studio\n技术访谈',
+        );
+        expect(asr(glossary: glossary).prompt, 'Ollama, LM Studio');
       });
 
-      test('翻译：任务里的模型与要求盖过设置', () {
-        final p = mt(model: ' deepseek-chat ', guidance: '任务的要求');
+      test('识别：温度没动过不发，调过就跟着声明走', () {
+        expect(asr().temperature, isNull);
+        expect(
+          asr(
+            model: _whisper.withOptions(
+              ModelOptions.none.set(ModelParams.asrTemperature.key, 0.2),
+            ),
+          ).temperature,
+          0.2,
+        );
+      });
+
+      test('识别：声明的接入方式这家服务没有，报可行动的错', () {
+        expect(
+          () => asr(
+            model: const AsrModelSpec(
+              name: 'qwen3-asr-flash',
+              transport: AsrTransport.dashscopeSync,
+              dialect: DashScopeDialect.qwen3Asr,
+            ),
+          ),
+          throwsA(
+            isA<ActionableException>()
+                .having((e) => e.message, 'message', contains('同步逐段'))
+                .having((e) => e.hint, 'hint', contains('设置')),
+          ),
+        );
+      });
+
+      test('翻译：声明里的模型、任务的要求与词表原样进实例', () {
+        const glossary = [GlossaryEntry(term: '百炼', translation: 'Bailian')];
+        final p = mt(
+          model: const ChatModelSpec(name: 'deepseek-chat'),
+          guidance: '任务的要求',
+          glossary: glossary,
+        );
         expect(p.endpoint.model, 'deepseek-chat');
         expect(p.extraGuidance, '任务的要求');
+        expect(p.glossary, glossary);
         expect(p.endpoint.baseUrl, 'https://api.deepseek.com/v1');
         expect(p.endpoint.apiKey, 'sk-mt');
-        expect(mt(guidance: '').extraGuidance, '');
+        expect(mt().extraGuidance, '');
+        expect(mt().glossary, isEmpty);
       });
 
-      test('翻译：任务没给时用设置里的第一个模型与要求', () {
-        expect(mt().endpoint.model, 'deepseek-reasoner');
-        expect(mt(model: '').endpoint.model, 'deepseek-reasoner');
-        expect(mt().extraGuidance, '设置里的要求');
+      test('翻译：温度没动过是 0.3，选了不发送就是 null', () {
+        expect(mt().temperature, 0.3);
+        final key = ModelParams.chatTemperature.key;
+        expect(
+          mt(
+            model: _chat.withOptions(ModelOptions.none.set(key, null)),
+          ).temperature,
+          isNull,
+        );
+        expect(
+          mt(
+            model: _chat.withOptions(ModelOptions.none.set(key, 1.2)),
+          ).temperature,
+          1.2,
+        );
+      });
+
+      // 过渡：任务参数里眼下还只有模型名，建实例前经设置补成声明。
+      test('只有模型名时补成声明：没给用默认，设置里有的用那份，否则按名字推断', () {
+        expect(settings.asrModelNamed('openai', null).name, 'my-whisper');
+        expect(settings.asrModelNamed('openai', '  ').name, 'my-whisper');
+        expect(
+          settings.asrModelNamed('openai', ' gpt-4o-transcribe '),
+          const AsrModelSpec(
+            name: 'gpt-4o-transcribe',
+            transport: AsrTransport.openaiTranscription,
+          ),
+        );
+        expect(
+          settings.chatModelNamed('deepseek', null).name,
+          'deepseek-reasoner',
+        );
+        expect(
+          settings.chatModelNamed('deepseek', '').name,
+          'deepseek-reasoner',
+        );
+        expect(
+          settings.chatModelNamed('deepseek', ' my-chat '),
+          const ChatModelSpec(name: 'my-chat'),
+        );
+        // 服务也认不出来：不抛，留给就绪检查去说。
+        expect(settings.asrModelNamed('不存在', 'x').name, 'x');
+        expect(settings.chatModelNamed('不存在', null).isUnset, isTrue);
+
+        // 设置里那份带着用户调过的参数，按名字找回来时参数还在。
+        final tuned = const ChatModelSpec(name: 'tuned').withOptions(
+          ModelOptions.none.set(ModelParams.chatTemperature.key, 1.0),
+        );
+        settings.setModels('deepseek', [_chat, tuned]);
+        expect(settings.chatModelNamed('deepseek', 'tuned'), tuned);
       });
 
       test('建好的实例不跟着之后的设置改动变', () {
-        final recognizer = asr(prompt: '任务的提示');
-        final translator = mt(guidance: '任务的要求');
+        final recognizer = asr(
+          model: settings.asrModelNamed('openai', null),
+          prompt: '任务的提示',
+        );
+        final translator = mt(
+          model: settings.chatModelNamed('deepseek', null),
+          guidance: '任务的要求',
+        );
 
         settings
           ..asrPrompt = '后来改的提示'
           ..translationGuidance = '后来改的要求'
-          ..setConfig('openai', const ProviderConfig(model: 'later'))
-          ..setConfig('deepseek', const ProviderConfig(model: 'later'));
+          ..setConfig('openai', const ProviderConfig(legacyModelText: 'later'))
+          ..setConfig(
+            'deepseek',
+            const ProviderConfig(legacyModelText: 'later'),
+          );
 
         expect(recognizer.prompt, '任务的提示');
         expect(recognizer.endpoint.model, 'my-whisper');
@@ -470,11 +623,11 @@ void main() {
     test('本地服务与在线服务走同一个实现类', () async {
       final settings = await _settings();
       expect(
-        Registry.buildTranslation('ollama', settings),
+        Registry.buildTranslation('ollama', settings, model: _chat),
         isA<OpenAiCompatibleTranslationProvider>(),
       );
       expect(
-        Registry.buildTranslation('deepseek', settings),
+        Registry.buildTranslation('deepseek', settings, model: _chat),
         isA<OpenAiCompatibleTranslationProvider>(),
       );
     });
@@ -489,7 +642,10 @@ void main() {
 
       settings.setConfig(
         'deepseek',
-        const ProviderConfig(model: 'deepseek-reasoner', apiKey: 'sk-x'),
+        const ProviderConfig(
+          legacyModelText: 'deepseek-reasoner',
+          apiKey: 'sk-x',
+        ),
       );
       final endpoint = settings.endpointFor(info);
       expect(endpoint.model, 'deepseek-reasoner');
@@ -507,7 +663,9 @@ void main() {
       settings.setConfig(
         'dashscope_qwen_asr',
         const ProviderConfig(
-          model: ' qwen-audio-3.0-asr-flash ,fun-asr-flash，qwen-audio-3.0-asr-flash,, ',
+          legacyModelText:
+              ' qwen-audio-3.0-asr-flash ,fun-asr-flash，'
+              'qwen-audio-3.0-asr-flash,, ',
           apiKey: 'sk-x',
         ),
       );
@@ -583,6 +741,173 @@ void main() {
 
       expect(settings.modelsFor(groq), groq.models);
       expect(settings.endpointFor(groq).model, 'whisper-large-v3');
+    });
+
+    test('旧存档的模型名读的时候补成声明，不写盘', () async {
+      SharedPreferences.setMockInitialValues({
+        'providerConfigs': jsonEncode({
+          'dashscope_qwen_asr': {
+            'model':
+                'qwen-audio-3.0-asr-flash-filetrans, fun-asr-flash, '
+                'my-model',
+            'apiKey': 'sk-asr',
+          },
+          'deepseek': {'model': 'my-chat，deepseek-chat'},
+        }),
+      });
+      final settings = await AppSettings.load();
+      final dashscope = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+      final deepseek = ProviderCatalog.translationInfo('deepseek')!;
+
+      // 接入方式与报文族照重构前按名字判断的规则补：同一份存档，
+      // 请求还是打到原来那个接口、用原来那种报文。
+      expect(
+        [
+          for (final m in settings.asrModelsFor(dashscope))
+            (m.name, m.transport, m.dialect),
+        ],
+        [
+          (
+            'qwen-audio-3.0-asr-flash-filetrans',
+            AsrTransport.dashscopeFileTrans,
+            DashScopeDialect.qwenAudio3,
+          ),
+          (
+            'fun-asr-flash',
+            AsrTransport.dashscopeSync,
+            DashScopeDialect.funAsr,
+          ),
+          ('my-model', AsrTransport.dashscopeSync, DashScopeDialect.qwen3Asr),
+        ],
+      );
+      expect(
+        settings.defaultAsrModel(dashscope),
+        same(dashscope.presets[3]),
+      );
+      expect(settings.chatModelsFor(deepseek), [
+        const ChatModelSpec(name: 'my-chat'),
+        const ChatModelSpec(name: 'deepseek-chat'),
+      ]);
+      expect(settings.defaultModel(deepseek).name, 'my-chat');
+
+      // 读不改存档：那串文本原样留着，也没有多出 models。
+      expect(
+        settings.configFor('dashscope_qwen_asr').toJson().keys,
+        unorderedEquals(['model', 'apiKey']),
+      );
+    });
+
+    test('什么都没配：候选就是登记表的预置，没有预置时默认是空名占位', () async {
+      final settings = await _settings();
+      final openai = ProviderCatalog.asrInfo('openai')!;
+      final custom = ProviderCatalog.asrInfo('asr_custom')!;
+      final lmstudio = ProviderCatalog.translationInfo('lmstudio')!;
+
+      expect(settings.asrModelsFor(openai), same(openai.presets));
+      expect(settings.defaultAsrModel(openai), same(openai.presets.first));
+      expect(settings.asrModelsFor(custom), isEmpty);
+      expect(settings.defaultAsrModel(custom).isUnset, isTrue);
+      expect(settings.defaultChatModel(lmstudio).isUnset, isTrue);
+      expect(settings.endpointFor(custom).model, '');
+      expect(settings.isConfigured(lmstudio), isFalse);
+    });
+
+    test('改别的字段不丢旧存档里的模型名', () async {
+      SharedPreferences.setMockInitialValues({
+        'providerConfigs': jsonEncode({
+          'openai': {'model': 'my-whisper', 'apiKey': 'old'},
+        }),
+      });
+      final settings = await AppSettings.load();
+      settings.setConfig(
+        'openai',
+        settings.configFor('openai').copyWith(apiKey: 'new'),
+      );
+
+      final reloaded = await AppSettings.load();
+      final openai = ProviderCatalog.asrInfo('openai')!;
+      expect(reloaded.endpointFor(openai).model, 'my-whisper');
+      expect(reloaded.endpointFor(openai).apiKey, 'new');
+    });
+
+    test('存模型列表：第一个是默认，参数一起落盘，旧的那串模型名不再用', () async {
+      SharedPreferences.setMockInitialValues({
+        'providerConfigs': jsonEncode({
+          'dashscope_qwen_asr': {
+            'baseUrl': 'https://proxy.example/api/v1',
+            'model': 'old-model',
+            'apiKey': 'sk-asr',
+          },
+        }),
+      });
+      final settings = await AppSettings.load();
+      final info = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+      const custom = AsrModelSpec(
+        name: 'my-model',
+        transport: AsrTransport.dashscopeFileTrans,
+        dialect: DashScopeDialect.funAsr,
+      );
+      final tuned = info.presets.first.withOptions(
+        ModelOptions.none.set(ModelParams.enableItn.key, false),
+      );
+
+      var notified = 0;
+      settings.addListener(() => notified++);
+      settings.setModels(info.id, [custom, tuned]);
+      expect(notified, 1);
+
+      for (final s in [settings, await AppSettings.load()]) {
+        expect(s.asrModelsFor(info), [custom, tuned]);
+        expect(s.defaultAsrModel(info), custom);
+        // 自填的名字不合任何命名规律，接入方式照声明来。
+        expect(
+          s.defaultAsrModel(info).transport,
+          AsrTransport.dashscopeFileTrans,
+        );
+        final endpoint = s.endpointFor(info);
+        expect(endpoint.model, 'my-model');
+        expect(endpoint.baseUrl, 'https://proxy.example/api/v1');
+        expect(endpoint.apiKey, 'sk-asr');
+        expect(s.modelsFor(info), ['my-model', 'qwen3-asr-flash']);
+        final config = s.configFor(info.id);
+        expect(config.legacyModelText, isNull);
+        expect(config.toJson().keys, isNot(contains('model')));
+      }
+    });
+
+    test('读模型列表：读不出来的那条丢掉，种类不对的不算数', () async {
+      SharedPreferences.setMockInitialValues({
+        'providerConfigs': jsonEncode({
+          'openai': {
+            'models': [
+              'x',
+              {'kind': '不认识', 'name': 'a'},
+              const ChatModelSpec(name: '翻译模型放错了地方').toJson(),
+              _whisper.toJson(),
+            ],
+          },
+          // 列表里一条能用的都没有：当成没配过，回落到预置。
+          'groq': {
+            'models': [
+              {'kind': 'asr'},
+            ],
+          },
+          'deepseek': {'models': '不是列表', 'model': 'fallback-chat'},
+        }),
+      });
+      final settings = await AppSettings.load();
+
+      expect(settings.asrModelsFor(ProviderCatalog.asrInfo('openai')!), [
+        _whisper,
+      ]);
+      final groq = ProviderCatalog.asrInfo('groq')!;
+      expect(settings.asrModelsFor(groq), same(groq.presets));
+      expect(
+        settings
+            .defaultChatModel(ProviderCatalog.translationInfo('deepseek')!)
+            .name,
+        'fallback-chat',
+      );
     });
 
     test('存档损坏时回到默认值，不让应用起不来', () async {

@@ -163,14 +163,17 @@ class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
     options.asrProviderId,
     settings,
     language: options.sourceLanguage,
-    model: options.asrModel,
+    model: settings.asrModelNamed(options.asrProviderId, options.asrModel),
     diarize: options.diarize,
   );
 
   Readiness get translationReadiness => ProviderReadiness.translation(
     options.translationProviderId,
     settings,
-    model: options.translationModel,
+    model: settings.chatModelNamed(
+      options.translationProviderId,
+      options.translationModel,
+    ),
   );
 
   List<Readiness> get _checks => [

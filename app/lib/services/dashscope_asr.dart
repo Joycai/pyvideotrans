@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../domain/cue.dart';
+import '../domain/providers/asr_transport.dart';
+import '../domain/providers/model_params.dart';
 import '../domain/recognition_checkpoint.dart';
 import 'audio_splitter.dart';
 import 'provider_api.dart';
@@ -16,14 +18,17 @@ import 'provider_api.dart';
 /// 2. **只返回整段文本，不带时间戳**。所以先用 [AudioSplitter] 按静音把音频
 ///    切成句子，逐段识别，每段音频的起止就是这条字幕的时间码。
 ///
-/// 支持两代模型的报文：`qwen3-asr-flash` 走 `audio` 内容块 + `asr_options`，
-/// `qwen-audio-3.0-asr-flash` / `fun-asr-flash` 走 `input_audio` 内容块 +
-/// `format/sample_rate` 参数，与原 Python 实现一致。
+/// 支持两代模型的报文：Qwen3-ASR 走 `audio` 内容块 + `asr_options`，
+/// Qwen-Audio 3.0 / Fun-ASR 走 `input_audio` 内容块 + `format/sample_rate`
+/// 参数，与原 Python 实现一致。用哪一种由模型声明里的报文族决定
+/// （[dialect]），不看模型名。
 class DashScopeAsrProvider implements AsrProvider {
   DashScopeAsrProvider({
     required this.info,
     required this.endpoint,
+    required this.dialect,
     required this.splitter,
+    this.options = ModelOptions.none,
     this.prompt = '',
     this.diarize = false,
     http.Client? client,
@@ -35,9 +40,16 @@ class DashScopeAsrProvider implements AsrProvider {
   final ProviderInfo info;
 
   final Endpoint endpoint;
+
+  /// 这个模型说哪一族报文。
+  final DashScopeDialect dialect;
   final AudioSplitter splitter;
 
-  /// 领域提示（专有名词、术语）。Qwen3-ASR 用 system 消息做上下文偏置。
+  /// 模型声明里的参数取值（眼下只有 Qwen3-ASR 的逆文本规范化）。
+  final ModelOptions options;
+
+  /// 领域提示（专有名词、术语）。Qwen3-ASR 用 system 消息做上下文偏置；
+  /// 另两族的报文里没有放它的位置，不下发。
   final String prompt;
 
   /// 说话人分离：请求里带 `diarization_enabled`，按返回的词级
@@ -74,11 +86,9 @@ class DashScopeAsrProvider implements AsrProvider {
 
   static const path = '/services/aigc/multimodal-generation/generation';
 
-  /// `qwen-audio-3.0` 与 `fun-asr` 两族用 OpenAI 风格的 `input_audio` 内容块，
-  /// 其余（qwen3-asr-flash）用百炼原生的 `audio` 内容块。
-  bool get _qwen3Shape =>
-      !(endpoint.model.startsWith('qwen-audio-3.0-asr-flash') ||
-          endpoint.model.startsWith('fun-asr-flash'));
+  /// Qwen-Audio 3.0 与 Fun-ASR 两族用 OpenAI 风格的 `input_audio` 内容块，
+  /// Qwen3-ASR 用百炼原生的 `audio` 内容块。
+  bool get _qwen3Shape => dialect == DashScopeDialect.qwen3Asr;
 
   @override
   Future<List<Cue>> transcribe({
@@ -425,7 +435,7 @@ class DashScopeAsrProvider implements AsrProvider {
         'asr_options': {
           'language': ?lang,
           'enable_lid': true,
-          'enable_itn': true,
+          'enable_itn': options.flag(ModelParams.enableItn),
         },
       },
     };

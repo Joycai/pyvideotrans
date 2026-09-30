@@ -5,7 +5,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:subtitle_studio/domain/providers/asr_transport.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
+import 'package:subtitle_studio/services/dashscope_asr.dart';
 import 'package:subtitle_studio/services/dashscope_filetrans.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
@@ -166,11 +169,13 @@ void main() {
   DashScopeFileTransProvider build(
     MockClient client, {
     String model = 'qwen-audio-3.0-asr-flash-filetrans',
+    DashScopeDialect dialect = DashScopeDialect.qwenAudio3,
     bool diarize = true,
     Ffmpeg? media,
   }) => DashScopeFileTransProvider(
     info: _info,
     endpoint: _endpoint(model),
+    dialect: dialect,
     media: media ?? _FakeFfmpeg(),
     diarize: diarize,
     client: client,
@@ -249,6 +254,7 @@ void main() {
       await build(
         server.client,
         model: 'qwen3-asr-flash-filetrans',
+        dialect: DashScopeDialect.qwen3Asr,
         diarize: false,
       ).transcribe(
         audioPath: audio,
@@ -263,7 +269,11 @@ void main() {
         'enable_words': true,
       });
 
-      final p = build(server.client, model: 'qwen3-asr-flash-filetrans');
+      final p = build(
+        server.client,
+        model: 'qwen3-asr-flash-filetrans',
+        dialect: DashScopeDialect.qwen3Asr,
+      );
       expect(
         p.submitPayload('oss://k', 'ja')['parameters'],
         containsPair('language', 'ja'),
@@ -585,27 +595,62 @@ void main() {
       expect(DashScopeFileTransProvider.parseTranscript({}), isEmpty);
     });
 
-    test('登记表按模型名后缀选实现类', () async {
+    test('提交的报文跟着声明的报文族走，不看模型名', () {
+      // 名字故意取得和报文族对不上：以前按前缀猜，这两个都会猜错。
+      final qwen3 = build(
+        MockClient((_) async => http.Response('', 500)),
+        model: 'my-model',
+        dialect: DashScopeDialect.qwen3Asr,
+      ).submitPayload('oss://k', 'ja');
+      expect(qwen3['input'], {'file_url': 'oss://k'});
+      expect(qwen3['parameters'], containsPair('language', 'ja'));
+
+      for (final dialect in [
+        DashScopeDialect.qwenAudio3,
+        DashScopeDialect.funAsr,
+      ]) {
+        final other = build(
+          MockClient((_) async => http.Response('', 500)),
+          model: 'qwen3-asr-flash-filetrans',
+          dialect: dialect,
+        ).submitPayload('oss://k', 'ja');
+        expect(other['input'], {
+          'file_urls': ['oss://k'],
+        });
+        expect(other['parameters'], containsPair('language_hints', ['ja']));
+      }
+    });
+
+    test('登记表按接入方式选实现类，不看模型名后缀', () async {
       SharedPreferences.setMockInitialValues({});
       final settings = await AppSettings.load()
         ..setConfig('dashscope_qwen_asr', const ProviderConfig(apiKey: 'sk'));
+
+      AsrProvider build(String name, AsrTransport transport) =>
+          Registry.buildAsr(
+            'dashscope_qwen_asr',
+            settings,
+            model: AsrModelSpec(
+              name: name,
+              transport: transport,
+              dialect: DashScopeDialect.qwenAudio3,
+            ),
+            diarize: true,
+            media: _FakeFfmpeg(),
+          );
+
+      // 自填的名字没有 -filetrans 后缀，声明是异步整文件：走录音文件转写。
+      final async = build('my-model', AsrTransport.dashscopeFileTrans);
+      expect(async, isA<DashScopeFileTransProvider>());
+      async as DashScopeFileTransProvider;
+      expect(async.endpoint.model, 'my-model');
+      expect(async.dialect, DashScopeDialect.qwenAudio3);
+      expect(async.diarize, isTrue);
+
+      // 名字带着后缀，声明是同步逐段：照声明走同步接口。
       expect(
-        Registry.buildAsr(
-          'dashscope_qwen_asr',
-          settings,
-          model: 'qwen3-asr-flash-filetrans',
-          media: _FakeFfmpeg(),
-        ),
-        isA<DashScopeFileTransProvider>(),
-      );
-      expect(
-        Registry.buildAsr(
-          'dashscope_qwen_asr',
-          settings,
-          model: 'qwen-audio-3.0-asr-flash',
-          media: _FakeFfmpeg(),
-        ),
-        isNot(isA<DashScopeFileTransProvider>()),
+        build('x-filetrans', AsrTransport.dashscopeSync),
+        isA<DashScopeAsrProvider>(),
       );
     });
   });
