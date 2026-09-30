@@ -28,7 +28,8 @@ class SettingsResetDialog extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 400),
         child: Text(
           '全部恢复会清掉所有服务的地址、模型与 API 密钥，并把语言、'
-          '任务默认值、输出目录、主题都退回初始值。已排队的任务不受影响。',
+          '任务默认值、输出目录、主题都退回初始值。已排队的任务不受影响。'
+          '词表不受影响。',
           style: context.texts.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
         ),
       ),

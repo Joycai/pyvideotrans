@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:subtitle_studio/domain/glossary.dart';
 import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/services/openai_compatible.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
@@ -135,12 +136,16 @@ void main() {
     });
 
     /// 发一批并把请求体解出来。
-    Future<Map<String, Object?>> sentBody({String? guidance}) async {
+    Future<Map<String, Object?>> sentBody({
+      String? guidance,
+      List<GlossaryEntry> glossary = const [],
+    }) async {
       late http.Request sent;
       final provider = OpenAiCompatibleTranslationProvider(
         info: _info,
         endpoint: _endpoint,
         extraGuidance: guidance,
+        glossary: glossary,
         client: MockClient((r) async {
           sent = r;
           return http.Response(reply('${_m}1$_m Hello\n${_m}2$_m World'), 200);
@@ -207,6 +212,49 @@ void main() {
         guided,
         plain.replaceFirst('\n# 示例', '\n# 补充要求\n\n语气随意些。\n\n# 示例'),
       );
+    });
+
+    test('词表只在有条目时进系统提示，位置在「补充要求」之前', () async {
+      String systemOf(Map<String, Object?> body) =>
+          ((body['messages']! as List).first as Map)['content'] as String;
+      const glossary = [
+        GlossaryEntry(term: '百炼', translation: 'Bailian'),
+        GlossaryEntry(term: 'Ollama'),
+      ];
+      // 术语段的全文抄在这里，不调 GlossaryText 来拼：措辞被改也要挂。
+      const section = '''
+# 术语表
+
+下面的词在原文里出现时，按给定的译法翻译；标了「保留原文写法」的照抄原文，不要翻译也不要音译。
+
+- 百炼 → Bailian
+- Ollama（保留原文写法）
+''';
+
+      // 没有词表：和加词表之前逐字相同。
+      expect(systemOf(await sentBody()), _englishSystemPrompt);
+      // 条目全是空的等于没有词表。
+      expect(
+        systemOf(await sentBody(glossary: const [GlossaryEntry(term: ' ')])),
+        _englishSystemPrompt,
+      );
+
+      expect(
+        systemOf(await sentBody(glossary: glossary)),
+        _englishSystemPrompt.replaceFirst('\n# 示例', '\n$section\n# 示例'),
+      );
+      expect(
+        systemOf(await sentBody(glossary: glossary, guidance: '语气随意些。')),
+        _englishSystemPrompt.replaceFirst(
+          '\n# 示例',
+          '\n$section\n# 补充要求\n\n语气随意些。\n\n# 示例',
+        ),
+      );
+
+      // 词表不改请求的其余部分。
+      final body = await sentBody(glossary: glossary);
+      expect(body.keys, unorderedEquals(['model', 'temperature', 'messages']));
+      expect(body['messages'], hasLength(2));
     });
 
     test('返回等长译文', () async {

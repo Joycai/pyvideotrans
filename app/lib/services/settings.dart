@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../domain/enum_by_name.dart';
+import '../domain/glossary.dart';
 import '../domain/language.dart';
 import '../domain/mux/merge_options.dart';
 import '../domain/task_options.dart';
@@ -86,13 +87,16 @@ class AppSettings extends ChangeNotifier {
   static const _kLastTranslate = 'lastTranslateOptions';
   static const _kLastTranscode = 'lastTranscodeOptions';
   static const _kLastMerge = 'lastMergeOptions';
+  static const _kGlossaries = 'glossaries';
 
   Map<String, ProviderConfig> _configs = {};
+  List<Glossary> _glossaries = const [];
 
   static Future<AppSettings> load() async {
     final prefs = await SharedPreferences.getInstance();
     final settings = AppSettings._(prefs);
     settings._configs = _readConfigs(prefs);
+    settings._glossaries = _readGlossaries(prefs);
     return settings;
   }
 
@@ -110,6 +114,23 @@ class AppSettings extends ChangeNotifier {
     } catch (_) {
       // 配置损坏时宁可回到默认值，也不要让应用起不来。
       return {};
+    }
+  }
+
+  static List<Glossary> _readGlossaries(SharedPreferences prefs) {
+    final raw = prefs.getString(_kGlossaries);
+    if (raw == null) return const [];
+    try {
+      final seen = <String>{};
+      return List.unmodifiable([
+        for (final item in jsonDecode(raw) as List)
+          // 读不出来的那一份丢掉，其余照常；id 撞了的只留前一份。
+          if (Glossary.fromJson(item) case final glossary?
+              when seen.add(glossary.id))
+            glossary,
+      ]);
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -294,6 +315,58 @@ class AppSettings extends ChangeNotifier {
     // 不 notify：这份参数只被「上次参数」按钮读取，不影响任何常显内容。
   }
 
+  /// 用户建的词表，按建立的先后排。
+  ///
+  /// 词表是用户数据，不是设置：[reset] / [resetAll] 都不动它，和「上次参数」
+  /// 同类 —— 攒了几百条的词表不该因为「恢复默认」没了。
+  List<Glossary> get glossaries => _glossaries;
+
+  /// 新建任务时默认勾上的那几份。
+  List<String> get defaultGlossaryIds => [
+    for (final glossary in _glossaries)
+      if (glossary.enabledByDefault) glossary.id,
+  ];
+
+  /// 存一份词表：id 已有的就地换掉（位置不变），没有的加在末尾。
+  void setGlossary(Glossary glossary) {
+    final cleaned = glossary.normalized();
+    final at = _glossaries.indexWhere((g) => g.id == cleaned.id);
+    _writeGlossaries([
+      for (final (i, existing) in _glossaries.indexed)
+        i == at ? cleaned : existing,
+      if (at < 0) cleaned,
+    ]);
+  }
+
+  void removeGlossary(String id) {
+    if (!_glossaries.any((g) => g.id == id)) return;
+    _writeGlossaries([
+      for (final glossary in _glossaries)
+        if (glossary.id != id) glossary,
+    ]);
+  }
+
+  /// 把勾选的几份词表展开成一份条目，给任务入队时冻结用。
+  ///
+  /// 顺序跟着 [glossaries]，不跟着 [ids]：勾选的先后不该改变发出去的提示词。
+  /// 同一个原文在两份词表里都有时留排在前面那份的译法；已经删掉的 id 跳过。
+  List<GlossaryEntry> glossaryEntries(Iterable<String> ids) {
+    final wanted = ids.toSet();
+    return GlossaryText.clean([
+      for (final glossary in _glossaries)
+        if (wanted.contains(glossary.id)) ...glossary.entries,
+    ]);
+  }
+
+  void _writeGlossaries(List<Glossary> glossaries) {
+    _glossaries = List.unmodifiable(glossaries);
+    _prefs.setString(
+      _kGlossaries,
+      jsonEncode([for (final glossary in _glossaries) glossary.toJson()]),
+    );
+    notifyListeners();
+  }
+
   /// 把一组设置恢复成默认值。
   ///
   /// 「恢复默认」按分区作用：用户来设置页多半只想重置某一块（比如把识别
@@ -328,7 +401,8 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 全部恢复默认。「上次参数」不在其列 —— 它是历史记录，不是设置。
+  /// 全部恢复默认。「上次参数」不在其列 —— 它是历史记录，不是设置；
+  /// 词表也不在其列，见 [glossaries]。
   void resetAll({
     Iterable<String> asrProviderIds = const [],
     Iterable<String> translationProviderIds = const [],

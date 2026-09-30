@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../domain/cue.dart';
+import '../domain/glossary.dart';
 import '../domain/recognition_checkpoint.dart';
 import 'provider_api.dart';
 import 'translation_protocol.dart';
@@ -193,6 +194,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
     required this.info,
     required this.endpoint,
     this.extraGuidance,
+    this.glossary = const [],
     this.temperature = 0.3,
     http.Client? client,
   }) : _client = client ?? http.Client();
@@ -202,8 +204,11 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
 
   final Endpoint endpoint;
 
-  /// 用户在设置里填的额外要求（术语表、语气）。
+  /// 用户填的额外要求（语气、风格）。
   final String? extraGuidance;
+
+  /// 任务勾选的词表展开后的条目，进系统提示的「术语表」段。
+  final List<GlossaryEntry> glossary;
 
   final double temperature;
   final http.Client _client;
@@ -227,6 +232,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
           'content': TranslationProtocol.systemPrompt(
             targetLanguageName: targetLanguage,
             extraGuidance: extraGuidance,
+            glossary: glossary,
           ),
         },
         {

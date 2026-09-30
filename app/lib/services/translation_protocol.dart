@@ -1,3 +1,5 @@
+import '../domain/glossary.dart';
+
 /// 字幕翻译的线路协议。
 ///
 /// 大模型翻译字幕最容易出的问题是**条数对不上** —— 合并短句、丢掉语气词、
@@ -8,11 +10,22 @@ abstract final class TranslationProtocol {
   /// 每行的标记前缀。用不常见的符号组合，避免与正文内容冲突。
   static const marker = '§';
 
+  /// [glossary] 非空时多出一段「# 术语表」，排在「补充要求」前面：紧跟
+  /// 「语感」段里讲专有名词的那条规则，用户写的补充要求仍是最后一段说明。
+  /// 词表为空时，提示词与加词表之前逐字相同。
   static String systemPrompt({
     required String targetLanguageName,
     String? extraGuidance,
-  }) =>
-      '''
+    List<GlossaryEntry> glossary = const [],
+  }) {
+    final terms = GlossaryText.translationSection(glossary);
+    final guidance = extraGuidance?.trim() ?? '';
+    // 可有可无的两段各自带着前面的空行：都没有时模板里不多出一个字符。
+    final optional = [
+      if (terms.isNotEmpty) '\n$terms\n',
+      if (guidance.isNotEmpty) '\n# 补充要求\n\n$guidance\n',
+    ].join();
+    return '''
 你是字幕翻译专家。把 <INPUT> 里的每一行翻译成$targetLanguageName。
 
 # 绝对规则：逐行一一对应
@@ -34,7 +47,7 @@ abstract final class TranslationProtocol {
 - 面向听觉而非阅读：用日常口语词，避免书面语和翻译腔。
 - 字幕停留时间有限，去掉可省的主语、客套和冗余修饰，取最短的自然说法。
 - 保留原文的专有名词、数字与单位。原文是人名/产品名且无通行译法时保留原文。
-${extraGuidance == null || extraGuidance.trim().isEmpty ? '' : '\n# 补充要求\n\n${extraGuidance.trim()}\n'}
+$optional
 # 示例
 
 输入：
@@ -47,6 +60,7 @@ ${marker}1$marker Let's first check...
 ${marker}2$marker ...whether Ollama is running.
 ${marker}3$marker Mm-hm.
 ''';
+  }
 
   /// 把一批原文包装成带行号的输入。
   static String encode(List<String> lines) {
