@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/providers/asr_transport.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/services/openai_compatible.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 
@@ -15,7 +17,15 @@ const _info = AsrProviderInfo(
   id: 'test_asr',
   name: '测试',
   vendor: '测试服务',
-  defaultBaseUrl: 'https://example.invalid/v1',
+  defaultBaseUrl: 'https://default.invalid/v1',
+  // 登记表里的默认值故意与下面的连接参数不同：请求必须用连接参数里的，
+  // 两边一样的话取错了来源也测不出来。
+  presets: [
+    AsrModelSpec(
+      name: 'preset-model',
+      transport: AsrTransport.openaiTranscription,
+    ),
+  ],
 );
 
 const _endpoint = Endpoint(
@@ -35,10 +45,16 @@ class _Captured {
   int calls = 0;
 }
 
-MockClient _client(_Captured seen, {int status = 200, Object? body}) =>
+MockClient _client(
+  _Captured seen, {
+  int status = 200,
+  Object? body,
+  void Function()? onRequest,
+}) =>
     MockClient.streaming((request, bodyStream) async {
       // 不读完的话，上传文件的句柄会一直开着。
       await bodyStream.drain<void>();
+      onRequest?.call();
       final multipart = request as http.MultipartRequest;
       seen
         ..calls += 1
@@ -105,6 +121,11 @@ void main() {
 
       expect(seen.method, 'POST');
       expect(seen.url.toString(), 'https://example.invalid/v1/audio/transcriptions');
+      // 头只有两个：鉴权，和 http 包给 multipart 写的 content-type。
+      expect(seen.headers.keys.map((k) => k.toLowerCase()).toSet(), {
+        'authorization',
+        'content-type',
+      });
       expect(seen.headers['Authorization'], 'Bearer k');
       // 用整张表比：多发一个字段也算变了。
       expect(seen.fields, {
@@ -132,7 +153,10 @@ void main() {
         return seen.fields['language'];
       }
 
-      expect(await languageOf('zh-CN'), 'zh');
+      // 流水线下发的是语言表里的代码：小写，有的带地区。
+      expect(await languageOf('zh-tw'), 'zh');
+      expect(await languageOf('es-419'), 'es');
+      expect(await languageOf('yue'), 'yue');
       expect(await languageOf('EN'), 'en');
       expect(await languageOf('auto'), isNull);
       expect(await languageOf(''), isNull);
@@ -222,6 +246,16 @@ void main() {
         throwsA(isA<TaskCancelled>()),
       );
       expect(seen.calls, 0);
+    });
+
+    test('上传期间取消：服务端照常返回也不要这份结果', () async {
+      final token = CancellationToken();
+      final seen = _Captured();
+      await expectLater(
+        run(_client(seen, onRequest: token.cancel), token: token),
+        throwsA(isA<TaskCancelled>()),
+      );
+      expect(seen.calls, 1);
     });
 
     test('音频文件不存在时不发请求', () async {

@@ -341,6 +341,9 @@ void _jsonTests() {
       expect(o.format, SubtitleFormat.ass);
       expect(o.outputLocation, OutputLocation.besideSource);
       expect(o.outputDir, isNull);
+      // 没写模型的旧存档：读回来是「用设置里的默认模型」。
+      expect(o.asrModel, isNull);
+      expect(o.translationModel, isNull);
     });
 
     test('设置里的「上次参数」坏了就当没有', () async {

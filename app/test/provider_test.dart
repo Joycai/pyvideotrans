@@ -26,6 +26,47 @@ const _endpoint = Endpoint(
 
 const _m = TranslationProtocol.marker;
 
+/// 目标语言为「英文」、没有补充要求时的系统提示全文。
+///
+/// 故意抄一份字面量而不是调 [TranslationProtocol.systemPrompt] 来比：
+/// 拿被测函数自己当期望值，规则正文被改掉一行也照样绿。有意改提示词时
+/// 这里会挂，那正是想要的信号 —— 改完把这份一起更新。
+const _englishSystemPrompt = r'''
+你是字幕翻译专家。把 <INPUT> 里的每一行翻译成英文。
+
+# 绝对规则：逐行一一对应
+
+- 输出的行数必须与输入**完全相同**。输入 N 行就输出 N 行。
+- 每行以 `§` + 行号 + `§` 开头，行号照抄输入，不要重排。
+- 禁止合并：即使两行原文属于同一个句子，也必须分别翻译成两行。
+- 禁止删除：语气词、拟声词、重复的短句、单个字的应答，全都要保留对应行。
+- 禁止增行：不要加解释、不要加标题、不要输出原文、不要用代码块包裹。
+
+# 跨行断句的处理
+
+口语会把一句话切在几行里。只翻译当前行**实际出现**的词，
+不要为了符合英文 的语序把成分挪到相邻行。
+如果某行在句中断开，用省略号收尾；下一行承接时用省略号开头。
+
+# 语感
+
+- 面向听觉而非阅读：用日常口语词，避免书面语和翻译腔。
+- 字幕停留时间有限，去掉可省的主语、客套和冗余修饰，取最短的自然说法。
+- 保留原文的专有名词、数字与单位。原文是人名/产品名且无通行译法时保留原文。
+
+# 示例
+
+输入：
+§1§ 我们先确认一下
+§2§ Ollama 有没有在跑。
+§3§ 嗯。
+
+输出：
+§1§ Let's first check...
+§2§ ...whether Ollama is running.
+§3§ Mm-hm.
+''';
+
 Future<AppSettings> _settings() async {
   SharedPreferences.setMockInitialValues({});
   return AppSettings.load();
@@ -111,7 +152,11 @@ void main() {
         targetLanguage: '英文',
         token: CancellationToken(),
       );
-      expect(sent.headers['content-type'], 'application/json; charset=utf-8');
+      // 头也是请求的一部分：多出一个也算变了。
+      expect(sent.headers.map((k, v) => MapEntry(k.toLowerCase(), v)), {
+        'content-type': 'application/json; charset=utf-8',
+        'authorization': 'Bearer k',
+      });
       return jsonDecode(utf8.decode(sent.bodyBytes)) as Map<String, Object?>;
     }
 
@@ -146,6 +191,7 @@ void main() {
       ];
 
       final plain = systemOf(await sentBody());
+      expect(plain, _englishSystemPrompt);
       expect(plain, startsWith('你是字幕翻译专家。把 <INPUT> 里的每一行翻译成英文。'));
       expect(headings(plain), [
         '# 绝对规则：逐行一一对应',
@@ -281,6 +327,96 @@ void main() {
         () => Registry.buildTranslation('不存在', settings),
         throwsA(isA<ActionableException>()),
       );
+    });
+
+    // 「设置 → 连接参数」与「连接参数 → 请求」两头各有测试，中间这道
+    // 「任务级参数盖过设置」的接缝以前只断言了返回类型。任务参数在入队时
+    // 定死，建实例时拿错了来源，排着队的任务就会被后来的设置改动影响。
+    group('任务级参数', () {
+      late AppSettings settings;
+
+      setUp(() async {
+        SharedPreferences.setMockInitialValues({
+          'providerConfigs': jsonEncode({
+            'openai': {
+              'baseUrl': 'https://proxy.example/v1',
+              'model': 'my-whisper, whisper-1',
+              'apiKey': 'sk-asr',
+            },
+            'deepseek': {
+              'model': 'deepseek-reasoner，deepseek-chat',
+              'apiKey': 'sk-mt',
+            },
+          }),
+          'asrPrompt': '设置里的提示',
+          'translationGuidance': '设置里的要求',
+        });
+        settings = await AppSettings.load();
+      });
+
+      OpenAiCompatibleAsrProvider asr({String? model, String? prompt}) =>
+          Registry.buildAsr('openai', settings, model: model, prompt: prompt)
+              as OpenAiCompatibleAsrProvider;
+
+      OpenAiCompatibleTranslationProvider mt({
+        String? model,
+        String? guidance,
+      }) =>
+          Registry.buildTranslation(
+                'deepseek',
+                settings,
+                model: model,
+                guidance: guidance,
+              )
+              as OpenAiCompatibleTranslationProvider;
+
+      test('识别：任务里的模型与提示词盖过设置，地址与密钥来自设置', () {
+        final p = asr(model: ' gpt-4o-transcribe ', prompt: '任务的提示');
+        expect(p.endpoint.model, 'gpt-4o-transcribe');
+        expect(p.prompt, '任务的提示');
+        expect(p.endpoint.baseUrl, 'https://proxy.example/v1');
+        expect(p.endpoint.apiKey, 'sk-asr');
+        // 任务里明确给了空提示词就是不要提示词，不回落到设置。
+        expect(asr(prompt: '').prompt, '');
+      });
+
+      test('识别：任务没给时用设置里的第一个模型与提示词', () {
+        expect(asr().endpoint.model, 'my-whisper');
+        expect(asr(model: '  ').endpoint.model, 'my-whisper');
+        expect(asr().prompt, '设置里的提示');
+      });
+
+      test('翻译：任务里的模型与要求盖过设置', () {
+        final p = mt(model: ' deepseek-chat ', guidance: '任务的要求');
+        expect(p.endpoint.model, 'deepseek-chat');
+        expect(p.extraGuidance, '任务的要求');
+        expect(p.endpoint.baseUrl, 'https://api.deepseek.com/v1');
+        expect(p.endpoint.apiKey, 'sk-mt');
+        expect(mt(guidance: '').extraGuidance, '');
+      });
+
+      test('翻译：任务没给时用设置里的第一个模型与要求', () {
+        expect(mt().endpoint.model, 'deepseek-reasoner');
+        expect(mt(model: '').endpoint.model, 'deepseek-reasoner');
+        expect(mt().extraGuidance, '设置里的要求');
+      });
+
+      test('建好的实例不跟着之后的设置改动变', () {
+        final recognizer = asr(prompt: '任务的提示');
+        final translator = mt(guidance: '任务的要求');
+
+        settings
+          ..asrPrompt = '后来改的提示'
+          ..translationGuidance = '后来改的要求'
+          ..setConfig('openai', const ProviderConfig(model: 'later'))
+          ..setConfig('deepseek', const ProviderConfig(model: 'later'));
+
+        expect(recognizer.prompt, '任务的提示');
+        expect(recognizer.endpoint.model, 'my-whisper');
+        expect(recognizer.endpoint.apiKey, 'sk-asr');
+        expect(translator.extraGuidance, '任务的要求');
+        expect(translator.endpoint.model, 'deepseek-reasoner');
+      });
     });
 
     test('本地服务与在线服务走同一个实现类', () async {
