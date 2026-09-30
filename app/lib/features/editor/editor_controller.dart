@@ -1035,28 +1035,53 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     return buildTranslationProvider();
   }
 
-  /// 任务会话用任务里冻结的模型与词表。本地文件会话没有「入队」这一步，
-  /// 冻结没有意义：模型与词表每次翻译时现取设置里的 —— 否则用户发现没选
-  /// 模型、去设置里填好再回来，还得把文件关掉重开才生效。
+  /// 翻译服务是现取设置里的，还是用会话里冻结的。设置页「翻译服务」那
+  /// 一块里的每一项都跟着它走，别在各处自己判断 —— 漏掉一项，用户在设置
+  /// 里改了它，这里就还是旧的。
   ///
-  /// 只转写的任务介于两者之间：词表是用户建任务时勾的，用冻结的；翻译
-  /// 模型却是入队时顺手从设置里抄下来的，建任务页上翻译那一段是收起的，
-  /// 用户没看到也没选过它，就绪检查也没查过它。那时要是还没配模型，抄下
-  /// 来的就是空的，之后在设置里配好了这个任务也用不上 —— 所以现取。
+  /// 任务会话用任务里冻结的。本地文件会话没有「入队」这一步，冻结没有
+  /// 意义：每次翻译时现取 —— 否则用户发现没配好、去设置里改完再回来，
+  /// 还得把文件关掉重开才生效。
+  ///
+  /// 只转写的任务也现取：翻译服务是入队时顺手从设置里抄下来的，建任务页
+  /// 上翻译那一段是收起的，用户没看到也没选过它，就绪检查也没查过它。
+  /// 那时要是还没配好，抄下来的就用不了，之后在设置里配好了这个任务也
+  /// 用不上。
+  bool get _liveTranslationService => switch (session) {
+    FileSession() => true,
+    TaskSession(:final task) => task.kind == TaskKind.transcribe,
+  };
+
+  /// 补翻时一批送几条。条数对不上时提示用户「减小批量」，能调它的地方
+  /// 只有设置页，所以现取翻译服务的会话得跟着生效。
+  @visibleForTesting
+  int get translationBatchSize => _liveTranslationService
+      ? settings.translationBatchSize
+      : session.options.translationBatchSize;
+
+  /// 现取的是整套翻译服务（哪一家、哪个模型、翻译要求），不只是模型：
+  /// 只现取模型的话，用户在设置里换了一家翻译服务，这里还在往打开文件时
+  /// 的那一家发，报的仍是那一家「未配置密钥」。
+  ///
+  /// 词表只有本地文件会话现取。只转写的任务，词表是用户建任务时勾的，
+  /// 识别用的是哪份，补翻也用哪份。
   @visibleForTesting
   TranslationProvider buildTranslationProvider() {
     final options = session.options;
-    final (liveModel, liveGlossary) = switch (session) {
-      FileSession() => (true, true),
-      TaskSession(:final task) => (task.kind == TaskKind.transcribe, false),
-    };
+    final liveService = _liveTranslationService;
+    final liveGlossary = session is FileSession;
+    final providerId = liveService
+        ? settings.translationProviderId
+        : options.translationProviderId;
     return Registry.buildTranslation(
-      options.translationProviderId,
+      providerId,
       settings,
-      model: liveModel
-          ? settings.defaultChatModelOf(options.translationProviderId)
+      model: liveService
+          ? settings.defaultChatModelOf(providerId)
           : options.translationModel,
-      guidance: options.translationGuidance,
+      guidance: liveService
+          ? settings.translationGuidance
+          : options.translationGuidance,
       glossary: liveGlossary
           ? settings.glossaryEntries(settings.defaultGlossaryIds)
           : options.glossary,
@@ -1112,7 +1137,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
 
     final provider = _translationProvider();
     final token = CancellationToken();
-    final batchSize = session.options.translationBatchSize;
+    final batchSize = translationBatchSize;
     var done = 0;
     var pushed = false;
 

@@ -587,6 +587,10 @@ class _PasteLinesState extends State<_PasteLines> {
 
 /// 盖过输入框自带的粘贴动作。输入框的动作是可覆盖的：快捷键先找到它，
 /// 它再往上找到这里，[callingAction] 就是它自己，单行时交回去照常粘贴。
+///
+/// 没有用 `ShortcutAction`：要交回去就得拿到 [callingAction]，那是
+/// [Action] 自己的成员，回调里拿不到。它也不用守「组字时让出按键」那条：
+/// 粘贴不是输入法要用的键，组字时多行文本照样该按行进表。
 class _PasteAction extends Action<PasteTextIntent> {
   _PasteAction(this.paste);
 

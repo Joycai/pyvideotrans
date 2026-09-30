@@ -186,6 +186,32 @@ void main() {
       await tester.pump();
       expect(form.options.glossaryIds, isEmpty);
     });
+
+    // 这次任务里没有翻译时，不能说「接着翻译时仍会用」。
+    testWidgets('不接受提示又没开继续翻译：说明改成之后在编辑器里翻译时才用', (tester) async {
+      final bailian = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+      settings
+        ..asrProviderId = bailian.id
+        ..setGlossary(_interview);
+      final form = await pumpSection(tester);
+      form.update(
+        (o) => o.copyWith(asrModel: bailian.presets[3], translate: false),
+      );
+      await tester.pump();
+
+      expect(find.text(_ignoredNote), findsNothing);
+      expect(
+        find.text(
+          '当前模型不接受上下文提示，识别时不会发送词表与识别提示；'
+          '之后在编辑器里翻译时仍会用词表。',
+        ),
+        findsOneWidget,
+      );
+
+      form.update((o) => o.copyWith(translate: true));
+      await tester.pump();
+      expect(find.text(_ignoredNote), findsOneWidget);
+    });
   });
 
   group('翻译 · 翻译段', () {
