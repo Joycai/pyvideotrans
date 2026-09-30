@@ -69,9 +69,19 @@ class _GlossaryEntryTableState extends State<GlossaryEntryTable> {
 
   /// 上一次交出去的条目。外面传进来的与它不同，说明词表被别处改了
   /// （而不是自己那次改动绕了一圈回来），这时才按外面的重建各行。
-  late List<GlossaryEntry> _emitted = widget.entries;
+  ///
+  /// 在 [initState] 里赋值，不写成字段的初始化式：`late` 字段第一次被读
+  /// 时才求值，那可能已经是 [didUpdateWidget] 里了，读到的是新的 widget，
+  /// 外面的第一次改动就会被当成自己的回声吞掉。
+  late List<GlossaryEntry> _emitted;
 
   final _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _emitted = widget.entries;
+  }
 
   @override
   void didUpdateWidget(GlossaryEntryTable oldWidget) {

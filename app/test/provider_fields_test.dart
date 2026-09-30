@@ -373,6 +373,27 @@ void main() {
       expect(emitted.last, settings.defaultAsrModel(info));
     });
 
+    testWidgets('切去别的应用时丢了焦点：留在输入框，回来接着填', (tester) async {
+      final info = ProviderCatalog.asrInfo('openai')!;
+      await pumpField(
+        tester,
+        info: info,
+        model: settings.defaultAsrModel(info),
+      );
+      await pickOther(tester);
+
+      // 框还空着就去别的应用复制模型名：不能回来发现输入框没了。
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+      typing(tester).focusNode!.unfocus();
+      await tester.pump();
+      expect(find.byType(TextField), findsOneWidget);
+    });
+
     testWidgets('手填途中参数被别处换掉（重置、上次参数）：回到列表', (tester) async {
       final info = ProviderCatalog.asrInfo('openai')!;
       var model = settings.defaultAsrModel(info);

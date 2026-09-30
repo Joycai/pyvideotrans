@@ -11,6 +11,7 @@ import '../../core/widgets/dashed_border.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/indicators.dart';
+import '../../core/widgets/text_focus.dart';
 import '../../domain/glossary.dart';
 import '../../services/settings.dart';
 import 'glossary_entry_table.dart';
@@ -86,12 +87,26 @@ class _GlossarySectionState extends State<GlossarySection> {
     return taken ? '已经有一份叫「$name」的词表' : null;
   }
 
+  /// 改一份词表：读设置里现在的那份，改完存回去。
+  ///
+  /// 不用 build 时拿到的那份算：改名失焦提交与紧跟着的一次点击可能落在
+  /// 同一帧里，后一次拿旧的那份改，前一次的改动就被盖掉了。
+  void _update(
+    String id,
+    Glossary Function(Glossary current) change, {
+    bool typed = false,
+  }) {
+    final current = _settings.glossaries.where((g) => g.id == id).firstOrNull;
+    if (current == null) return;
+    _settings.setGlossary(change(current));
+    widget.onChanged(typed: typed);
+  }
+
   void _rename(Glossary glossary, String raw) {
     setState(() => _renaming = false);
     final name = raw.trim();
     if (name == glossary.name) return;
-    _settings.setGlossary(glossary.copyWith(name: name));
-    widget.onChanged();
+    _update(glossary.id, (g) => g.copyWith(name: name));
   }
 
   Future<void> _confirmRemove(Glossary glossary) async {
@@ -186,12 +201,10 @@ class _GlossarySectionState extends State<GlossarySection> {
     final count = glossary.entries.length;
     final muted = context.texts.bodySmall?.copyWith(color: cs.onSurfaceVariant);
 
-    void toggleDefault() {
-      _settings.setGlossary(
-        glossary.copyWith(enabledByDefault: !glossary.enabledByDefault),
-      );
-      widget.onChanged();
-    }
+    void toggleDefault() => _update(
+      glossary.id,
+      (g) => g.copyWith(enabledByDefault: !g.enabledByDefault),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -267,10 +280,11 @@ class _GlossarySectionState extends State<GlossarySection> {
           // 换一份词表时重建：写到一半没存的行不带到另一份里去。
           key: ValueKey(glossary.id),
           entries: glossary.entries,
-          onChanged: (entries) {
-            _settings.setGlossary(glossary.copyWith(entries: entries));
-            widget.onChanged(typed: true);
-          },
+          onChanged: (entries) => _update(
+            glossary.id,
+            (g) => g.copyWith(entries: entries),
+            typed: true,
+          ),
         ),
         const SizedBox(height: 10),
         Text(
@@ -562,7 +576,8 @@ class _RenameFieldState extends State<_RenameField> {
   }
 
   void _onFocusChanged() {
-    if (_focus.hasFocus) {
+    // 切去别的应用时焦点也会被拿走，回来再还上：那不算离开这个框。
+    if (_focus.hasFocus || appInBackground()) {
       setState(() {});
       return;
     }

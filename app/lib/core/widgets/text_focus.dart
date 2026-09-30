@@ -1,3 +1,4 @@
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 /// 键盘焦点是否落在输入框里。[multiline] 为 true 时只认多行输入框。
@@ -31,4 +32,15 @@ bool isComposingText() {
       ? widget
       : context.findAncestorWidgetOfExactType<EditableText>();
   return editable?.controller.value.composing.isValid ?? false;
+}
+
+/// 整个应用是不是退到了后台（切去别的应用、窗口失去激活）。
+///
+/// 桌面上应用失去激活时，焦点管理器会把焦点从输入框上拿走，回到前台再
+/// 还回去。「失焦就提交 / 放弃」的输入框要先问这一句：这种失焦不是用户
+/// 离开了这个框 —— 多半是去别处复制一个名字，回来还要接着填。不问的话，
+/// 回来时框已经没了，打到一半的内容被提交或丢掉。
+bool appInBackground() {
+  final state = SchedulerBinding.instance.lifecycleState;
+  return state != null && state != AppLifecycleState.resumed;
 }

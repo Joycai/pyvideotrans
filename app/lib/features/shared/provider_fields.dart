@@ -5,6 +5,7 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
+import '../../core/widgets/text_focus.dart';
 import '../../domain/providers/model_name.dart';
 import '../../domain/providers/model_spec.dart';
 import '../../services/provider_api.dart';
@@ -187,8 +188,10 @@ class _ModelFieldState<T extends ModelSpec> extends State<ModelField<T>> {
   }
 
   void _onFocusChanged() {
-    // 清空后离开：没有要填的了，回到列表。
-    if (!_focus.hasFocus && _typing && _name.text.trim().isEmpty) {
+    // 清空后离开：没有要填的了，回到列表。切去别的应用不算离开 ——
+    // 多半是去复制模型名，回来还要接着填。
+    final left = !_focus.hasFocus && !appInBackground();
+    if (left && _typing && _name.text.trim().isEmpty) {
       _backToList();
     } else if (mounted) {
       setState(() {});

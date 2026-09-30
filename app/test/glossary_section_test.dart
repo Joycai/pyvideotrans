@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -278,6 +279,47 @@ void main() {
       expect(writes, 0);
     });
 
+    testWidgets('改名失焦提交与紧跟着的点击落在同一帧：两次改动都在', (tester) async {
+      await startRename(tester);
+      await tester.enterText(rename, '产品术语');
+      await tester.pump();
+
+      // 桌面上按下的那一刻改名框就失焦并提交；抬起触发的是上一帧的回调，
+      // 它要是拿旧的那份词表去改，刚提交的名字就被盖回去了。
+      await tester.tap(find.byType(AppSwitch), kind: PointerDeviceKind.mouse);
+      await tester.pump();
+      expect(stored('terms').name, '产品术语');
+      expect(stored('terms').enabledByDefault, isFalse);
+      expect(stored('terms').entries, _terms.entries);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+    testWidgets('切去别的应用时丢了焦点：不提交也不放弃，回来接着改', (tester) async {
+      await startRename(tester);
+      await tester.enterText(rename, '半截');
+      await tester.pump();
+
+      // 桌面上应用失去激活时焦点管理器会把焦点拿走，回到前台再还上。
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      addTearDown(
+        () => tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        ),
+      );
+      field(tester, rename).focusNode!.unfocus();
+      await tester.pump();
+      expect(rename, findsOneWidget);
+      expect(field(tester, rename).controller!.text, '半截');
+      expect(writes, 0);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      field(tester, rename).focusNode!.requestFocus();
+      await tester.pump();
+      await tester.enterText(rename, '半截补全');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(stored('terms').name, '半截补全');
+    });
+
     testWidgets('名字没变：不写设置', (tester) async {
       await startRename(tester);
       await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -463,6 +505,65 @@ void main() {
       expect(field(tester, term(1)).controller!.text, isEmpty);
       expect(stored('people').entries, _people.entries);
     });
+
+    testWidgets('词表在别处被改了：按外面的内容重建，接着改的是新内容', (tester) async {
+      await load(const [_terms]);
+      await pump(tester);
+
+      // 表挂上之后还没动过，条目就在别处换掉了。
+      settings.setGlossary(
+        _terms.copyWith(entries: const [GlossaryEntry(term: '外来的')]),
+      );
+      await tester.pump();
+      expect(cells, findsNWidgets(4));
+      expect(field(tester, term(0)).controller!.text, '外来的');
+
+      await tester.enterText(translation(0), 'external');
+      await tester.pump();
+      expect(_pairs(stored('terms').entries), [('外来的', 'external')]);
+    });
+
+    testWidgets('Tab 在格子之间走，不停在行尾的删除按钮上', (tester) async {
+      await load(const [_terms]);
+      await pump(tester);
+      await tester.tap(term(1));
+      await tester.pump();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(field(tester, translation(1)).focusNode!.hasFocus, isTrue);
+      // 最后一行的译文格再按 Tab：到新增行的原文格。
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(field(tester, term(2)).focusNode!.hasFocus, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(field(tester, translation(2)).focusNode!.hasFocus, isTrue);
+    });
+
+    testWidgets('右键菜单里的粘贴：多行文本同样按行追加', (tester) async {
+      await load(const [_terms]);
+      await pump(tester);
+      clipboard(tester, '通义=Tongyi\nLM Studio\n');
+      await tester.tap(term(0));
+      await tester.pump();
+      await tester.tap(
+        term(0),
+        buttons: kSecondaryButton,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Paste'));
+      await tester.pumpAndSettle();
+      expect(field(tester, term(0)).controller!.text, '百炼');
+      expect(_pairs(stored('terms').entries), [
+        ('百炼', 'Bailian'),
+        ('Ollama', ''),
+        ('通义', 'Tongyi'),
+        ('LM Studio', ''),
+      ]);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets('多行粘贴：逐行解析后追加在末尾，不写进当前格', (tester) async {
       await load(const [_terms]);

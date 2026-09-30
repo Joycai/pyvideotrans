@@ -401,8 +401,8 @@ class AppSettings extends ChangeNotifier {
 
   /// 新建一份空词表并存下，返回建好的那份。
   ///
-  /// 名字取「词表 N」里第一个没被占用的；新词表默认启用 —— 建它多半
-  /// 就是为了马上用。
+  /// 名字是「词表 N」：N 从现有份数加一起，取第一个没被占用的。新词表
+  /// 默认启用 —— 建它多半就是为了马上用。
   Glossary addGlossary() {
     final taken = {for (final glossary in _glossaries) glossary.name};
     var n = _glossaries.length + 1;
