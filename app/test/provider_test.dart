@@ -93,6 +93,76 @@ void main() {
       ],
     });
 
+    /// 发一批并把请求体解出来。
+    Future<Map<String, Object?>> sentBody({String? guidance}) async {
+      late http.Request sent;
+      final provider = OpenAiCompatibleTranslationProvider(
+        info: _info,
+        endpoint: _endpoint,
+        extraGuidance: guidance,
+        client: MockClient((r) async {
+          sent = r;
+          return http.Response(reply('${_m}1$_m Hello\n${_m}2$_m World'), 200);
+        }),
+      );
+      await provider.translateBatch(
+        lines: ['你好', '世界'],
+        sourceLanguage: '中文',
+        targetLanguage: '英文',
+        token: CancellationToken(),
+      );
+      expect(sent.headers['content-type'], 'application/json; charset=utf-8');
+      return jsonDecode(utf8.decode(sent.bodyBytes)) as Map<String, Object?>;
+    }
+
+    // 下面两条钉的是「发出去的请求长什么样」。重构模型配置、加词表时，
+    // 不改设置的用户发出的请求必须一个字节都不变。
+    test('请求体：模型、温度 0.3、一条 system 一条 user', () async {
+      final body = await sentBody();
+
+      expect(body.keys, unorderedEquals(['model', 'temperature', 'messages']));
+      expect(body['model'], 'm');
+      expect(body['temperature'], 0.3);
+      expect(body['messages'], [
+        {
+          'role': 'system',
+          'content': TranslationProtocol.systemPrompt(
+            targetLanguageName: '英文',
+          ),
+        },
+        {
+          'role': 'user',
+          'content': '<INPUT>\n${_m}1$_m 你好\n${_m}2$_m 世界\n</INPUT>',
+        },
+      ]);
+    });
+
+    test('补充要求只在填了的时候进系统提示，位置在「示例」之前', () async {
+      String systemOf(Map<String, Object?> body) =>
+          ((body['messages']! as List).first as Map)['content'] as String;
+      List<String> headings(String prompt) => [
+        for (final line in prompt.split('\n'))
+          if (line.startsWith('# ')) line,
+      ];
+
+      final plain = systemOf(await sentBody());
+      expect(plain, startsWith('你是字幕翻译专家。把 <INPUT> 里的每一行翻译成英文。'));
+      expect(headings(plain), [
+        '# 绝对规则：逐行一一对应',
+        '# 跨行断句的处理',
+        '# 语感',
+        '# 示例',
+      ]);
+      // 只有空白等于没填。
+      expect(systemOf(await sentBody(guidance: ' \n ')), plain);
+
+      final guided = systemOf(await sentBody(guidance: '  语气随意些。\n'));
+      expect(
+        guided,
+        plain.replaceFirst('\n# 示例', '\n# 补充要求\n\n语气随意些。\n\n# 示例'),
+      );
+    });
+
     test('返回等长译文', () async {
       final provider = build(
         MockClient((r) async {
@@ -266,6 +336,127 @@ void main() {
       // 只有逗号和空白等于没填。
       expect(ProviderConfig.splitModels(' , ，'), isEmpty);
       expect(ProviderConfig.splitModels(null), isEmpty);
+    });
+
+    // 真实用户的存档是 prefs 里的一段 JSON 字符串，不经过 setConfig。
+    // 这几条直接预置那段字符串：改存储形状时，旧存档读出来的结果不能变。
+    test('读旧存档：逗号串的第一个是默认模型，地址与密钥照用', () async {
+      SharedPreferences.setMockInitialValues({
+        'providerConfigs': jsonEncode({
+          'dashscope_qwen_asr': {
+            'model':
+                ' qwen-audio-3.0-asr-flash-filetrans ,fun-asr-flash，'
+                'qwen-audio-3.0-asr-flash-filetrans,, my-model ',
+            'apiKey': 'sk-asr',
+          },
+          'deepseek': {
+            'baseUrl': 'https://proxy.example/v1',
+            'model': 'deepseek-reasoner，deepseek-chat',
+          },
+          // 只填了密钥：模型与地址回落到登记表。
+          'openai': {'apiKey': 'sk-openai'},
+        }),
+      });
+      final settings = await AppSettings.load();
+
+      final dashscope = Registry.asrInfo('dashscope_qwen_asr')!;
+      expect(settings.modelsFor(dashscope), [
+        'qwen-audio-3.0-asr-flash-filetrans',
+        'fun-asr-flash',
+        'my-model',
+      ]);
+      final asr = settings.endpointFor(dashscope);
+      expect(asr.model, 'qwen-audio-3.0-asr-flash-filetrans');
+      expect(asr.baseUrl, 'https://dashscope.aliyuncs.com/api/v1');
+      expect(asr.apiKey, 'sk-asr');
+      expect(settings.isConfigured(dashscope), isTrue);
+
+      final deepseek = Registry.translationInfo('deepseek')!;
+      expect(settings.modelsFor(deepseek), [
+        'deepseek-reasoner',
+        'deepseek-chat',
+      ]);
+      final mt = settings.endpointFor(deepseek);
+      expect(mt.model, 'deepseek-reasoner');
+      expect(mt.baseUrl, 'https://proxy.example/v1');
+      expect(mt.apiKey, '');
+      expect(settings.isConfigured(deepseek), isFalse);
+
+      final openai = Registry.asrInfo('openai')!;
+      expect(settings.modelsFor(openai), openai.models);
+      expect(settings.endpointFor(openai).model, 'whisper-1');
+      expect(settings.isConfigured(openai), isTrue);
+    });
+
+    test('读旧存档：模型只有逗号与空白等于没填', () async {
+      SharedPreferences.setMockInitialValues({
+        'providerConfigs': jsonEncode({
+          'groq': {'model': ' , ，', 'apiKey': 'k'},
+        }),
+      });
+      final settings = await AppSettings.load();
+      final groq = Registry.asrInfo('groq')!;
+
+      expect(settings.modelsFor(groq), groq.models);
+      expect(settings.endpointFor(groq).model, 'whisper-large-v3');
+    });
+
+    test('存档损坏时回到默认值，不让应用起不来', () async {
+      for (final broken in [
+        '{不是 JSON',
+        '[]',
+        // 有一条不是对象：整份作废，不猜哪几条还能用。
+        jsonEncode({
+          'openai': 'whisper-1',
+          'groq': {'apiKey': 'k'},
+        }),
+      ]) {
+        SharedPreferences.setMockInitialValues({'providerConfigs': broken});
+        final settings = await AppSettings.load();
+
+        expect(settings.configFor('groq').apiKey, isNull, reason: broken);
+        expect(
+          settings.endpointFor(Registry.asrInfo('openai')!).model,
+          'whisper-1',
+          reason: broken,
+        );
+      }
+    });
+
+    test('恢复识别分区的默认：清掉识别侧的配置与提示词，翻译侧不动', () async {
+      SharedPreferences.setMockInitialValues({
+        'providerConfigs': jsonEncode({
+          'openai': {'model': 'gpt-4o-transcribe', 'apiKey': 'sk-asr'},
+          'deepseek': {'model': 'deepseek-reasoner', 'apiKey': 'sk-mt'},
+        }),
+        'asrProviderId': 'groq',
+        'asrPrompt': '专有名词',
+        'translationProviderId': 'ollama',
+        'translationGuidance': '口语化',
+      });
+      final settings = await AppSettings.load();
+
+      settings.reset(
+        SettingsGroup.asr,
+        providerIds: Registry.asr.map((p) => p.id),
+      );
+
+      expect(settings.asrProviderId, 'openai');
+      expect(settings.asrPrompt, '');
+      expect(settings.configFor('openai').apiKey, isNull);
+      expect(settings.endpointFor(Registry.asrInfo('openai')!).model, 'whisper-1');
+
+      expect(settings.translationProviderId, 'ollama');
+      expect(settings.translationGuidance, '口语化');
+      expect(settings.configFor('deepseek').apiKey, 'sk-mt');
+
+      // 落盘的那份也只剩翻译侧，重启后不会又读回来。
+      final reloaded = await AppSettings.load();
+      expect(reloaded.configFor('openai').apiKey, isNull);
+      expect(
+        reloaded.endpointFor(Registry.translationInfo('deepseek')!).model,
+        'deepseek-reasoner',
+      );
     });
 
     test('缺密钥时算未配置，本地服务不需要密钥', () async {
