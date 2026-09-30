@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_extensions.dart';
+import '../../core/widgets/indicators.dart';
 import '../../domain/task.dart';
 
 /// 阶段条：字幕任务六段，转码任务四段。一眼看出任务走到哪、哪一段出了事、
@@ -41,7 +42,6 @@ class _Segment extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = context.colors;
     final ext = context.ext;
-    final e = context.elevation;
     final dim = cs.surfaceContainerHighest;
     final state = task.stages[stage]!.state;
 
@@ -50,57 +50,26 @@ class _Segment extends StatelessWidget {
 
     return switch (state) {
       StageState.done => _bar(color: cs.primary),
-      StageState.failed => _bar(
-        color: dim,
-        fillFraction: 0.4,
-        fill: [cs.error, cs.error],
+      StageState.failed => GradientProgressBar(
+        value: 0.4,
+        colors: [cs.error, cs.error],
       ),
-      StageState.cancelled => _bar(
-        color: dim,
-        fillFraction: task.progress,
-        fill: [cs.outline, cs.outline],
+      StageState.cancelled => GradientProgressBar(
+        value: task.progress,
+        colors: [cs.outline, cs.outline],
       ),
       StageState.active =>
         task.status == TaskStatus.queued
             ? _bar(color: cs.outline)
-            : _bar(
-                color: dim,
-                fillFraction: task.progress,
-                fill: e.progressGradient,
-              ),
+            : GradientProgressBar(value: task.progress),
       StageState.skipped => _DashedSegment(color: cs.outlineVariant),
       StageState.pending => _bar(color: dim),
     };
   }
 
-  Widget _bar({
-    required Color color,
-    double fillFraction = 0,
-    List<Color>? fill,
-  }) => ClipRRect(
+  Widget _bar({required Color color}) => ClipRRect(
     borderRadius: BorderRadius.circular(2),
-    child: SizedBox(
-      height: 4,
-      child: ColoredBox(
-        color: color,
-        child: fill == null
-            ? null
-            : Align(
-                alignment: Alignment.centerLeft,
-                // Align 会把高度放松成 0..4，不写 heightFactor 的话没有 child 的
-                // DecoratedBox 会缩成 0 高，填充根本画不出来。
-                child: FractionallySizedBox(
-                  widthFactor: fillFraction.clamp(0.0, 1.0),
-                  heightFactor: 1,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: fill),
-                    ),
-                  ),
-                ),
-              ),
-      ),
-    ),
+    child: SizedBox(height: 4, child: ColoredBox(color: color)),
   );
 }
 

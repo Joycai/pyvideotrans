@@ -421,6 +421,7 @@ flutter test --tags golden --run-skipped
   `test/cue_selection_test.dart` 用随机操作序列检查选区不变量，`editor_test.dart` 与 `editor_ui_test.dart` 的「多选」组覆盖点选、筛选下扩选、批量指派与撤销，并用随机操作序列检查「批量只改看得见的选中行」；
   `preview_playback_test.dart` 的「播放与选区的联动」组覆盖多选时的脱钩。
 - `test/status_snapshot_test.dart` 钉死状态栏快照的服务文案（未选择 / 未配置 / 已配置）与任务计数。
+- `test/progress_bar_test.dart` 核对渐变进度条与任务页阶段条填充块的实际尺寸（高度不为 0、宽度按进度 / 失败 40%）。
 - `test/task_filter_test.dart` 钉死状态分组；`test/tasks_controller_test.dart` 覆盖筛选、选中、拖入分流，
   以及拆掉任务页再装回来后选中与筛选仍在。
 - golden 测试共 55 张场景图；拆 UI 文件后必须保持逐像素一致。

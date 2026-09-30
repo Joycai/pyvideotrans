@@ -38,31 +38,53 @@ void main() {
     expect(size.width, 50);
   });
 
-  testWidgets('StageBar 进行中的阶段按进度填充', (tester) async {
-    final task = SubtitleTask(
-      id: 't1',
-      sourcePath: '/v/a.mp4',
-      kind: TaskKind.transcribe,
-      options: testOptions(),
-      status: TaskStatus.running,
-      stage: TaskStage.recognize,
-      progress: 0.5,
-      stages: {
-        for (final s in TaskStage.values)
-          s: StageRecord(
-            state: switch (s) {
-              TaskStage.queued || TaskStage.prepare => StageState.done,
-              TaskStage.recognize => StageState.active,
-              _ => StageState.pending,
-            },
-          ),
-      },
-    );
+  // 夹具里只有识别段带填充，是阶段条里唯一一条 GradientProgressBar：取它的填充占比。
+  Future<double> segmentFill(WidgetTester tester, SubtitleTask task) async {
     await tester.pumpWidget(
       _host(SizedBox(width: 200, child: StageBar(task: task))),
     );
-    final size = _fillSize(tester, find.byType(StageBar));
-    expect(size.height, 4);
-    expect(size.width, greaterThan(0));
+    final bar = find.byType(GradientProgressBar);
+    final fill = _fillSize(tester, bar);
+    expect(fill.height, 4);
+    return fill.width / tester.getSize(bar).width;
+  }
+
+  SubtitleTask transcribeAt(StageState current, {TaskStatus? status}) =>
+      SubtitleTask(
+        id: 't1',
+        sourcePath: '/v/a.mp4',
+        kind: TaskKind.transcribe,
+        options: testOptions(),
+        status: status ?? TaskStatus.running,
+        stage: TaskStage.recognize,
+        progress: 0.5,
+        stages: {
+          for (final s in TaskStage.values)
+            s: StageRecord(
+              state: switch (s) {
+                TaskStage.queued || TaskStage.prepare => StageState.done,
+                TaskStage.recognize => current,
+                _ => StageState.pending,
+              },
+            ),
+        },
+      );
+
+  testWidgets('StageBar 进行中的阶段按进度填充', (tester) async {
+    final ratio = await segmentFill(tester, transcribeAt(StageState.active));
+    expect(ratio, closeTo(0.5, 0.01));
+  });
+
+  testWidgets('StageBar 取消的阶段填到中断处，失败的阶段填 40%', (tester) async {
+    final cancelled = await segmentFill(
+      tester,
+      transcribeAt(StageState.cancelled, status: TaskStatus.cancelled),
+    );
+    expect(cancelled, closeTo(0.5, 0.01));
+    final failed = await segmentFill(
+      tester,
+      transcribeAt(StageState.failed, status: TaskStatus.failed),
+    );
+    expect(failed, closeTo(0.4, 0.01));
   });
 }
