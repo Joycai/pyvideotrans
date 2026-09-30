@@ -13,6 +13,7 @@ class NewTranslateParamPanel extends StatelessWidget {
     required this.footerOverride,
     required this.onOpenSettings,
     required this.onStart,
+    this.onOpenGlossary,
   });
 
   final TranslateFormController form;
@@ -20,6 +21,7 @@ class NewTranslateParamPanel extends StatelessWidget {
   /// 页面在拖放拒收时用中性色的说明顶替控制器里的 error 版本。
   final FooterMessage? footerOverride;
   final VoidCallback onOpenSettings;
+  final VoidCallback? onOpenGlossary;
   final VoidCallback onStart;
 
   @override
@@ -30,6 +32,7 @@ class NewTranslateParamPanel extends StatelessWidget {
         form: form,
         flat: true,
         onOpenSettings: onOpenSettings,
+        onOpenGlossary: onOpenGlossary,
       ),
       TranslateAdvancedSection(form: form, flat: true),
     ],

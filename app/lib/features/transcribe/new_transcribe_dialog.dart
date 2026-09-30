@@ -34,6 +34,7 @@ Future<EnqueueRequest?> showNewTranscribeDialog(
   List<String> initialPaths = const [],
   Ffmpeg? media,
   VoidCallback? onOpenSettings,
+  VoidCallback? onOpenGlossary,
 }) => showDialog<EnqueueRequest>(
   context: context,
   barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.32),
@@ -42,6 +43,7 @@ Future<EnqueueRequest?> showNewTranscribeDialog(
     initialPaths: initialPaths,
     media: media,
     onOpenSettings: onOpenSettings,
+    onOpenGlossary: onOpenGlossary,
   ),
 );
 
@@ -52,6 +54,7 @@ class NewTranscribeDialog extends StatefulWidget {
     this.initialPaths = const [],
     this.media,
     this.onOpenSettings,
+    this.onOpenGlossary,
   });
 
   final AppSettings settings;
@@ -61,6 +64,9 @@ class NewTranscribeDialog extends StatefulWidget {
   /// 缺密钥时那个「去设置」。为 null 就只显示文字 —— 宁可不给链接，
   /// 也不要给一个点了没反应的链接。
   final VoidCallback? onOpenSettings;
+
+  /// 还没有词表时的「去设置里建一个」：落到设置页的「词表」分区。
+  final VoidCallback? onOpenGlossary;
 
   @override
   State<NewTranscribeDialog> createState() => NewTranscribeDialogState();
@@ -103,6 +109,14 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
     if (result != null) Navigator.of(context).pop(result);
   }
 
+  /// 去设置之前先关掉这个对话框。没给去处时返回 null，链接就不显示。
+  VoidCallback? _leaving(VoidCallback? go) => go == null
+      ? null
+      : () {
+          Navigator.of(context).pop();
+          go();
+        };
+
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
@@ -144,12 +158,8 @@ class NewTranscribeDialogState extends State<NewTranscribeDialog> {
                             const SizedBox(height: AppSpacing.s4),
                             TranscribeRecognizeSection(
                               form: _form,
-                              onOpenSettings: widget.onOpenSettings == null
-                                  ? null
-                                  : () {
-                                      Navigator.of(context).pop();
-                                      widget.onOpenSettings!();
-                                    },
+                              onOpenSettings: _leaving(widget.onOpenSettings),
+                              onOpenGlossary: _leaving(widget.onOpenGlossary),
                             ),
                             const SizedBox(height: AppSpacing.s4),
                             TranscribeTranslateSection(form: _form),

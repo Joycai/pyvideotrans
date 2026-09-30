@@ -46,7 +46,13 @@ abstract class NewTaskFormBase<TOptions, TFile extends StagedPath>
   TOptions _options;
   TOptions get options => _options;
   @protected
-  set options(TOptions value) => _options = value;
+  set options(TOptions value) => _options = normalize(value);
+
+  /// 每次写入参数前过一遍，保住各项之间必须成立的关系（开关开着，选中的
+  /// 模型就得支持它）。参数从好几条路写进来 —— 用户改、重置、「上次参数」、
+  /// 跟着设置变 —— 规则放在这一处，不靠每条路各自记得。
+  @protected
+  TOptions normalize(TOptions options) => options;
 
   final _files = <TFile>[];
   List<TFile> get files => List.unmodifiable(_files);
@@ -114,13 +120,13 @@ abstract class NewTaskFormBase<TOptions, TFile extends StagedPath>
 
   /// 改一项参数。多行输入框每个字符都会调，传 `notify: false` 省掉重建。
   void update(TOptions Function(TOptions) change, {bool notify = true}) {
-    _options = change(_options);
+    options = change(_options);
     if (notify) notifyIfAlive();
   }
 
   /// 恢复为默认值，不动文件列表。
   void reset() {
-    _options = defaultOptions;
+    options = defaultOptions;
     notifyIfAlive();
   }
 
@@ -128,7 +134,7 @@ abstract class NewTaskFormBase<TOptions, TFile extends StagedPath>
   bool applyLastUsed() {
     final last = lastUsedOptions;
     if (last == null) return false;
-    _options = refreshLastUsed(last);
+    options = refreshLastUsed(last);
     notifyIfAlive();
     return true;
   }
@@ -155,7 +161,7 @@ abstract class NewTaskFormBase<TOptions, TFile extends StagedPath>
   Future<void> pickOutputDir() async {
     final dir = await _pickDirectory();
     if (dir == null || _disposed) return;
-    _options = withOutput(_options, OutputLocation.custom, dir: dir);
+    options = withOutput(_options, OutputLocation.custom, dir: dir);
     notifyIfAlive();
   }
 
@@ -274,9 +280,10 @@ abstract class TaskOptionsFormBase<TFile extends StagedPath>
         ProviderCatalog.translationInfo(o.translationProviderId),
         before.models,
       ),
+      // 勾选没动过的跟着默认走；动过的只把已经删掉的那几份去掉。
       glossaryIds: listEquals(o.glossaryIds, before.glossaryIds)
           ? _defaults.glossaryIds
-          : null,
+          : _existing(o.glossaryIds),
     );
     if (next.asrModel == o.asrModel &&
         next.translationModel == o.translationModel &&
@@ -314,6 +321,8 @@ abstract class TaskOptionsFormBase<TFile extends StagedPath>
   /// 「上次参数」里的模型是上次提交时的那份声明。之后用户可能在设置里改过
   /// 它的参数或接入方式；下拉里名字一样，看不出是旧的，所以填回时按名字
   /// 换成设置里现在的那份 —— 与「先填回、再去改设置」得到的结果一致。
+  ///
+  /// 勾选的词表里已经删掉的那几份丢掉。
   @override
   TaskOptions refreshLastUsed(TaskOptions last) => last.copyWith(
     asrModel: _declared(
@@ -324,7 +333,27 @@ abstract class TaskOptionsFormBase<TFile extends StagedPath>
       last.translationModel,
       ProviderCatalog.translationInfo(last.translationProviderId),
     ),
+    glossaryIds: _existing(last.glossaryIds),
   );
+
+  /// 勾上或去掉一份词表。
+  void toggleGlossary(String id) => update((o) {
+    final selected = o.glossaryIds.toSet();
+    if (!selected.remove(id)) selected.add(id);
+    return o.copyWith(glossaryIds: _existing(selected));
+  });
+
+  /// [ids] 里还存在的那几份，按设置里词表的先后排。
+  ///
+  /// 顺序固定下来，「勾选等于默认」的判断才不受点击先后影响：去掉再勾回
+  /// 来的，仍然算没动过，继续跟着设置里的默认走。
+  List<String> _existing(Iterable<String> ids) {
+    final wanted = ids.toSet();
+    return [
+      for (final glossary in settings.glossaries)
+        if (wanted.contains(glossary.id)) glossary.id,
+    ];
+  }
 
   /// 交给队列的那份参数：按勾选的词表把条目展开进去。
   ///

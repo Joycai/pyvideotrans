@@ -19,6 +19,8 @@ import 'package:subtitle_studio/pipeline/task_runner.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
+import 'glossary_fixtures.dart';
+
 /// 与 render_test.dart 同样的字体处理：测试默认字体不含汉字。
 Future<void> _loadCjkFont() async {
   const candidates = [
@@ -83,6 +85,8 @@ void main() {
       ..asrProviderId = variant == 'C' ? 'groq' : 'dashscope_qwen_asr'
       ..setConfig('dashscope_qwen_asr', const ProviderConfig(apiKey: 'sk-test'))
       ..setConfig('deepseek', const ProviderConfig(apiKey: 'sk-test'));
+    // 空态留着「还没有词表」那句；其余几张带上词表筹码。
+    if (variant != 'A') sampleGlossaries.forEach(settings.setGlossary);
     final media = _FakeFfmpeg();
     final form = TranscribeFormController(settings: settings, media: media);
     addTearDown(form.dispose);

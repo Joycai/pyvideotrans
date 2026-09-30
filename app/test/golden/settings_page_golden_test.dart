@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
-import 'package:subtitle_studio/domain/glossary.dart';
 import 'package:subtitle_studio/domain/providers/model_params.dart';
 import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
@@ -19,6 +18,8 @@ import 'package:subtitle_studio/features/shell/nav_rail.dart';
 import 'package:subtitle_studio/features/shell/status_bar.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
+
+import 'glossary_fixtures.dart';
 
 /// 「环境」分区要显示 ffmpeg 路径。给一份写死的，截图才不会随测试机
 /// 装没装 ffmpeg、装在哪而变。
@@ -49,35 +50,6 @@ ThemeData _readable(ThemeData theme) => theme.copyWith(
   primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'Noto Sans SC'),
 );
 
-/// 设计稿「词表」画板里的三份：一份术语、一份人名、一份还空着且没启用。
-const _glossaries = [
-  Glossary(
-    id: 'terms',
-    name: '术语 · 产品',
-    entries: [
-      GlossaryEntry(term: 'Kubernetes', translation: 'Kubernetes'),
-      GlossaryEntry(term: '缓存穿透', translation: 'cache penetration'),
-      GlossaryEntry(term: '布隆过滤器', translation: 'Bloom filter'),
-      GlossaryEntry(term: 'SenseVoice'),
-      GlossaryEntry(term: '字幕组', translation: 'fansub group'),
-      GlossaryEntry(term: '向量数据库', translation: 'vector database'),
-      GlossaryEntry(term: 'whisper-large-v3'),
-    ],
-  ),
-  Glossary(
-    id: 'people',
-    name: '人名',
-    entries: [
-      GlossaryEntry(term: '陈嘉行', translation: 'Chen Jiaxing'),
-      GlossaryEntry(term: 'Aaron Patterson'),
-      GlossaryEntry(term: '李雪琴', translation: 'Li Xueqin'),
-      GlossaryEntry(term: 'Mia'),
-      GlossaryEntry(term: '周鸣', translation: 'Zhou Ming'),
-    ],
-  ),
-  Glossary(id: 'season3', name: '第 3 季新词', enabledByDefault: false),
-];
-
 void main() {
   setUpAll(_loadCjkFont);
 
@@ -97,7 +69,7 @@ void main() {
   }) async {
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
-    if (glossaries) _glossaries.forEach(settings.setGlossary);
+    if (glossaries) sampleGlossaries.forEach(settings.setGlossary);
     if (variant == 'B') {
       settings
         ..asrProviderId = 'groq'

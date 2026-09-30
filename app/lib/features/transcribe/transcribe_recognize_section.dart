@@ -6,15 +6,17 @@ import '../../core/widgets/fields.dart';
 import '../../domain/language.dart';
 import '../../domain/providers/provider_catalog.dart';
 import '../../services/readiness.dart';
+import '../shared/glossary_chips.dart';
 import '../shared/provider_fields.dart';
 import 'transcribe_form.dart';
 
-/// 「识别」段：语音语言、识别服务、模型、就绪状态行。
+/// 「识别」段：语音语言、识别服务、模型、说话人分离、词表、就绪状态行。
 class TranscribeRecognizeSection extends StatelessWidget {
   const TranscribeRecognizeSection({
     super.key,
     required this.form,
     this.onOpenSettings,
+    this.onOpenGlossary,
     this.flat = false,
   });
 
@@ -23,6 +25,9 @@ class TranscribeRecognizeSection extends StatelessWidget {
   /// 缺密钥时那个「去设置」。为 null 就只显示文字 —— 宁可不给链接，
   /// 也不要给一个点了没反应的链接。
   final VoidCallback? onOpenSettings;
+
+  /// 还没有词表时那个「去设置里建一个」，落到设置页的「词表」分区。
+  final VoidCallback? onOpenGlossary;
 
   /// 平铺（页面）还是卡片（对话框）。
   final bool flat;
@@ -64,10 +69,11 @@ class TranscribeRecognizeSection extends StatelessWidget {
         onChanged: form.selectAsrProvider,
       ),
     );
-    final model = modelField(
+    final model = ModelField(
       info: info,
       model: o.asrModel,
       settings: form.settings,
+      onOpenSettings: onOpenSettings,
       onChanged: (m) => form.update((o) => o.copyWith(asrModel: m)),
     );
     final status = ReadinessLine(
@@ -75,18 +81,24 @@ class TranscribeRecognizeSection extends StatelessWidget {
       needsApiKey: info?.needsApiKey ?? true,
       onOpenSettings: onOpenSettings,
     );
-    // 这家服务有模型能分离说话人才有这个开关；没有的连灰掉的都不给，
-    // 免得用户去找原因。选中的模型不支持时由就绪状态行提示。
-    // 开关开着的时候总是给：用户在设置里把能分离的模型删掉之后，「上次
-    // 参数」或表单里可能还留着开着的开关，不给的话就没地方关了。
-    final diarize =
-        o.diarize ||
-            info != null &&
-                form.settings
-                    .asrModelsFor(info)
-                    .any((m) => m.capabilities.diarization)
+    final capabilities = o.asrModel.capabilities;
+    // 选中的模型能分离说话人才有这个开关；不能的连灰掉的都不给，免得
+    // 用户去找原因。模型换成不能分离的那一刻，表单会把开关关掉
+    // （[TranscribeFormController.normalize]），不会留下看不见又开着的。
+    final diarize = capabilities.diarization
         ? _DiarizeToggle(form: form)
         : null;
+    // 识别与接着的翻译共用这一行勾选。
+    final glossary = GlossaryChips(
+      glossaries: form.settings.glossaries,
+      selectedIds: o.glossaryIds.toSet(),
+      onToggle: form.toggleGlossary,
+      onOpenSettings: onOpenGlossary,
+      note: capabilities.contextPrompt
+          ? null
+          : '当前模型不接受上下文提示，识别时不会发送词表与识别提示；'
+                '接着翻译时仍会用词表。',
+    );
 
     if (flat) {
       return flatSection(
@@ -108,6 +120,7 @@ class TranscribeRecognizeSection extends StatelessWidget {
           twoColumn(language, service, gap: gap),
           model,
           ?diarize,
+          glossary,
           status,
         ],
       );
@@ -139,6 +152,8 @@ class TranscribeRecognizeSection extends StatelessWidget {
           const SizedBox(height: AppSpacing.s3),
           diarize,
         ],
+        const SizedBox(height: AppSpacing.s3),
+        glossary,
         const SizedBox(height: AppSpacing.s2),
         status,
       ],
@@ -172,9 +187,11 @@ class _DiarizeToggle extends StatelessWidget {
                 Text('说话人分离', style: context.texts.titleSmall),
                 const SizedBox(height: 1),
                 Text(
+                  // 时间码从哪来取自选中模型的能力，不写死某个模型的名字。
                   on
                       ? '按说话人切开字幕并标上「说话人1：」；多人会议、访谈适用。'
-                            '需选 qwen-audio-3.0-asr-flash-filetrans 模型。'
+                            '时间码取自'
+                            '${form.options.asrModel.capabilities.timing}。'
                       : '区分多位说话人，给每条字幕标上说话人编号',
                   style: context.texts.bodySmall?.copyWith(
                     color: cs.onSurfaceVariant,

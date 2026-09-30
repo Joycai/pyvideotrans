@@ -8,7 +8,6 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/glossary.dart';
-import 'settings_section.dart';
 
 /// 一份词表的条目表（设计稿 C-GlossarySection 右侧）：原文、译文两列，
 /// 逐格编辑，表尾常驻一行用来新增，多行文本粘贴进来按行解析。

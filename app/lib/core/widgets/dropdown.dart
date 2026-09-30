@@ -31,10 +31,18 @@ class DropdownEntry<T> {
 
 /// 下拉里的一组，带标题（「可用」「第二期未实施」）。
 class DropdownGroup<T> {
-  const DropdownGroup({this.title, required this.entries});
+  const DropdownGroup({
+    this.title,
+    required this.entries,
+    this.divided = false,
+  });
 
   final String? title;
   final List<DropdownEntry<T>> entries;
+
+  /// 没有标题的组也在上方画一条分隔线，把它与前一组隔开（模型下拉末尾的
+  /// 「其他模型…」）。有标题的组本来就带线，不用给。
+  final bool divided;
 }
 
 /// 分组下拉。菜单用玻璃浮层，选中项打勾，禁用项灰掉但保留说明文字。
@@ -50,6 +58,7 @@ class AppDropdown<T> extends StatefulWidget {
     this.error = false,
     this.menuWidth = 344,
     this.placeholder = '—',
+    this.footer,
   });
 
   final T value;
@@ -66,6 +75,10 @@ class AppDropdown<T> extends StatefulWidget {
   final bool error;
   final double menuWidth;
   final String placeholder;
+
+  /// 菜单末尾的一段说明，与选项之间隔一条线。不传时菜单与原来一样。
+  /// 参数是「关掉菜单」：里面的链接点了之后通常要先把菜单收起来。
+  final Widget Function(BuildContext context, VoidCallback close)? footer;
 
   @override
   State<AppDropdown<T>> createState() => _AppDropdownState<T>();
@@ -116,7 +129,9 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
             _GroupHeader(
               title: group.title!,
               divider: group != widget.groups.first,
-            ),
+            )
+          else if (group.divided)
+            const _MenuDivider(),
           for (final entry in group.entries)
             _DropdownItem<T>(
               entry: entry,
@@ -127,6 +142,16 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
                 _controller.close();
               },
             ),
+        ],
+        if (widget.footer case final footer?) ...[
+          const _MenuDivider(),
+          SizedBox(
+            width: widget.menuWidth,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+              child: footer(context, _controller.close),
+            ),
+          ),
         ],
       ],
       builder: (context, controller, _) => ControlSurface(
@@ -172,6 +197,17 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
   }
 }
 
+/// 菜单里的一条分隔线。
+class _MenuDivider extends StatelessWidget {
+  const _MenuDivider();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: AppSpacing.s1),
+    child: Container(height: 1, color: context.colors.outlineVariant),
+  );
+}
+
 class _GroupHeader extends StatelessWidget {
   const _GroupHeader({required this.title, required this.divider});
 
@@ -184,11 +220,7 @@ class _GroupHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (divider)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.s1),
-            child: Container(height: 1, color: cs.outlineVariant),
-          ),
+        if (divider) const _MenuDivider(),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
           child: Text(

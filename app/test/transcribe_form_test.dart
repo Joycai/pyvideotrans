@@ -386,25 +386,31 @@ void main() {
     });
   });
 
-  group('提交时冻结词表', () {
-    test('按勾选把条目展开进任务参数；「上次参数」只记勾选', () async {
-      final settings = await _settings();
-      settings
-        ..setGlossary(
-          const Glossary(
-            id: 'a',
-            name: '访谈',
-            entries: [GlossaryEntry(term: '百炼', translation: 'Bailian')],
-          ),
-        )
-        ..setGlossary(
-          const Glossary(
-            id: 'b',
-            name: '技术',
-            enabledByDefault: false,
-            entries: [GlossaryEntry(term: 'Ollama')],
-          ),
-        );
+  group('词表勾选', () {
+    const interview = Glossary(
+      id: 'a',
+      name: '访谈',
+      entries: [GlossaryEntry(term: '百炼', translation: 'Bailian')],
+    );
+    const tech = Glossary(
+      id: 'b',
+      name: '技术',
+      enabledByDefault: false,
+      entries: [GlossaryEntry(term: 'Ollama')],
+    );
+
+    late AppSettings settings;
+    late TranscribeFormController form;
+
+    setUp(() async {
+      settings = await _settings()
+        ..setGlossary(interview)
+        ..setGlossary(tech);
+      form = TranscribeFormController(settings: settings);
+      addTearDown(form.dispose);
+    });
+
+    test('提交时按勾选把条目展开进任务参数；「上次参数」只记勾选', () async {
       final media = GatedFfmpeg();
       final form = TranscribeFormController(settings: settings, media: media);
       final done = form.add(['/v/a.mp4']);
@@ -412,13 +418,10 @@ void main() {
       await done;
 
       // 表单打开之后词表又加了一条：提交时取的是此刻的内容。
-      form.update((o) => o.copyWith(glossaryIds: ['b', 'a', '已删']));
+      form.toggleGlossary('b');
       settings.setGlossary(
-        const Glossary(
-          id: 'b',
-          name: '技术',
-          enabledByDefault: false,
-          entries: [
+        tech.copyWith(
+          entries: const [
             GlossaryEntry(term: 'Ollama'),
             GlossaryEntry(term: 'LM Studio'),
           ],
@@ -434,8 +437,132 @@ void main() {
       expect(request.options.asrModel, form.options.asrModel);
 
       final last = settings.lastTranscribeOptions!;
-      expect(last.glossaryIds, ['b', 'a', '已删']);
+      expect(last.glossaryIds, ['a', 'b']);
       expect(last.glossary, isEmpty);
+    });
+
+    test('点一下勾上、再点去掉；顺序跟着设置里的词表走，不跟着点击先后', () {
+      expect(form.options.glossaryIds, ['a']);
+
+      form
+        ..toggleGlossary('a')
+        ..toggleGlossary('b');
+      expect(form.options.glossaryIds, ['b']);
+      form.toggleGlossary('a');
+      // 后勾的 a 排在前面：它在设置里排在前面。
+      expect(form.options.glossaryIds, ['a', 'b']);
+
+      // 不存在的 id 勾不上。
+      form.toggleGlossary('没有这份');
+      expect(form.options.glossaryIds, ['a', 'b']);
+    });
+
+    test('去掉再勾回来仍算没动过：继续跟着设置里的默认走', () {
+      form
+        ..toggleGlossary('a')
+        ..toggleGlossary('a');
+      settings.setGlossary(tech.copyWith(enabledByDefault: true));
+      expect(form.options.glossaryIds, ['a', 'b']);
+    });
+
+    test('勾选动过之后不跟默认走；词表被删掉时把它从勾选里去掉', () {
+      form.toggleGlossary('b');
+      expect(form.options.glossaryIds, ['a', 'b']);
+
+      settings.setGlossary(interview.copyWith(enabledByDefault: false));
+      expect(form.options.glossaryIds, ['a', 'b']);
+
+      settings.removeGlossary('a');
+      expect(form.options.glossaryIds, ['b']);
+    });
+
+    test('「上次参数」恢复勾选，已经删掉的那几份丢掉', () {
+      settings.lastTranscribeOptions = form.options.copyWith(
+        glossaryIds: ['b', '已删', 'a'],
+      );
+      settings.removeGlossary('a');
+
+      expect(form.applyLastUsed(), isTrue);
+      expect(form.options.glossaryIds, ['b']);
+    });
+
+    test('重置为默认：回到默认启用的那几份', () {
+      form
+        ..toggleGlossary('a')
+        ..toggleGlossary('b');
+      expect(form.options.glossaryIds, ['b']);
+      form.reset();
+      expect(form.options.glossaryIds, ['a']);
+    });
+  });
+
+  group('说话人分离与模型能力', () {
+    final bailian = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+    final capable = bailian.presets[3];
+    final incapable = bailian.presets[0];
+
+    late AppSettings settings;
+    late TranscribeFormController form;
+
+    setUp(() async {
+      settings = await _settings()
+        ..asrProviderId = bailian.id
+        ..setModels(bailian.id, [capable, incapable]);
+      form = TranscribeFormController(settings: settings);
+      addTearDown(form.dispose);
+      form.update((o) => o.copyWith(diarize: true));
+    });
+
+    test('模型能分离：开关开得起来', () {
+      expect(form.options.asrModel, capable);
+      expect(form.options.diarize, isTrue);
+    });
+
+    test('换成不能分离的模型：开关随之关掉，换回来也不会自己打开', () {
+      form.update((o) => o.copyWith(asrModel: incapable));
+      expect(form.options.diarize, isFalse);
+      form.update((o) => o.copyWith(asrModel: capable));
+      expect(form.options.diarize, isFalse);
+    });
+
+    test('模型不能分离时开不了', () {
+      form
+        ..update((o) => o.copyWith(asrModel: incapable))
+        ..update((o) => o.copyWith(diarize: true));
+      expect(form.options.diarize, isFalse);
+    });
+
+    test('设置里把默认模型换成不能分离的：表单跟过去，开关关掉', () {
+      settings.setModels(bailian.id, [incapable, capable]);
+      expect(form.options.asrModel, incapable);
+      expect(form.options.diarize, isFalse);
+    });
+
+    test('「上次参数」里开着分离，而那个模型现在声明成不能分离的：填回时关掉', () {
+      settings.lastTranscribeOptions = form.options;
+      // 同一个名字，在设置里改成了同步接入：不再能分离。
+      settings.setModels(bailian.id, [
+        AsrModelSpec(
+          name: capable.name,
+          transport: AsrTransport.dashscopeSync,
+          dialect: DashScopeDialect.qwenAudio3,
+        ),
+      ]);
+      form.applyLastUsed();
+      expect(form.options.asrModel.transport, AsrTransport.dashscopeSync);
+      expect(form.options.diarize, isFalse);
+    });
+
+    test('初始参数里开着分离而模型不支持：建表单时就关掉', () {
+      final form = TranscribeFormController(
+        settings: settings,
+        initial: settings.defaultTaskOptions().copyWith(
+          asrModel: incapable,
+          diarize: true,
+        ),
+      );
+      addTearDown(form.dispose);
+      expect(form.options.diarize, isFalse);
     });
   });
 }

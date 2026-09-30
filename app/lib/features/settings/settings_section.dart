@@ -181,43 +181,6 @@ class SettingsRow extends StatelessWidget {
   }
 }
 
-/// 一段说明（服务不需要密钥、写入失败…）：小图标 + bodySmall。
-class InlineNote extends StatelessWidget {
-  const InlineNote({
-    super.key,
-    required this.text,
-    this.icon = Symbols.info,
-    this.color,
-  });
-
-  final String text;
-  final IconData icon;
-
-  /// 默认 onSurfaceVariant；出错时传 error。
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final fg = color ?? context.colors.onSurfaceVariant;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 1),
-          child: Icon(icon, size: 14, weight: 400, color: fg),
-        ),
-        const SizedBox(width: AppSpacing.s1),
-        Flexible(
-          child: Text(
-            text,
-            style: context.texts.bodySmall?.copyWith(color: fg),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 /// 设置页用的分段按钮：surfaceContainerLow 容器 + 选中块浮起（白底 + 软阴影）。
 ///
 /// 与编辑器里的 [SegmentedToggle] 是两种东西：那个是并列的实底段，

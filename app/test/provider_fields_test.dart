@@ -4,12 +4,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/core/widgets/fields.dart';
 import 'package:subtitle_studio/domain/providers/asr_transport.dart';
+import 'package:subtitle_studio/domain/providers/model_params.dart';
 import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/features/shared/provider_fields.dart';
 import 'package:subtitle_studio/features/transcribe/transcribe_form.dart';
 import 'package:subtitle_studio/features/transcribe/transcribe_recognize_section.dart';
+import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
+
+const _bailian = 'dashscope_qwen_asr';
 
 /// 「新建转写」「新建翻译」的模型字段：显示的必须就是会发出去的那个模型。
 void main() {
@@ -34,275 +38,503 @@ void main() {
     await tester.pump();
   }
 
+  /// 把模型字段摆出来，像表单那样记住选中的模型并传回去。
+  Future<List<T>> pumpField<T extends ModelSpec>(
+    WidgetTester tester, {
+    required ProviderInfo info,
+    required T model,
+    VoidCallback? onOpenSettings,
+  }) async {
+    final emitted = <T>[];
+    var current = model;
+    await pump(
+      tester,
+      StatefulBuilder(
+        builder: (context, setState) => ModelField<T>(
+          info: info,
+          model: current,
+          settings: settings,
+          onOpenSettings: onOpenSettings,
+          onChanged: (m) {
+            emitted.add(m);
+            setState(() => current = m);
+          },
+        ),
+      ),
+    );
+    return emitted;
+  }
+
   AppDropdown<String> dropdown(WidgetTester tester) =>
       tester.widget<AppDropdown<String>>(find.byType(AppDropdown<String>));
 
-  List<String> entries(WidgetTester tester) => [
+  /// 下拉里的模型（不含末尾隔开的「其他模型…」）。
+  List<DropdownEntry<String>> models(WidgetTester tester) => [
     for (final g in dropdown(tester).groups)
-      for (final e in g.entries) e.value,
+      if (!g.divided) ...g.entries,
   ];
 
-  testWidgets('设置里逗号分隔的模型成为候选，第一个是默认选中', (tester) async {
-    final info = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
-    settings.setConfig(
-      info.id,
-      const ProviderConfig(
-        legacyModelText: 'qwen-audio-3.0-asr-flash, fun-asr-flash',
-      ),
-    );
-    await pump(
-      tester,
-      modelField(
-        info: info,
-        model: settings.defaultAsrModel(info),
-        settings: settings,
-        onChanged: (_) {},
-      ),
-    );
-    expect(dropdown(tester).value, 'qwen-audio-3.0-asr-flash');
-    expect(entries(tester), ['qwen-audio-3.0-asr-flash', 'fun-asr-flash']);
-    // 服务下拉旁的标签也得是这个模型，而不是登记表默认值。
-    expect(
-      serviceLabel(info, settings.defaultAsrModel(info)),
-      '阿里百炼 · Qwen3-ASR · qwen-audio-3.0-asr-flash',
-    );
-  });
+  List<String> names(WidgetTester tester) => [
+    for (final e in models(tester)) e.value,
+  ];
 
-  testWidgets('设置里只填一个模型时，下拉也只列这一个，不再显示登记表默认值', (tester) async {
-    final info = ProviderCatalog.asrInfo('openai')!;
-    settings.setConfig(
-      info.id,
-      const ProviderConfig(legacyModelText: 'my-whisper'),
-    );
-    await pump(
-      tester,
-      modelField(
-        info: info,
-        model: settings.defaultAsrModel(info),
-        settings: settings,
-        onChanged: (_) {},
-      ),
-    );
-    expect(dropdown(tester).value, 'my-whisper');
-    expect(entries(tester), ['my-whisper']);
-  });
+  /// 末尾那一项「其他模型…」；没有时为 null。
+  DropdownEntry<String>? other(WidgetTester tester) =>
+      dropdown(tester).groups
+          .where((g) => g.divided)
+          .firstOrNull
+          ?.entries
+          .single;
 
-  testWidgets('没填时用登记表的常用列表；任务里覆盖的模型即使不在候选里也列出来', (tester) async {
-    final info = ProviderCatalog.asrInfo('openai')!;
-    await pump(
-      tester,
-      modelField(
-        info: info,
-        model: info.guess('gpt-4o-transcribe'),
-        settings: settings,
-        onChanged: (_) {},
-      ),
-    );
-    expect(dropdown(tester).value, 'gpt-4o-transcribe');
-    expect(entries(tester), [for (final p in info.presets) p.name]);
+  Future<void> pickOther(WidgetTester tester) async {
+    dropdown(tester).onChanged(other(tester)!.value);
+    await tester.pump();
+  }
 
-    await pump(
-      tester,
-      modelField(
-        info: info,
-        model: info.guess('legacy-model'),
-        settings: settings,
-        onChanged: (_) {},
-      ),
-    );
-    expect(dropdown(tester).value, 'legacy-model');
-    expect(entries(tester).first, 'legacy-model');
-  });
+  TextField typing(WidgetTester tester) =>
+      tester.widget<TextField>(find.byType(TextField));
 
-  testWidgets('只登记了一个默认模型的翻译服务：没填时给输入框，可以手填', (tester) async {
-    // Ollama、OpenRouter 的模型是用户自己挑的，登记表里那一个只是例子。
-    for (final id in ['siliconflow_chat', 'openrouter', 'ollama']) {
-      final info = ProviderCatalog.translationInfo(id)!;
-      await pump(
-        tester,
-        modelField(
-          info: info,
-          model: settings.defaultChatModel(info),
-          settings: settings,
-          onChanged: (_) {},
+  group('候选', () {
+    testWidgets('设置里逗号分隔的模型成为候选，第一个是默认选中', (tester) async {
+      final info = ProviderCatalog.asrInfo(_bailian)!;
+      settings.setConfig(
+        info.id,
+        const ProviderConfig(
+          legacyModelText: 'qwen-audio-3.0-asr-flash, fun-asr-flash',
         ),
       );
-      expect(find.byType(AppDropdown<String>), findsNothing, reason: id);
-      final field = tester.widget<SingleLineField>(
-        find.byType(SingleLineField),
-      );
-      // 框里先放着默认模型：不改就用它。
-      expect(field.value, info.presets.single.name, reason: id);
-    }
-  });
-
-  testWidgets('在下拉里选中的是整份声明，不只是名字', (tester) async {
-    final info = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
-    final picked = <AsrModelSpec>[];
-    await pump(
-      tester,
-      modelField(
+      await pumpField(
+        tester,
         info: info,
         model: settings.defaultAsrModel(info),
-        settings: settings,
-        onChanged: picked.add,
-      ),
-    );
-    dropdown(tester).onChanged('qwen-audio-3.0-asr-flash-filetrans');
-    // 接入方式与报文族跟着一起来：任务冻结的就是这一份。
-    expect(picked.single, same(info.presets[3]));
-    expect(picked.single.transport, AsrTransport.dashscopeFileTrans);
-  });
+      );
+      expect(dropdown(tester).value, 'qwen-audio-3.0-asr-flash');
+      expect(names(tester), ['qwen-audio-3.0-asr-flash', 'fun-asr-flash']);
+      // 服务下拉旁的标签也得是这个模型，而不是登记表默认值。
+      expect(
+        serviceLabel(info, settings.defaultAsrModel(info)),
+        '阿里百炼 · Qwen3-ASR · qwen-audio-3.0-asr-flash',
+      );
+    });
 
-  testWidgets('手填：填了按名字补成声明，清空回到默认模型', (tester) async {
-    final custom = ProviderCatalog.asrInfo('asr_custom')!;
-    final typed = <AsrModelSpec>[];
-    await pump(
-      tester,
-      modelField(
-        info: custom,
-        model: settings.defaultAsrModel(custom),
-        settings: settings,
-        onChanged: typed.add,
-      ),
-    );
-    final field = tester.widget<SingleLineField>(find.byType(SingleLineField));
-    field.onChanged(' my-whisper ');
-    field.onChanged('  ');
-    expect(typed, [
-      const AsrModelSpec(
-        name: 'my-whisper',
-        transport: AsrTransport.openaiTranscription,
-      ),
-      settings.defaultAsrModel(custom),
-    ]);
-    expect(typed.last.isUnset, isTrue);
+    testWidgets('设置里只有一个模型时，下拉也只列这一个，不再显示登记表默认值', (tester) async {
+      final info = ProviderCatalog.asrInfo('openai')!;
+      settings.setConfig(
+        info.id,
+        const ProviderConfig(legacyModelText: 'my-whisper'),
+      );
+      await pumpField(
+        tester,
+        info: info,
+        model: settings.defaultAsrModel(info),
+      );
+      expect(dropdown(tester).value, 'my-whisper');
+      expect(names(tester), ['my-whisper']);
+    });
 
-    // 翻译侧同理：清空回到登记表里那个例子。
-    final ollama = ProviderCatalog.translationInfo('ollama')!;
-    final chat = <ChatModelSpec>[];
-    await pump(
-      tester,
-      modelField(
-        info: ollama,
-        model: settings.defaultChatModel(ollama),
-        settings: settings,
-        onChanged: chat.add,
-      ),
-    );
-    tester.widget<SingleLineField>(find.byType(SingleLineField))
-      ..onChanged('llama3.1')
-      ..onChanged('');
-    expect(chat, [
-      const ChatModelSpec(name: 'llama3.1'),
-      ollama.presets.single,
-    ]);
-  });
+    testWidgets('没配过时用登记表的常用列表；不在候选里的模型排在最前', (tester) async {
+      final info = ProviderCatalog.asrInfo('openai')!;
+      await pumpField(
+        tester,
+        info: info,
+        model: info.guess('gpt-4o-transcribe'),
+      );
+      expect(dropdown(tester).value, 'gpt-4o-transcribe');
+      expect(names(tester), [for (final p in info.presets) p.name]);
 
-  testWidgets('只登记了一个预置的翻译服务：用户配过模型之后就给下拉', (tester) async {
-    final info = ProviderCatalog.translationInfo('ollama')!;
-    settings.setConfig(
-      info.id,
-      const ProviderConfig(legacyModelText: 'llama3.1'),
-    );
-    await pump(
-      tester,
-      modelField(
+      // 「上次参数」带来的、设置里已经删掉的模型：照样列出来，别让下拉崩掉。
+      await pumpField(tester, info: info, model: info.guess('legacy-model'));
+      expect(dropdown(tester).value, 'legacy-model');
+      expect(names(tester), [
+        'legacy-model',
+        for (final p in info.presets) p.name,
+      ]);
+    });
+
+    testWidgets('在下拉里选中的是整份声明，不只是名字', (tester) async {
+      final info = ProviderCatalog.asrInfo(_bailian)!;
+      final picked = await pumpField(
+        tester,
+        info: info,
+        model: settings.defaultAsrModel(info),
+      );
+      dropdown(tester).onChanged('qwen-audio-3.0-asr-flash-filetrans');
+      // 接入方式与报文族跟着一起来：任务冻结的就是这一份。
+      expect(picked.single, same(info.presets[3]));
+      expect(picked.single.transport, AsrTransport.dashscopeFileTrans);
+    });
+
+    testWidgets('设置里调过参数的模型：选中的是带着参数的那一份', (tester) async {
+      final info = ProviderCatalog.translationInfo('deepseek')!;
+      settings.setModels(info.id, const [
+        ChatModelSpec(name: 'deepseek-chat'),
+        ChatModelSpec(
+          name: 'deepseek-reasoner',
+          options: ModelOptions({'temperature': null}),
+        ),
+      ]);
+      final picked = await pumpField(
+        tester,
         info: info,
         model: settings.defaultChatModel(info),
-        settings: settings,
-        onChanged: (_) {},
-      ),
-    );
-    expect(find.byType(SingleLineField), findsNothing);
-    expect(entries(tester), ['llama3.1']);
+      );
+      dropdown(tester).onChanged('deepseek-reasoner');
+      expect(picked.single.options.number(ModelParams.chatTemperature), isNull);
+    });
+
+    testWidgets('还没选模型的声明：下拉里列成「未选择」，服务标签只有服务名', (tester) async {
+      final info = ProviderCatalog.asrInfo('openai')!;
+      await pumpField(tester, info: info, model: info.unsetModel);
+      expect(dropdown(tester).value, '');
+      expect(models(tester).first.label, '未选择');
+      expect(models(tester).first.description, isNull);
+      expect(serviceLabel(info, info.unsetModel), 'OpenAI');
+      expect(serviceLabel(null, info.unsetModel), '—');
+    });
+
+    testWidgets('未实施的服务：灰掉并说明', (tester) async {
+      final info = ProviderCatalog.asrInfo('local_backend')!;
+      await pumpField(tester, info: info, model: info.presets.first);
+      expect(dropdown(tester).enabled, isFalse);
+      expect(find.text('该服务暂不支持切换模型'), findsOneWidget);
+    });
   });
 
-  testWidgets('还没选模型的声明：下拉里列成「未选择」，服务标签只有服务名', (tester) async {
-    final info = ProviderCatalog.asrInfo('openai')!;
-    await pump(
-      tester,
-      modelField(
+  group('每一项的说明', () {
+    testWidgets('多接入方式的服务：带接入方式标签与能力摘要', (tester) async {
+      final info = ProviderCatalog.asrInfo(_bailian)!;
+      await pumpField(
+        tester,
         info: info,
-        model: info.unsetModel,
-        settings: settings,
-        onChanged: (_) {},
-      ),
-    );
-    expect(dropdown(tester).value, '');
-    expect(
-      dropdown(tester).groups.single.entries.first.label,
-      '未选择',
-    );
-    expect(serviceLabel(info, info.unsetModel), 'OpenAI');
-    expect(serviceLabel(null, info.unsetModel), '—');
+        model: settings.defaultAsrModel(info),
+      );
+      expect(
+        [for (final e in models(tester)) (e.value, e.badge, e.description)],
+        [
+          ('qwen3-asr-flash', '同步逐段', '上下文提示 · 切片时间码'),
+          ('qwen-audio-3.0-asr-flash', '同步逐段', '切片时间码'),
+          ('fun-asr-flash-2026-06-15', '同步逐段', '切片时间码'),
+          ('qwen-audio-3.0-asr-flash-filetrans', '异步整文件', '说话人分离 · 句级时间戳'),
+          ('qwen3-asr-flash-filetrans', '异步整文件', '句级时间戳'),
+        ],
+      );
+    });
+
+    testWidgets('只有一种接入方式的服务：没有标签，只有能力摘要', (tester) async {
+      final info = ProviderCatalog.asrInfo('openai')!;
+      await pumpField(
+        tester,
+        info: info,
+        model: settings.defaultAsrModel(info),
+      );
+      for (final entry in models(tester)) {
+        expect(entry.badge, isNull);
+        expect(entry.description, '上下文提示 · 分段时间戳');
+      }
+    });
+
+    testWidgets('翻译模型：没有标签也没有摘要', (tester) async {
+      final info = ProviderCatalog.translationInfo('deepseek')!;
+      await pumpField(
+        tester,
+        info: info,
+        model: settings.defaultChatModel(info),
+      );
+      for (final entry in models(tester)) {
+        expect(entry.badge, isNull);
+        expect(entry.description, isNull);
+      }
+    });
   });
 
-  testWidgets('自定义接口：设置里填了就按填的列，没填才给输入框', (tester) async {
-    final info = ProviderCatalog.asrInfo('asr_custom')!;
-    await pump(
-      tester,
-      modelField(
-        info: info,
-        model: settings.defaultAsrModel(info),
-        settings: settings,
-        onChanged: (_) {},
-      ),
-    );
-    expect(find.byType(AppDropdown<String>), findsNothing);
-    expect(find.byType(SingleLineField), findsOneWidget);
+  group('其他模型…', () {
+    testWidgets('只有一种接入方式的服务：菜单末尾隔开一项', (tester) async {
+      // 包括只登记了一个预置的翻译服务：那一个只是例子，想用别的不必先
+      // 绕去设置。
+      for (final info in <ProviderInfo>[
+        ProviderCatalog.asrInfo('openai')!,
+        ProviderCatalog.translationInfo('deepseek')!,
+        ProviderCatalog.translationInfo('ollama')!,
+      ]) {
+        await pumpField(tester, info: info, model: settings.defaultModel(info));
+        expect(names(tester), [for (final p in info.presets) p.name]);
+        expect(other(tester)?.label, '其他模型…', reason: info.id);
+        expect(other(tester)?.description, '手动填写模型名，只用于这次任务');
+        expect(dropdown(tester).footer, isNull);
+      }
+    });
 
-    settings.setConfig(
-      info.id,
-      const ProviderConfig(legacyModelText: 'whisper-x'),
-    );
-    await pump(
-      tester,
-      modelField(
+    testWidgets('选中后变成输入框；填了按名字补成只用于这次任务的声明', (tester) async {
+      final info = ProviderCatalog.asrInfo('openai')!;
+      final emitted = await pumpField(
+        tester,
         info: info,
         model: settings.defaultAsrModel(info),
-        settings: settings,
-        onChanged: (_) {},
-      ),
-    );
-    expect(find.byType(SingleLineField), findsNothing);
-    expect(dropdown(tester).value, 'whisper-x');
-    expect(entries(tester), ['whisper-x']);
+      );
+      await pickOther(tester);
+
+      expect(find.byType(AppDropdown<String>), findsNothing);
+      expect(typing(tester).controller!.text, isEmpty);
+      expect(typing(tester).focusNode!.hasFocus, isTrue);
+      expect(find.text('只用于这次任务，不会加进设置里的列表。清空后回到列表。'), findsOneWidget);
+      // 还没填：交出去的是「未选择」，就绪检查会拦住，不会拿旧模型去跑。
+      expect(emitted.single.isUnset, isTrue);
+
+      await tester.enterText(find.byType(TextField), ' my-whisper ');
+      await tester.pump();
+      expect(
+        emitted.last,
+        const AsrModelSpec(
+          name: 'my-whisper',
+          transport: AsrTransport.openaiTranscription,
+        ),
+      );
+      // 没有写进设置。
+      expect(settings.ownModels(info), isEmpty);
+    });
+
+    testWidgets('填的名字设置里有：用设置里带着参数的那一份', (tester) async {
+      final info = ProviderCatalog.translationInfo('deepseek')!;
+      const tuned = ChatModelSpec(
+        name: 'deepseek-reasoner',
+        options: ModelOptions({'temperature': null}),
+      );
+      settings.setModels(info.id, const [
+        ChatModelSpec(name: 'deepseek-chat'),
+        tuned,
+      ]);
+      final emitted = await pumpField(
+        tester,
+        info: info,
+        model: settings.defaultChatModel(info),
+      );
+      await pickOther(tester);
+      await tester.enterText(find.byType(TextField), 'deepseek-reasoner');
+      await tester.pump();
+      expect(emitted.last, tuned);
+    });
+
+    testWidgets('名字不合法：说明原因，交出「未选择」', (tester) async {
+      final info = ProviderCatalog.translationInfo('deepseek')!;
+      final emitted = await pumpField(
+        tester,
+        info: info,
+        model: settings.defaultChatModel(info),
+      );
+      await pickOther(tester);
+      await tester.enterText(find.byType(TextField), 'gpt 4o');
+      await tester.pump();
+      expect(find.text('模型名不能含空格或逗号'), findsOneWidget);
+      expect(emitted.last.isUnset, isTrue);
+
+      await tester.enterText(find.byType(TextField), 'gpt-4o');
+      await tester.pump();
+      expect(find.text('模型名不能含空格或逗号'), findsNothing);
+      expect(emitted.last, const ChatModelSpec(name: 'gpt-4o'));
+    });
+
+    testWidgets('点 × 回到列表，选回默认模型', (tester) async {
+      final info = ProviderCatalog.asrInfo('openai')!;
+      final emitted = await pumpField(
+        tester,
+        info: info,
+        model: info.presets[1],
+      );
+      await pickOther(tester);
+      await tester.enterText(find.byType(TextField), 'my-whisper');
+      await tester.pump();
+
+      await tester.tap(find.byTooltip('回到列表'));
+      await tester.pump();
+      expect(find.byType(TextField), findsNothing);
+      expect(emitted.last, settings.defaultAsrModel(info));
+      expect(dropdown(tester).value, info.presets.first.name);
+    });
+
+    testWidgets('清空后失焦：回到列表；填着东西失焦：留在输入框', (tester) async {
+      final info = ProviderCatalog.asrInfo('openai')!;
+      final emitted = await pumpField(
+        tester,
+        info: info,
+        model: settings.defaultAsrModel(info),
+      );
+      await pickOther(tester);
+      await tester.enterText(find.byType(TextField), 'my-whisper');
+      await tester.pump();
+      typing(tester).focusNode!.unfocus();
+      await tester.pump();
+      expect(find.byType(TextField), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), '  ');
+      await tester.pump();
+      typing(tester).focusNode!.unfocus();
+      await tester.pump();
+      expect(find.byType(TextField), findsNothing);
+      expect(emitted.last, settings.defaultAsrModel(info));
+    });
+
+    testWidgets('手填途中参数被别处换掉（重置、上次参数）：回到列表', (tester) async {
+      final info = ProviderCatalog.asrInfo('openai')!;
+      var model = settings.defaultAsrModel(info);
+      late StateSetter rebuild;
+      await pump(
+        tester,
+        StatefulBuilder(
+          builder: (context, setState) {
+            rebuild = setState;
+            return ModelField<AsrModelSpec>(
+              info: info,
+              model: model,
+              settings: settings,
+              onChanged: (m) => setState(() => model = m),
+            );
+          },
+        ),
+      );
+      await pickOther(tester);
+      await tester.enterText(find.byType(TextField), 'my-whisper');
+      await tester.pump();
+      expect(find.byType(TextField), findsOneWidget);
+
+      rebuild(() => model = info.presets[2]);
+      await tester.pump();
+      expect(find.byType(TextField), findsNothing);
+      expect(dropdown(tester).value, info.presets[2].name);
+    });
+  });
+
+  group('多接入方式的服务（百炼）', () {
+    testWidgets('没有「其他模型…」：光有名字不知道怎么接，菜单末尾指路去设置', (tester) async {
+      final info = ProviderCatalog.asrInfo(_bailian)!;
+      var opened = 0;
+      await pumpField(
+        tester,
+        info: info,
+        model: settings.defaultAsrModel(info),
+        onOpenSettings: () => opened++,
+      );
+      expect(other(tester), isNull);
+
+      await tester.tap(find.byType(AppDropdown<String>));
+      await tester.pumpAndSettle();
+      expect(find.text('要用列表外的模型，'), findsOneWidget);
+      await tester.tap(find.text('在设置里添加'));
+      await tester.pumpAndSettle();
+      expect(opened, 1);
+      // 菜单跟着收起来了。
+      expect(find.text('在设置里添加'), findsNothing);
+    });
+
+    testWidgets('宿主没给去处：那句话是纯文字', (tester) async {
+      final info = ProviderCatalog.asrInfo(_bailian)!;
+      await pumpField(
+        tester,
+        info: info,
+        model: settings.defaultAsrModel(info),
+      );
+      await tester.tap(find.byType(AppDropdown<String>));
+      await tester.pumpAndSettle();
+      expect(find.text('要用列表外的模型，在设置里添加'), findsOneWidget);
+      expect(find.byType(LinkText), findsNothing);
+    });
+  });
+
+  group('没有候选的服务（自定义接口）', () {
+    testWidgets('一直是输入框：填了按名字补成声明，清空或写坏了交出「未选择」', (tester) async {
+      final custom = ProviderCatalog.asrInfo('asr_custom')!;
+      final typed = await pumpField(
+        tester,
+        info: custom,
+        model: settings.defaultAsrModel(custom),
+      );
+      expect(find.byType(AppDropdown<String>), findsNothing);
+      // 没有列表可回。
+      expect(find.byTooltip('回到列表'), findsNothing);
+      expect(typing(tester).decoration?.hintText, '填写模型名');
+
+      await tester.enterText(find.byType(TextField), ' my-whisper ');
+      await tester.pump();
+      expect(
+        typed.last,
+        const AsrModelSpec(
+          name: 'my-whisper',
+          transport: AsrTransport.openaiTranscription,
+        ),
+      );
+      await tester.enterText(find.byType(TextField), 'my whisper');
+      await tester.pump();
+      expect(typed.last.isUnset, isTrue);
+      expect(find.text('模型名不能含空格或逗号'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), '  ');
+      await tester.pump();
+      expect(typed.last.isUnset, isTrue);
+      expect(find.text('模型名不能含空格或逗号'), findsNothing);
+      // 失焦也还是输入框。
+      typing(tester).focusNode!.unfocus();
+      await tester.pump();
+      expect(find.byType(TextField), findsOneWidget);
+    });
+
+    testWidgets('框里先放着任务里的模型；设置里配了模型之后换成下拉', (tester) async {
+      final info = ProviderCatalog.asrInfo('asr_custom')!;
+      await pumpField(tester, info: info, model: info.guess('from-last-time'));
+      expect(typing(tester).controller!.text, 'from-last-time');
+
+      settings.setConfig(
+        info.id,
+        const ProviderConfig(legacyModelText: 'whisper-x'),
+      );
+      await pumpField(
+        tester,
+        info: info,
+        model: settings.defaultAsrModel(info),
+      );
+      expect(find.byType(TextField), findsNothing);
+      expect(dropdown(tester).value, 'whisper-x');
+      expect(names(tester), ['whisper-x']);
+    });
   });
 }
 
 /// 「识别」段里的说话人分离开关。
 void _diarizeToggleTests() {
   late AppSettings settings;
+  final bailian = ProviderCatalog.asrInfo(_bailian)!;
+  final capable = bailian.presets[3];
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     settings = await AppSettings.load()
+      ..asrProviderId = _bailian
       ..setConfig('openai', const ProviderConfig(apiKey: 'sk'))
-      ..setConfig('dashscope_qwen_asr', const ProviderConfig(apiKey: 'sk'));
+      ..setConfig(_bailian, const ProviderConfig(apiKey: 'sk'));
   });
 
   Future<TranscribeFormController> pump(
     WidgetTester tester, {
-    required String asr,
+    AsrModelSpec? model,
     bool diarize = false,
   }) async {
     final form = TranscribeFormController(
       settings: settings,
       initial: settings.defaultTaskOptions().copyWith(
-        asrProviderId: asr,
+        asrModel: model,
         diarize: diarize,
       ),
     );
+    addTearDown(form.dispose);
     await tester.pumpWidget(
       MaterialApp(
         theme: lightTheme,
         home: Scaffold(
-          body: SizedBox(
-            width: 720,
-            child: ListenableBuilder(
-              listenable: form,
-              builder: (_, _) => TranscribeRecognizeSection(form: form),
+          body: SingleChildScrollView(
+            child: SizedBox(
+              width: 720,
+              child: ListenableBuilder(
+                listenable: form,
+                builder: (_, _) => TranscribeRecognizeSection(form: form),
+              ),
             ),
           ),
         ),
@@ -312,46 +544,70 @@ void _diarizeToggleTests() {
     return form;
   }
 
-  testWidgets('只有支持的服务才显示开关', (tester) async {
-    await pump(tester, asr: 'openai');
+  /// 识别段里的模型下拉（第三个下拉：语言、服务之后）。
+  AppDropdown<String> modelDropdown(WidgetTester tester) => tester
+      .widgetList<AppDropdown<String>>(find.byType(AppDropdown<String>))
+      .elementAt(2);
+
+  testWidgets('选中的模型能分离才显示开关，不给灰掉的', (tester) async {
+    // 默认模型是同步的 Qwen3-ASR：同一家服务，但这个模型不能分离。
+    await pump(tester);
     expect(find.text('说话人分离'), findsNothing);
 
-    await pump(tester, asr: 'dashscope_qwen_asr');
+    await pump(tester, model: capable);
     expect(find.text('说话人分离'), findsOneWidget);
+    expect(find.text('区分多位说话人，给每条字幕标上说话人编号'), findsOneWidget);
   });
 
-  // 「上次参数」里开着分离，而设置里能分离的模型已经删了：开关得留着，
-  // 不然参数里一直是开的，界面上没地方关。
-  testWidgets('开关开着时总是显示，关掉之后才收起', (tester) async {
-    settings.setModels('dashscope_qwen_asr', [
-      const AsrModelSpec(
-        name: 'qwen3-asr-flash',
-        transport: AsrTransport.dashscopeSync,
-        dialect: DashScopeDialect.qwen3Asr,
-      ),
-    ]);
-    final form = await pump(tester, asr: 'dashscope_qwen_asr', diarize: true);
-    expect(find.text('说话人分离'), findsOneWidget);
-
+  testWidgets('开着时的说明：时间码来源取自模型的能力，不写模型名', (tester) async {
+    final form = await pump(tester, model: capable);
     await tester.tap(find.text('说话人分离'));
     await tester.pump();
+    expect(form.options.diarize, isTrue);
+    expect(
+      find.text(
+        '按说话人切开字幕并标上「说话人1：」；多人会议、访谈适用。'
+        '时间码取自句级时间戳。',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('filetrans 模型'), findsNothing);
+  });
+
+  testWidgets('模型换成不能分离的那一刻：开关关掉并收起', (tester) async {
+    final form = await pump(tester, model: capable, diarize: true);
+    expect(form.options.diarize, isTrue);
+
+    modelDropdown(tester).onChanged('qwen3-asr-flash');
+    await tester.pump();
+    expect(form.options.asrModel.name, 'qwen3-asr-flash');
+    expect(form.options.diarize, isFalse);
+    expect(find.text('说话人分离'), findsNothing);
+
+    // 换回来不会自己打开：用户得再点一次。
+    modelDropdown(tester).onChanged(capable.name);
+    await tester.pump();
+    expect(find.text('说话人分离'), findsOneWidget);
+    expect(form.options.diarize, isFalse);
+  });
+
+  testWidgets('换到不支持的服务时参数随之关掉', (tester) async {
+    final form = await pump(tester, model: capable, diarize: true);
+    // 走服务下拉的 onChanged，跟用户真换服务一样。
+    final service = tester
+        .widgetList<AppDropdown<String>>(find.byType(AppDropdown<String>))
+        .firstWhere((d) => d.value == _bailian);
+    service.onChanged('openai');
+    await tester.pump();
+    expect(form.options.asrProviderId, 'openai');
     expect(form.options.diarize, isFalse);
     expect(find.text('说话人分离'), findsNothing);
   });
 
-  testWidgets('点开关切换参数；换到不支持的服务时参数随之关掉', (tester) async {
-    final form = await pump(tester, asr: 'dashscope_qwen_asr');
-    await tester.tap(find.text('说话人分离'));
-    await tester.pump();
-    expect(form.options.diarize, isTrue);
-
-    // 走服务下拉的 onChanged，跟用户真换服务一样。
-    final service = tester
-        .widgetList<AppDropdown<String>>(find.byType(AppDropdown<String>))
-        .firstWhere((d) => d.value == 'dashscope_qwen_asr');
-    service.onChanged('openai');
-    await tester.pump();
-    expect(form.options.asrProviderId, 'openai');
+  testWidgets('初始参数里开着分离而模型不支持：建表单时就关掉', (tester) async {
+    // 「上次参数」、旧存档都可能带来这样一份：界面上没有开关，不能让它
+    // 悄悄开着进任务。
+    final form = await pump(tester, diarize: true);
     expect(form.options.diarize, isFalse);
     expect(find.text('说话人分离'), findsNothing);
   });

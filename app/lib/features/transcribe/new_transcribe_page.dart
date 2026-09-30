@@ -40,12 +40,16 @@ class NewTranscribePage extends StatefulWidget {
     required this.queue,
     required this.onOpenSettings,
     required this.onOpenTasks,
+    this.onOpenGlossary,
   });
 
   final TranscribeFormController form;
   final TaskQueue queue;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenTasks;
+
+  /// 还没有词表时的「去设置里建一个」：落到设置页的「词表」分区。
+  final VoidCallback? onOpenGlossary;
 
   @override
   State<NewTranscribePage> createState() => NewTranscribePageState();
@@ -90,6 +94,7 @@ class NewTranscribePageState extends NewTaskPageState<NewTranscribePage> {
           ? null
           : (text: note, tone: FooterTone.rejected),
       onOpenSettings: widget.onOpenSettings,
+      onOpenGlossary: widget.onOpenGlossary,
       onStart: start,
     );
   }

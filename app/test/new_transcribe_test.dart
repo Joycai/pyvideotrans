@@ -33,6 +33,7 @@ Future<AppSettings> _settings({bool withKey = true}) async {
 void main() {
   EnqueueRequest? result;
   var openedSettings = false;
+  var openedGlossary = false;
 
   Future<void> open(
     WidgetTester tester, {
@@ -41,6 +42,7 @@ void main() {
   }) async {
     result = null;
     openedSettings = false;
+    openedGlossary = false;
     final settings = await _settings(withKey: withKey);
     tester.view
       ..physicalSize = const Size(1000, 1000)
@@ -59,6 +61,7 @@ void main() {
                 initialPaths: paths,
                 media: FakeFfmpeg(),
                 onOpenSettings: () => openedSettings = true,
+                onOpenGlossary: () => openedGlossary = true,
               );
             },
             child: const Text('open'),
@@ -134,6 +137,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(NewTranscribeDialog), findsNothing);
       expect(openedSettings, isTrue);
+    });
+
+    testWidgets('还没有词表：「去设置里建一个」关掉对话框并去词表分区', (tester) async {
+      await open(tester);
+      await tester.tap(find.text('去设置里建一个'));
+      await tester.pumpAndSettle();
+      expect(openedGlossary, isTrue);
+      expect(openedSettings, isFalse);
+      expect(find.byType(NewTranscribeDialog), findsNothing);
+      expect(result, isNull);
     });
 
     testWidgets('字幕文件被拒，并指向「新建翻译」', (tester) async {

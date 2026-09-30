@@ -82,14 +82,16 @@ core/       domain/ ←──── services/
 
 ### `core/widgets/`
 
-- `buttons.dart`：主按钮、控制按钮、静默按钮、图标按钮、分段选择、筛选条。
+- `buttons.dart`：主按钮、控制按钮、静默按钮、图标按钮、分段选择、筛选条 `FilterChipBar` 与单颗筹码 `FilterChipButton`
+  （词表勾选这类要多选、要换行的地方直接用后者）。
 - `glass_dialog.dart`：询问对话框外壳（标题、正文、说明条、左侧文字操作 + 右侧按钮）。
 - `fields.dart`：表单控件公共入口，只 export 下面三个实现文件。
-- `dropdown.dart`：`AppDropdown`、分组 / 条目模型、菜单定位与条目渲染。
+- `dropdown.dart`：`AppDropdown`、分组 / 条目模型、菜单定位与条目渲染；分组可带分隔线（`divided`），
+  菜单末尾可带一段说明（`footer`）。
 - `form_fields.dart`：标签、输入表面、单行 / 数字 / 多行输入、开关、表单分区。
   `SingleLineField` 是所有单行输入（设置页、密钥、模型名、转码后缀 / 额外参数）的唯一实现，
   外部值变化且无焦点时同步进框。
-- `form_layout.dart`：整行可点、链接文字、单选行、两列与平铺段。
+- `form_layout.dart`：整行可点、链接文字、一段说明 `InlineNote`、单选行、两列与平铺段。
 - `text_focus.dart`：`isEditingText`，焦点在不在输入框里。只剩两处用：`SubmitShortcuts`（打字时 Esc 先失焦、多行框里让回车），以及编辑器的 ⌘Z 在打字时让给输入框。同文件的 `isComposingText` 判断输入法是否在组字，只由 `ShortcutAction` 调用。编辑器的单键靠焦点范围隔开，不用它们。
 - `glass_panel.dart`：玻璃卡片与内容面板。
 - `indicators.dart`：状态标签、状态胶囊（`StateChip`，文件表状态列与编码器卡片）、时间码、渐变进度条、状态点。
@@ -211,7 +213,10 @@ core/       domain/ ←──── services/
 
 ## 七、跨 feature 公共件 `lib/features/shared/`
 
-- `provider_fields.dart`：服务分组、模型字段、readiness 行、服务 / 模型摘要。
+- `provider_fields.dart`：服务分组、模型字段 `ModelField`、readiness 行、服务 / 模型摘要。模型字段的候选是设置里
+  这家服务的模型声明，每项带接入方式标签（仅多接入方式的服务）与能力摘要；只有一种接入方式的服务末尾有
+  「其他模型…」（手填一个只用于这次任务的名字，校验不过时交出「未选择」），多接入方式的服务末尾指路去设置。
+- `glossary_chips.dart`：`GlossaryChips`，建任务页勾选词表的一行筹码，转写与翻译共用。
 - `command_block.dart`：转码页、合并页与任务详情共用的可复制命令块。
 - `param_section.dart`：参数面板里的分段 `ParamSection` 与小字 `ParamHint`，转码页与合并页共用。
 - `enqueued_banner.dart`：各建任务页面共用的入队成功横幅。
@@ -232,7 +237,9 @@ core/       domain/ ←──── services/
 - `new_task_form.dart`：三个建任务表单的公共基类 `NewTaskFormBase<TOptions, TFile>` —— 参数与
   `update` / `reset` / 「上次参数」、文件列表的增删与占位行替换、拖放说明、高级区开合、输出位置与
   选目录（`pickDirectory` 可注入）、`seed` / `browse`；`TaskOptionsFormBase` 在其上接好 `TaskOptions`
-  （转写与翻译）。暂存行的基类 `StagedPath`（路径、文件名、目录）。各表单只写收什么文件、怎么探测、怎么校验。
+  （转写与翻译）：跟着设置刷新模型与默认勾选的词表、`toggleGlossary`、提交时展开词表 `frozenOptions`。
+  参数从哪条路写进来都先过 `normalize`（转写表单在这里保证「说话人分离开着，选中的模型就得支持」）。
+  暂存行的基类 `StagedPath`（路径、文件名、目录）。各表单只写收什么文件、怎么探测、怎么校验。
 - `enqueue_request.dart`：`EnqueueRequest`，建任务表单交出来的「一批文件 + 一份参数」。
 - `footer_message.dart`：`FooterMessage` / `FooterTone`，表单报页脚文案的性质，图标由 `TaskFooterLine` 决定 —— 表单不 import material；
   以及三个表单共用的页脚句子：`queuedFooter`（「将创建 N 个…任务」）、`blockedFooter` / `advisoryFooter`（就绪检查）。
@@ -357,9 +364,17 @@ core/       domain/ ←──── services/
 ## 十二、设置 `lib/features/settings/`
 
 - `settings_page.dart`：滚动监听、目录高亮、恢复默认和布局组合。
-- `section_outline.dart`：宽窗口 Rail / 窄窗口 Tabs。
+- `section_outline.dart`：分区枚举 `SettingsSectionKey`（先后就是页面顺序）；宽窗口 Rail / 窄窗口 Tabs。
 - `settings_section.dart`：设置区、设置行、已保存提示和通用输入控件。
-- `provider_section.dart`：识别 / 翻译服务的地址、模型、密钥、批大小。
+- `provider_section.dart`：识别 / 翻译服务的地址、模型列表、密钥、批大小、提示。两边的差别收在增强枚举
+  `ProviderKind` 里（分区、文案、读写哪几项设置），界面代码里不逐处分叉。
+- `model_list_editor.dart`：`ModelListEditor`，一家服务的模型列表 —— 每行一个模型声明（接入方式与模型族标签、
+  能力、「默认」标记、设为默认 / 参数 / 删除），添加行在写下名字时校验，展开是照参数目录出控件的参数面板。
+  只管界面状态，列表由外面给；改动只在确认时回调，写设置走 `AppSettings.addModel` 等四个入口。
+- `glossary_section.dart`：`GlossarySection`，「词表」分区 —— 词表列表（窄窗是一行筹码）、新建 / 改名 / 删除、
+  默认启用开关。
+- `glossary_entry_table.dart`：`GlossaryEntryTable`，一份词表的条目表 —— 逐格编辑、表尾常驻新增行、多行粘贴
+  按行解析；原文空着或重复的行只留在界面上标红，不存盘。表体按需建行、最多显示 12 行。
 - `appearance_section.dart`、`language_section.dart`、`defaults_section.dart`、`output_section.dart`。
 - `environment_section.dart`、`local_backend_section.dart`。
 - `settings_footer.dart`、`settings_reset_dialog.dart`。
@@ -385,6 +400,11 @@ core/       domain/ ←──── services/
 | 加非兼容 provider | `AsrTransport` 加一种接入方式 + 新适配器（参照 `dashscope_*.dart`），在 `services/registry.dart` 的 `switch` 里接上 |
 | 加一个模型参数 | `domain/providers/model_params.dart` 的目录 + 对应实现类里读 `options` |
 | 词表怎么进提示词 | `domain/glossary.dart`（`GlossaryText`）；识别在 `services/registry.dart` 拼进提示，翻译在 `services/translation_protocol.dart` |
+| 设置页怎么编辑模型列表 | `features/settings/model_list_editor.dart`（界面）+ `services/settings.dart` 的 `addModel` / `removeModel` / `setDefaultModel` / `setModelOption` |
+| 设置页怎么编辑词表 | `features/settings/glossary_section.dart` + `glossary_entry_table.dart`；存取在 `services/settings.dart` |
+| 建任务页的模型下拉、「其他模型…」 | `features/shared/provider_fields.dart`（`ModelField`） |
+| 建任务页勾选词表、什么时候展开成条目 | `features/shared/glossary_chips.dart` + `features/shared/new_task_form.dart`（`toggleGlossary` / `frozenOptions`） |
+| 开关按模型能力显隐（说话人分离） | `domain/providers/asr_transport.dart`（`AsrCapabilities`）+ `features/transcribe/transcribe_recognize_section.dart`；开关与模型的约束在 `transcribe_form.dart` 的 `normalize` |
 | 服务未配置 / 语言不支持提示 | `services/readiness.dart` + `features/shared/provider_fields.dart` |
 | 任务类型与阶段顺序 | `domain/task_kind.dart` |
 | 任务筛选分组、后台任务计数 | `domain/task_filter.dart` |
@@ -444,8 +464,10 @@ flutter test --tags golden --run-skipped
   （预置的接法必须与按名字推断的一致）；`glossary_test.dart` 覆盖词表解析与两种提示词；
   `openai_asr_provider_test.dart`、`dashscope_asr_test.dart`、`dashscope_filetrans_test.dart`、`provider_test.dart`
   钉死请求形状 —— 不改设置时发出去的请求一个字段都不变；`readiness_test.dart` 覆盖就绪检查。
+  界面：`model_list_editor_test.dart`（设置页模型列表）、`glossary_section_test.dart`（词表分区与条目表）、
+  `provider_fields_test.dart`（建任务页的模型字段与说话人分离开关）、`glossary_chips_test.dart`（词表勾选）。
 - `test/status_snapshot_test.dart` 钉死状态栏快照的服务文案（未选择 / 未配置 / 已配置）与任务计数。
 - `test/task_filter_test.dart` 钉死状态分组；`test/tasks_controller_test.dart` 覆盖筛选、选中、拖入分流，
   以及拆掉任务页再装回来后选中与筛选仍在。
-- golden 测试共 55 张场景图；拆 UI 文件后必须保持逐像素一致。
+- golden 测试共 58 张场景图；拆 UI 文件后必须保持逐像素一致。
 - `live` 测试需要真实密钥，默认跳过；ffmpeg / 平台硬件编码用例会按本机能力跳过。

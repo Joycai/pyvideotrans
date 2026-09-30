@@ -32,6 +32,7 @@ class NewTranslatePage extends StatefulWidget {
     required this.queue,
     required this.onOpenSettings,
     required this.onOpenTasks,
+    this.onOpenGlossary,
     this.onSwitchToTranscribe,
   });
 
@@ -39,6 +40,9 @@ class NewTranslatePage extends StatefulWidget {
   final TaskQueue queue;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenTasks;
+
+  /// 还没有词表时的「去设置里建一个」：落到设置页的「词表」分区。
+  final VoidCallback? onOpenGlossary;
 
   /// 用户把音视频拖错了门：把这些文件交给「新建转写」页。
   final ValueChanged<List<String>>? onSwitchToTranscribe;
@@ -93,6 +97,7 @@ class NewTranslatePageState extends NewTaskPageState<NewTranslatePage> {
           ? null
           : (text: note, tone: FooterTone.rejected),
       onOpenSettings: widget.onOpenSettings,
+      onOpenGlossary: widget.onOpenGlossary,
       onStart: start,
     );
   }
