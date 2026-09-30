@@ -31,8 +31,14 @@ class TaskStore {
   }
 
   /// 读回全部任务，新的在前。读不了的存档跳过，不让一份坏文件拖垮启动。
+  ///
+  /// 旧版本写的存档（任务参数里没有模型声明）读回来之后交给 [onMigrated]，
+  /// 由调用方写回：不写回的话，下次启动又会按那时的设置重新补一遍，
+  /// 同一个任务两次启动之间可能换了模型。
   Future<List<SubtitleTask>> loadAll({
     required TaskOptions fallbackOptions,
+    DefaultModels? defaultModels,
+    void Function(SubtitleTask task)? onMigrated,
   }) async {
     final directory = Directory(dir);
     if (!await directory.exists()) return [];
@@ -42,12 +48,17 @@ class TaskStore {
       try {
         final json = jsonDecode(await entity.readAsString());
         if (json is! Map) continue;
-        tasks.add(
-          SubtitleTask.fromJson(
-            json.cast<String, Object?>(),
-            fallbackOptions: fallbackOptions,
-          ),
+        final task = SubtitleTask.fromJson(
+          json.cast<String, Object?>(),
+          fallbackOptions: fallbackOptions,
+          defaultModels: defaultModels,
         );
+        tasks.add(task);
+        final options = json['options'];
+        if (options is! Map ||
+            TaskOptions.isLegacyJson(options.cast<String, Object?>())) {
+          onMigrated?.call(task);
+        }
       } on Object {
         continue;
       }

@@ -33,6 +33,7 @@ Future<AppSettings> _settings({bool withKey = true}) async {
 void main() {
   EnqueueRequest? result;
   var openedSettings = false;
+  var openedGlossary = false;
 
   Future<void> open(
     WidgetTester tester, {
@@ -41,6 +42,7 @@ void main() {
   }) async {
     result = null;
     openedSettings = false;
+    openedGlossary = false;
     final settings = await _settings(withKey: withKey);
     tester.view
       ..physicalSize = const Size(1000, 1000)
@@ -59,6 +61,7 @@ void main() {
                 initialPaths: paths,
                 media: FakeFfmpeg(),
                 onOpenSettings: () => openedSettings = true,
+                onOpenGlossary: () => openedGlossary = true,
               );
             },
             child: const Text('open'),
@@ -136,6 +139,16 @@ void main() {
       expect(openedSettings, isTrue);
     });
 
+    testWidgets('还没有词表：「去设置里建一个」关掉对话框并去词表分区', (tester) async {
+      await open(tester);
+      await tester.tap(find.text('去设置里建一个'));
+      await tester.pumpAndSettle();
+      expect(openedGlossary, isTrue);
+      expect(openedSettings, isFalse);
+      expect(find.byType(NewTranscribeDialog), findsNothing);
+      expect(result, isNull);
+    });
+
     testWidgets('字幕文件被拒，并指向「新建翻译」', (tester) async {
       await open(tester, paths: ['/v/a.mp4']);
       tester
@@ -147,10 +160,63 @@ void main() {
     });
   });
 
+  group('其他模型…', () {
+    Future<void> pickOther(WidgetTester tester) async {
+      await tester.tap(find.text('whisper-1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('其他模型…'));
+      await tester.pumpAndSettle();
+    }
+
+    TextField typing(WidgetTester tester) => tester.widget<TextField>(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.hintText == '填写模型名',
+      ),
+    );
+
+    testWidgets('从菜单里选中后输入框直接拿到焦点，可以马上打字', (tester) async {
+      await open(tester, paths: ['/v/a.mp4']);
+      await pickOther(tester);
+      // 对话框的根节点一直占着焦点：不显式请求的话输入框拿不到。
+      expect(typing(tester).focusNode!.hasFocus, isTrue);
+      // 名字还空着：按「未选择模型」拦住。
+      expect(startEnabled(tester), isFalse);
+
+      tester.testTextInput.enterText('my-whisper');
+      await tester.pump();
+      expect(typing(tester).controller!.text, 'my-whisper');
+      expect(startEnabled(tester), isTrue);
+    });
+
+    testWidgets('框还空着时按 Esc：回到列表，不关对话框', (tester) async {
+      await open(tester, paths: ['/v/a.mp4']);
+      await pickOther(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(NewTranscribeDialog), findsOneWidget);
+      expect(find.text('填写模型名'), findsNothing);
+      expect(find.text('whisper-1'), findsOneWidget);
+      expect(startEnabled(tester), isTrue);
+    });
+
+    testWidgets('手填的模型随任务交出去', (tester) async {
+      await open(tester, paths: ['/v/a.mp4']);
+      await pickOther(tester);
+      tester.testTextInput.enterText('my-whisper');
+      await tester.pump();
+      await tester.tap(find.text('开始转写'));
+      await tester.pumpAndSettle();
+      expect(result!.options.asrModel.name, 'my-whisper');
+    });
+  });
+
   group('翻译开关', () {
     testWidgets('关掉后任务类型变成「转写」，翻译参数一并收起', (tester) async {
       await open(tester, paths: ['/v/a.mp4']);
       expect(find.text('目标语言'), findsOneWidget);
+      expect(find.text('翻译要求（可选）'), findsOneWidget);
+      expect(find.text('保持口语，不要书面化；人称用「你」'), findsOneWidget);
 
       await tester.tap(find.text('转写完成后继续翻译'));
       await tester.pumpAndSettle();
@@ -174,6 +240,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('识别提示词（可选）'), findsOneWidget);
       expect(find.text('输出格式'), findsOneWidget);
+      // 提示词只管风格：专有名词指向词表。
+      expect(find.text('风格与说明；专有名词请用词表'), findsOneWidget);
     });
 
     testWidgets('ASS 未实施，灰掉但仍然可读', (tester) async {

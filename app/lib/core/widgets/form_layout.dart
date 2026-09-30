@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/app_extensions.dart';
 import '../theme/tokens.dart';
 
-// 表单里的布局与轻量交互零件：整行可点、链接文字、单选行、两列、平铺段。
+// 表单里的布局与轻量交互零件：整行可点、链接文字、一段说明、单选行、两列、平铺段。
 // 经 fields.dart 导出。
 
 /// 整行可点：设计稿里开关和「高级」标题的热区都是一整行，不是那个小控件。
@@ -52,6 +53,44 @@ class LinkText extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// 一段说明（服务不需要密钥、当前模型不接受提示…）：小图标 + bodySmall。
+/// 设置页与建任务页共用。
+class InlineNote extends StatelessWidget {
+  const InlineNote({
+    super.key,
+    required this.text,
+    this.icon = Symbols.info,
+    this.color,
+  });
+
+  final String text;
+  final IconData icon;
+
+  /// 默认 onSurfaceVariant；出错时传 error。
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = color ?? context.colors.onSurfaceVariant;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(icon, size: 14, weight: 400, color: fg),
+        ),
+        const SizedBox(width: AppSpacing.s1),
+        Flexible(
+          child: Text(
+            text,
+            style: context.texts.bodySmall?.copyWith(color: fg),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 /// 左右两列等宽。

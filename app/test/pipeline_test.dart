@@ -4,22 +4,27 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/glossary.dart';
+import 'package:subtitle_studio/domain/providers/asr_transport.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
+import 'package:subtitle_studio/domain/transcode/options.dart';
 import 'package:subtitle_studio/pipeline/subtitle_output_writer.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/file_io.dart';
+import 'package:subtitle_studio/services/openai_compatible.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 import 'helpers.dart';
 
-const _asrInfo = ProviderInfo(id: 'fake_asr', name: '假识别', vendor: '测试');
-const _mtInfo = ProviderInfo(id: 'fake_mt', name: '假翻译', vendor: '测试');
+const _asrInfo = AsrProviderInfo(id: 'fake_asr', name: '假识别', vendor: '测试');
+const _mtInfo = ChatProviderInfo(id: 'fake_mt', name: '假翻译', vendor: '测试');
 
 /// 记录调用次数的假识别服务，用来验证续跑时不会重做已完成阶段。
 /// 不碰 ffmpeg 的假实现 —— 转写链路的前两阶段只关心「有没有产出音频」。
@@ -492,6 +497,107 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 1));
       }
       expect(first.status, TaskStatus.done);
+    });
+
+    // 任务是排队串行跑的：前一个还在跑，用户已经去改设置建下一个了。
+    // 模型与词表必须是入队那一刻的，不能是跑的时候再去设置里读的。
+    test('入队时冻结模型声明与词表内容，之后改设置不影响排着队的任务', () async {
+      const bailian = GlossaryEntry(term: '百炼', translation: 'Bailian');
+      AsrModelSpec whisper(String name) => AsrModelSpec(
+        name: name,
+        transport: AsrTransport.openaiTranscription,
+      );
+      settings
+        ..setModels('openai', [whisper('asr-before')])
+        ..setModels('deepseek', [const ChatModelSpec(name: 'before')])
+        ..setGlossary(
+          const Glossary(id: 'g', name: '访谈', entries: [bailian]),
+        );
+      final runner = _BlockingRunner(settings: settings, workDir: work.path);
+      final queue = TaskQueue(runner: runner, settings: settings);
+      queue.enqueue(sourcePath: '/v/first.srt');
+      await runner.started.future;
+      // 没给参数的入队（拖进来直接建）：取的是此刻设置里的默认。
+      final queued = queue.enqueue(sourcePath: '/v/second.srt');
+
+      settings
+        ..setModels('openai', [whisper('asr-after')])
+        ..setModels('deepseek', [const ChatModelSpec(name: 'after')])
+        ..setGlossary(
+          const Glossary(
+            id: 'g',
+            name: '访谈',
+            entries: [GlossaryEntry(term: '百炼', translation: 'Model Studio')],
+          ),
+        )
+        ..removeGlossary('g');
+
+      expect(queued.options.translationModel.name, 'before');
+      expect(queued.options.glossaryIds, ['g']);
+      expect(queued.options.glossary, [bailian]);
+
+      // 重启后从存档读回来也还是那一份，不拿新的默认来补。
+      final reloaded = SubtitleTask.fromJson(
+        queued.toJson(),
+        fallbackOptions: settings.defaultTaskOptions(),
+      );
+      expect(reloaded.options.translationModel.name, 'before');
+      expect(reloaded.options.glossary, [bailian]);
+
+      // 任务跑起来时，执行器建服务实例用的也是任务里那一份：从设置里拿的
+      // 只有地址与密钥。用默认的工厂建，不是测试注入的。
+      final real = TaskRunner(settings: settings, workDir: work.path);
+      final translation =
+          real.translationFactory(
+                queued.options.translationProviderId,
+                settings,
+                queued.options,
+              )
+              as OpenAiCompatibleTranslationProvider;
+      expect(translation.endpoint.model, 'before');
+      expect(translation.glossary, [bailian]);
+
+      final asr =
+          real.asrFactory(
+                queued.options.asrProviderId,
+                settings,
+                queued.options,
+              )
+              as OpenAiCompatibleAsrProvider;
+      expect(asr.endpoint.model, 'asr-before');
+      // 词表的原文进了识别提示词。
+      expect(asr.prompt, '百炼');
+
+      runner.release.complete();
+      for (var i = 0; i < 100 && queue.running != null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+    });
+
+    // 字幕参数对媒体任务只是占位。词表是里面唯一会变大的一项，不该抄进
+    // 每个转码任务的存档。
+    test('转码任务的占位参数不带词表', () async {
+      settings.setGlossary(
+        const Glossary(
+          id: 'g',
+          name: '访谈',
+          entries: [GlossaryEntry(term: '百炼')],
+        ),
+      );
+      expect(settings.defaultTaskOptions().glossary, isNotEmpty);
+      final runner = _BlockingRunner(settings: settings, workDir: work.path);
+      final queue = TaskQueue(runner: runner, settings: settings);
+      final task = queue
+          .enqueueTranscode(['/v/a.mp4'], options: const TranscodeOptions())
+          .single;
+      expect(task.options.glossaryIds, isEmpty);
+      expect(task.options.glossary, isEmpty);
+
+      await runner.started.future;
+      runner.release.complete();
+      for (var i = 0; i < 100 && queue.running != null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
     });
 
     test('串行执行，完成后自动取下一个', () async {

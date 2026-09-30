@@ -36,6 +36,7 @@ Future<AppSettings> _settings({bool withKey = true}) async {
 void main() {
   EnqueueRequest? result;
   var openedSettings = false;
+  var openedGlossary = false;
   List<String>? switchedToTranscribe;
 
   Future<void> open(
@@ -45,6 +46,7 @@ void main() {
   }) async {
     result = null;
     openedSettings = false;
+    openedGlossary = false;
     switchedToTranscribe = null;
     final settings = await _settings(withKey: withKey);
     tester.view
@@ -64,6 +66,7 @@ void main() {
                 initialPaths: paths,
                 media: FakeFfmpeg(),
                 onOpenSettings: () => openedSettings = true,
+                onOpenGlossary: () => openedGlossary = true,
                 onSwitchToTranscribe: (m) => switchedToTranscribe = m,
               );
             },
@@ -192,6 +195,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(openedSettings, isTrue);
       expect(find.byType(NewTranslateDialog), findsNothing);
+    });
+  });
+
+  group('词表', () {
+    testWidgets('还没有词表：「去设置里建一个」关掉对话框并去词表分区', (tester) async {
+      await open(tester, paths: ['/s/a.srt']);
+      await tester.tap(find.text('去设置里建一个'));
+      await tester.pumpAndSettle();
+      expect(openedGlossary, isTrue);
+      expect(openedSettings, isFalse);
+      // 不先关掉的话，设置页切过去了，对话框还盖在上面。
+      expect(find.byType(NewTranslateDialog), findsNothing);
+      expect(result, isNull);
     });
   });
 

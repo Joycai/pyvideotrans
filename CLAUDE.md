@@ -40,7 +40,8 @@ app/lib/
   main.dart          唯一装配点
   core/theme/        设计令牌 → ThemeData / ThemeExtension
   core/widgets/      无业务语义控件（fields.dart 是公共入口）
-  domain/            纯数据与纯规则；转码子域在 domain/transcode/，合并 / 重混流在 domain/mux/
+  domain/            纯数据与纯规则；转码子域在 domain/transcode/，合并 / 重混流在 domain/mux/，
+                     服务登记表与模型声明在 domain/providers/
   services/          网络、外部进程、设置与持久化
   pipeline/          队列、任务编排、阶段壳、字幕写出、转码与合并执行
   features/shared/   跨 feature 共用组件
@@ -57,16 +58,24 @@ app/lib/
 
 ### 服务抽象：本地不是一条单独的代码路径
 
-`Registry`（`services/registry.dart`）登记所有可选服务。Ollama、LM Studio 和第二期的本地
-Python 后端都说 OpenAI 兼容协议，于是共用 `OpenAiCompatibleAsrProvider` /
-`OpenAiCompatibleTranslationProvider`，**区别只在 baseUrl、要不要密钥、界面上一个图标**。
-加在线服务通常只是往登记表加一条 `ProviderInfo`。
+有哪些服务、各自有哪些预置模型是只读数据，在 `ProviderCatalog`（`domain/providers/`）；
+`Registry`（`services/registry.dart`）只是工厂，把一条登记项变成能发请求的实例。
+Ollama、LM Studio 和第二期的本地 Python 后端都说 OpenAI 兼容协议，于是共用
+`OpenAiCompatibleAsrProvider` / `OpenAiCompatibleTranslationProvider`，
+**区别只在 baseUrl、要不要密钥、界面上一个图标**。
+加在线服务通常只是往 `ProviderCatalog` 加一条 `AsrProviderInfo` / `ChatProviderInfo`。
 例外是阿里百炼 Qwen3-ASR：接口不是 OpenAI 形态，单独实现在 `dashscope_asr.dart`
 （切片后逐段识别）与 `dashscope_filetrans.dart`（异步整文件转写）。
 
+**走哪个实现、发哪一族报文，看模型声明（`ModelSpec`），不看模型名。** 识别模型的声明写明
+接入方式（`AsrTransport`）与百炼的报文族（`DashScopeDialect`），能力（能不能分离说话人、
+时间码从哪来）由这两项查 `AsrCapabilities` 得出。按名字推断（`guessFromName`）只在
+「手里只有一个名字」时用来补出声明：读旧存档、添加模型时预填建议并认出同名预置、建任务页手填模型名
+（只有一种接入方式的服务才能手填，结果与名字无关）。任务跑起来之后任何地方都不调它。
+
 ### 任务参数在入队那一刻定死
 
-建任务用到的全部参数打包进 `TaskOptions`，随任务入队。任务串行排队跑，用户很可能在排队期间
+建任务用到的全部参数打包进 `TaskOptions`，随任务入队 —— 包括整份模型声明和勾选的词表展开后的条目。任务串行排队跑，用户很可能在排队期间
 改设置去建下一个任务 —— **运行时再去读全局设置，前面排着的任务就会被后面的改动影响**，
 这类 bug 事后极难复现。`AppSettings` 只作为新建任务时的默认值来源。
 

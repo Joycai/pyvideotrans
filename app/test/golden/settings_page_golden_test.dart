@@ -8,6 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
+import 'package:subtitle_studio/domain/providers/model_params.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
+import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/features/settings/section_outline.dart';
 import 'package:subtitle_studio/features/settings/settings_page.dart';
 import 'package:subtitle_studio/features/shell/app_shell.dart';
@@ -15,6 +18,8 @@ import 'package:subtitle_studio/features/shell/nav_rail.dart';
 import 'package:subtitle_studio/features/shell/status_bar.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
+
+import 'glossary_fixtures.dart';
 
 /// 「环境」分区要显示 ffmpeg 路径。给一份写死的，截图才不会随测试机
 /// 装没装 ffmpeg、装在哪而变。
@@ -48,7 +53,9 @@ ThemeData _readable(ThemeData theme) => theme.copyWith(
 void main() {
   setUpAll(_loadCjkFont);
 
-  /// 设计稿的两种状态：A 全部已配置；B 识别选 Groq 没填密钥、翻译选 Ollama。
+  /// 设计稿的两种状态：A 全部已配置，模型列表里有几个模型（百炼带接入方式
+  /// 与模型族标签）；B 识别选 Groq 没填密钥也没添加模型、翻译选 Ollama，
+  /// 模型是旧版本存的一串名字。[expand] 展开识别服务第一个模型的参数。
   Future<void> shoot(
     WidgetTester tester, {
     required String file,
@@ -56,9 +63,13 @@ void main() {
     required String variant,
     double width = 1440,
     SettingsSectionKey? saved,
+    bool expand = false,
+    SettingsSectionKey? jump,
+    bool glossaries = false,
   }) async {
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
+    if (glossaries) sampleGlossaries.forEach(settings.setGlossary);
     if (variant == 'B') {
       settings
         ..asrProviderId = 'groq'
@@ -66,7 +77,7 @@ void main() {
         ..translationBatchSize = 12
         ..setConfig(
           'ollama',
-          const ProviderConfig(model: 'qwen2.5:14b-instruct'),
+          const ProviderConfig(legacyModelText: 'qwen2.5:14b-instruct'),
         );
     } else {
       settings
@@ -75,11 +86,31 @@ void main() {
         ..outputDir = '/Users/mia/Movies/Subs/2026'
         ..setConfig(
           'dashscope_qwen_asr',
-          const ProviderConfig(apiKey: 'sk-a93f4c210e7b48d5b6c1f7e2'),
+          ProviderConfig(
+            apiKey: 'sk-a93f4c210e7b48d5b6c1f7e2',
+            models: [
+              for (final name in const [
+                'qwen3-asr-flash',
+                'qwen-audio-3.0-asr-flash-filetrans',
+                'fun-asr-flash-2026-06-15',
+              ])
+                ProviderCatalog.legacyAsrSpec('dashscope_qwen_asr', name),
+            ],
+          ),
         )
         ..setConfig(
           'deepseek',
-          const ProviderConfig(apiKey: 'sk-7c1d9b04f2ae4831'),
+          const ProviderConfig(
+            apiKey: 'sk-7c1d9b04f2ae4831',
+            models: [
+              ChatModelSpec(name: 'deepseek-chat'),
+              // 推理模型不接受 temperature：勾了「不发送」。
+              ChatModelSpec(
+                name: 'deepseek-reasoner',
+                options: ModelOptions({'temperature': null}),
+              ),
+            ],
+          ),
         );
     }
     settings
@@ -120,8 +151,13 @@ void main() {
     await tester.pump();
 
     final state = tester.state<SettingsPageState>(find.byType(SettingsPage));
-    if (variant == 'B') {
-      state.jumpTo(SettingsSectionKey.asr);
+    final target = jump ?? (variant == 'B' ? SettingsSectionKey.asr : null);
+    if (target != null) {
+      state.jumpTo(target);
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+    if (expand) {
+      await tester.tap(find.byTooltip('展开参数').first);
       await tester.pump(const Duration(milliseconds: 400));
     }
     if (saved != null) {
@@ -152,6 +188,7 @@ void main() {
       brightness: Brightness.dark,
       variant: 'A',
       saved: SettingsSectionKey.mt,
+      expand: true,
     );
   });
 
@@ -171,6 +208,39 @@ void main() {
       brightness: Brightness.light,
       variant: 'A',
       width: 960,
+    );
+  });
+
+  testWidgets('设置页 · 词表 · 浅色', (tester) async {
+    await shoot(
+      tester,
+      file: 'settings_glossary_light',
+      brightness: Brightness.light,
+      variant: 'A',
+      jump: SettingsSectionKey.glossary,
+      glossaries: true,
+    );
+  });
+
+  testWidgets('设置页 · 词表 · 深色 · 还没有词表', (tester) async {
+    await shoot(
+      tester,
+      file: 'settings_glossary_empty_dark',
+      brightness: Brightness.dark,
+      variant: 'A',
+      jump: SettingsSectionKey.glossary,
+    );
+  });
+
+  testWidgets('设置页 · 词表 · 960 窄窗', (tester) async {
+    await shoot(
+      tester,
+      file: 'settings_glossary_narrow_light',
+      brightness: Brightness.light,
+      variant: 'A',
+      width: 960,
+      jump: SettingsSectionKey.glossary,
+      glossaries: true,
     );
   });
 

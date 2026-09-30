@@ -6,12 +6,13 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../domain/cue.dart';
+import '../domain/providers/asr_transport.dart';
 import '../domain/recognition_checkpoint.dart';
 import 'dashscope_asr.dart';
 import 'ffmpeg.dart';
 import 'provider_api.dart';
 
-/// 阿里百炼的**录音文件转写**（模型名以 `-filetrans` 结尾）。
+/// 阿里百炼的**录音文件转写**（模型声明的接入方式是「异步整文件」）。
 ///
 /// 与 [DashScopeAsrProvider] 的逐段同步识别不同，这条路把整段音频交给
 /// 服务端一次处理，拿回带句级时间戳（和说话人编号）的整份结果：
@@ -33,6 +34,7 @@ class DashScopeFileTransProvider implements AsrProvider {
   DashScopeFileTransProvider({
     required this.info,
     required this.endpoint,
+    required this.dialect,
     required this.media,
     this.diarize = false,
     http.Client? client,
@@ -44,6 +46,9 @@ class DashScopeFileTransProvider implements AsrProvider {
   final ProviderInfo info;
 
   final Endpoint endpoint;
+
+  /// 这个模型说哪一族报文。
+  final DashScopeDialect dialect;
   final Ffmpeg media;
   final bool diarize;
 
@@ -66,11 +71,9 @@ class DashScopeFileTransProvider implements AsrProvider {
   /// 文档：单个文件不超过 12 小时。
   static const maxDuration = Duration(hours: 12);
 
-  static bool isFileTransModel(String model) => model.endsWith('-filetrans');
-
-  /// 两族模型的参数名不同：Qwen-Audio-3.0 用 `language_hints` 列表，
-  /// Qwen3-ASR 用 `language`。
-  bool get _qwen3 => endpoint.model.startsWith('qwen3-asr');
+  /// 两族模型的参数名不同：Qwen-Audio 3.0 / Fun-ASR 用 `language_hints`
+  /// 列表，Qwen3-ASR 用 `language`。
+  bool get _qwen3 => dialect == DashScopeDialect.qwen3Asr;
 
   @override
   Future<List<Cue>> transcribe({
@@ -94,7 +97,7 @@ class DashScopeFileTransProvider implements AsrProvider {
       throw ActionableException(
         '音频超过录音文件转写的时长上限',
         detail: '${duration.inMinutes} 分钟，上限 ${maxDuration.inHours} 小时',
-        hint: '把文件切短，或改用逐段识别的模型（不带 -filetrans）。',
+        hint: '把文件切短，或改用「同步逐段」接入的模型。',
       );
     }
 
@@ -175,7 +178,7 @@ class DashScopeFileTransProvider implements AsrProvider {
       throw ActionableException(
         '音频超过 ${info.vendor} 的上传大小限制',
         detail: '${sizeMb.toStringAsFixed(1)} MB，上限 $maxMb MB',
-        hint: '把文件切短，或改用逐段识别的模型（不带 -filetrans）。',
+        hint: '把文件切短，或改用「同步逐段」接入的模型。',
       );
     }
     token.throwIfCancelled();

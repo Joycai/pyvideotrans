@@ -39,8 +39,9 @@ POST {baseUrl}/local/models/{id}/download # 流式返回下载进度
 已经预留好的位置（第一期为 stub，不发请求）：
 
 - `lib/services/local/local_backend.dart` — 后端进程的发现、健康检查、生命周期
-- `AsrProviderId.localBackend` / `TranslationProviderId.localBackend` — 枚举项已存在
+- `ProviderCatalog`（`lib/domain/providers/provider_catalog.dart`）里的 `local_backend` / `local_backend_chat`
+  两条登记项 — 已存在，标了 `implemented: false`
 - 设置页「本地服务」分区 — 已渲染，标注「第一期未实施」
 
-启用时要做的事，仅此而已：把 `localBackend` 的 `baseUrl` 指向后端进程，
-复用 OpenAI 兼容实现。
+启用时要做的事，仅此而已：把这两条登记项的 `implemented` 打开、`defaultBaseUrl` 指向后端进程，
+复用 OpenAI 兼容实现。后端装了哪些模型，写成登记项的预置模型声明（或由用户在设置的模型列表里添加）。

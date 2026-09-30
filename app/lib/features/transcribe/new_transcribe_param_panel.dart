@@ -14,6 +14,7 @@ class NewTranscribeParamPanel extends StatelessWidget {
     required this.footerOverride,
     required this.onOpenSettings,
     required this.onStart,
+    this.onOpenGlossary,
   });
 
   final TranscribeFormController form;
@@ -21,6 +22,7 @@ class NewTranscribeParamPanel extends StatelessWidget {
   /// 页面在拖放拒收时用中性色的说明顶替控制器里的 error 版本。
   final FooterMessage? footerOverride;
   final VoidCallback onOpenSettings;
+  final VoidCallback? onOpenGlossary;
   final VoidCallback onStart;
 
   @override
@@ -31,6 +33,7 @@ class NewTranscribeParamPanel extends StatelessWidget {
         form: form,
         flat: true,
         onOpenSettings: onOpenSettings,
+        onOpenGlossary: onOpenGlossary,
       ),
       TranscribeTranslateSection(form: form, flat: true),
       TranscribeAdvancedSection(form: form, flat: true),

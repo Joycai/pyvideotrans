@@ -64,7 +64,7 @@ class TranscribeAdvancedSection extends StatelessWidget {
       child: MultilineField(
         value: o.asrPrompt,
         minHeight: 56,
-        hint: '列出专有名词，帮助识别固定写法。例：SenseVoice、字幕组、whisper-large-v3',
+        hint: '风格与说明；专有名词请用词表',
         onChanged: (v) =>
             form.update((o) => o.copyWith(asrPrompt: v), notify: false),
       ),

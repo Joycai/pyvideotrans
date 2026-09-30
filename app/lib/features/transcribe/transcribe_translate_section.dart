@@ -4,13 +4,14 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/language.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../domain/task_options.dart';
 import '../../services/readiness.dart';
-import '../../services/registry.dart';
 import '../shared/provider_fields.dart';
 import 'transcribe_form.dart';
 
-/// 「翻译」段：开关 + 展开后的目标语言、服务、模型、每批条数、术语与风格。
+/// 「翻译」段：开关 + 展开后的目标语言、服务、模型、每批条数、翻译要求。
+/// 词表的勾选在「识别」段里，识别与这里的翻译共用。
 class TranscribeTranslateSection extends StatelessWidget {
   const TranscribeTranslateSection({
     super.key,
@@ -26,7 +27,7 @@ class TranscribeTranslateSection extends StatelessWidget {
     final cs = context.colors;
     final o = form.options;
     final on = o.translate;
-    final info = Registry.translationInfo(o.translationProviderId);
+    final info = ProviderCatalog.translationInfo(o.translationProviderId);
     final gap = flat ? AppSpacing.s3 : AppSpacing.s4;
 
     final toggle = Tappable(
@@ -81,7 +82,7 @@ class TranscribeTranslateSection extends StatelessWidget {
         value: o.translationProviderId,
         error: form.translationReadiness.isBlocked,
         groups: providerGroups(
-          Registry.translation,
+          ProviderCatalog.translation,
           (id) => ProviderReadiness.translation(
             id,
             form.settings,
@@ -91,7 +92,8 @@ class TranscribeTranslateSection extends StatelessWidget {
         onChanged: form.selectTranslationProvider,
       ),
     );
-    final model = modelField(
+    final model = ModelField(
+      key: ValueKey('mt-model-${form.revision}'),
       info: info,
       model: o.translationModel,
       settings: form.settings,
@@ -109,10 +111,10 @@ class TranscribeTranslateSection extends StatelessWidget {
       onChanged: (v) => form.update((o) => o.copyWith(translationBatchSize: v)),
     );
     final guidance = LabeledField(
-      label: '术语与风格（可选）',
+      label: '翻译要求（可选）',
       child: MultilineField(
         value: o.translationGuidance,
-        hint: '保持人名与产品名不译：Flutter、SenseVoice。口语化，句子尽量短。',
+        hint: '保持口语，不要书面化；人称用「你」',
         onChanged: (v) => form.update(
           (o) => o.copyWith(translationGuidance: v),
           notify: false,

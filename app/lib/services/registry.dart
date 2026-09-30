@@ -1,3 +1,8 @@
+import '../domain/glossary.dart';
+import '../domain/providers/asr_transport.dart';
+import '../domain/providers/model_params.dart';
+import '../domain/providers/model_spec.dart';
+import '../domain/providers/provider_catalog.dart';
 import '../domain/speech_segments.dart';
 import 'audio_splitter.dart';
 import 'dashscope_asr.dart';
@@ -7,171 +12,33 @@ import 'openai_compatible.dart';
 import 'provider_api.dart';
 import 'settings.dart';
 
-/// 所有可选服务的登记表。
+/// 服务实例的工厂：按服务 id 与模型声明建出识别 / 翻译的实现。
 ///
-/// 关键设计：**「本地」不是一条单独的代码路径**。Ollama、LM Studio 和第二期的
-/// 本地 Python 后端都说 OpenAI 兼容协议，因此它们与在线服务共用同一个实现类，
-/// 区别只在 baseUrl、是否需要密钥，以及界面上的一个图标。
+/// 「有哪些服务、各自有哪些模型」是只读数据，在 `ProviderCatalog`
+/// （domain/providers）。这里只管把一条登记项变成能发请求的实例 ——
+/// 所以只有这个文件需要同时认识设置与各个实现类。
+///
+/// 用哪个实现类、发哪一族报文，全看传进来的模型声明，不看模型名：
+/// 声明随任务入队冻结，名字合不合某种规律与走哪个接口无关。
 abstract final class Registry {
-  static const asr = <ProviderInfo>[
-    ProviderInfo(
-      id: 'openai',
-      name: 'OpenAI',
-      vendor: 'OpenAI',
-      defaultBaseUrl: 'https://api.openai.com/v1',
-      defaultModel: 'whisper-1',
-      models: ['whisper-1', 'gpt-4o-transcribe', 'gpt-4o-mini-transcribe'],
-    ),
-    ProviderInfo(
-      id: 'groq',
-      name: 'Groq',
-      vendor: 'Groq',
-      defaultBaseUrl: 'https://api.groq.com/openai/v1',
-      defaultModel: 'whisper-large-v3',
-      models: ['whisper-large-v3', 'whisper-large-v3-turbo'],
-    ),
-    ProviderInfo(
-      id: 'siliconflow',
-      name: '硅基流动',
-      vendor: '硅基流动',
-      defaultBaseUrl: 'https://api.siliconflow.cn/v1',
-      defaultModel: 'FunAudioLLM/SenseVoiceSmall',
-      models: ['FunAudioLLM/SenseVoiceSmall'],
-    ),
-    ProviderInfo(
-      id: 'asr_custom',
-      name: '自定义（OpenAI 兼容）',
-      vendor: '自定义服务',
-      defaultBaseUrl: '',
-      defaultModel: '',
-    ),
-    // 第二期：本地 Python 后端。协议与上面完全一致，只是跑在 localhost。
-    ProviderInfo(
-      id: 'local_backend',
-      name: '本地模型服务',
-      vendor: '本地服务',
-      runsLocally: true,
-      implemented: false,
-      needsApiKey: false,
-      defaultBaseUrl: 'http://127.0.0.1:8765/v1',
-      defaultModel: 'whisper-large-v3',
-    ),
-    // 阿里百炼的识别接口不是 OpenAI 兼容形态，走单独的实现类。同步模型
-    // （多模态 generation + base64 音频）不返回时间戳，只能先按静音切句再
-    // 逐段识别；「-filetrans」模型是异步整文件转写，自带时间戳，不切片。
-    ProviderInfo(
-      id: 'dashscope_qwen_asr',
-      name: '阿里百炼 · Qwen3-ASR',
-      vendor: '阿里百炼',
-      defaultBaseUrl: 'https://dashscope.aliyuncs.com/api/v1',
-      defaultModel: 'qwen3-asr-flash',
-      models: [
-        'qwen3-asr-flash',
-        'qwen-audio-3.0-asr-flash',
-        'fun-asr-flash-2026-06-15',
-        // 「-filetrans」结尾的是异步整文件转写：先把音频上传到百炼的临时
-        // 存储，再提交任务轮询结果；不切片，一次拿回带时间戳（和说话人）
-        // 的整份结果。见 DashScopeFileTransProvider。
-        'qwen-audio-3.0-asr-flash-filetrans',
-        'qwen3-asr-flash-filetrans',
-      ],
-      // 文档：说话人分离只有 Qwen-Audio-3.0-ASR 与 Fun-ASR 两族支持。
-      supportsDiarization: true,
-    ),
-  ];
-
-  static const translation = <ProviderInfo>[
-    ProviderInfo(
-      id: 'deepseek',
-      name: 'DeepSeek',
-      vendor: 'DeepSeek',
-      defaultBaseUrl: 'https://api.deepseek.com/v1',
-      defaultModel: 'deepseek-chat',
-      models: ['deepseek-chat', 'deepseek-reasoner'],
-    ),
-    ProviderInfo(
-      id: 'openai_chat',
-      name: 'OpenAI',
-      vendor: 'OpenAI',
-      defaultBaseUrl: 'https://api.openai.com/v1',
-      defaultModel: 'gpt-4o-mini',
-      models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
-    ),
-    ProviderInfo(
-      id: 'siliconflow_chat',
-      name: '硅基流动',
-      vendor: '硅基流动',
-      defaultBaseUrl: 'https://api.siliconflow.cn/v1',
-      defaultModel: 'Qwen/Qwen2.5-14B-Instruct',
-    ),
-    ProviderInfo(
-      id: 'openrouter',
-      name: 'OpenRouter',
-      vendor: 'OpenRouter',
-      defaultBaseUrl: 'https://openrouter.ai/api/v1',
-      defaultModel: 'google/gemini-2.0-flash-001',
-    ),
-    ProviderInfo(
-      id: 'ollama',
-      name: 'Ollama',
-      vendor: 'Ollama',
-      runsLocally: true,
-      needsApiKey: false,
-      defaultBaseUrl: 'http://localhost:11434/v1',
-      defaultModel: 'qwen2.5:14b',
-    ),
-    ProviderInfo(
-      id: 'lmstudio',
-      name: 'LM Studio',
-      vendor: 'LM Studio',
-      runsLocally: true,
-      needsApiKey: false,
-      defaultBaseUrl: 'http://localhost:1234/v1',
-      defaultModel: '',
-    ),
-    ProviderInfo(
-      id: 'mt_custom',
-      name: '自定义（OpenAI 兼容）',
-      vendor: '自定义服务',
-      defaultBaseUrl: '',
-      defaultModel: '',
-    ),
-    ProviderInfo(
-      id: 'local_backend_chat',
-      name: '本地模型服务',
-      vendor: '本地服务',
-      runsLocally: true,
-      implemented: false,
-      needsApiKey: false,
-      defaultBaseUrl: 'http://127.0.0.1:8765/v1',
-      defaultModel: '',
-    ),
-  ];
-
-  static ProviderInfo? asrInfo(String id) =>
-      asr.where((p) => p.id == id).firstOrNull;
-
-  static ProviderInfo? translationInfo(String id) =>
-      translation.where((p) => p.id == id).firstOrNull;
-
   /// 建一个识别服务实例。
   ///
-  /// [model] 与 [prompt] 是**任务级覆盖**：任务入队时把参数定死了，
-  /// 之后用户改设置不应该影响已经排上队的任务。传 null 表示沿用设置里的值。
+  /// [model]、[prompt]、[glossary] 都是任务入队时定死的，这里不再回头读
+  /// 设置里的默认值 —— 设置只提供地址与密钥。
   ///
   /// [media] 给需要本地切分音频的服务用（阿里百炼）；不传就临时建一个。
   ///
-  /// [diarize] 开说话人分离：只有 [ProviderInfo.supportsDiarization] 的服务
-  /// 理会它，其余忽略。
+  /// [diarize] 开说话人分离：模型不支持时服务端会忽略它。
   static AsrProvider buildAsr(
     String id,
     AppSettings settings, {
-    String? model,
-    String? prompt,
+    required AsrModelSpec model,
+    String prompt = '',
+    List<GlossaryEntry> glossary = const [],
     Ffmpeg? media,
     bool diarize = false,
   }) {
-    final info = asrInfo(id);
+    final info = ProviderCatalog.asrInfo(id);
     if (info == null) {
       throw ActionableException('未知的识别服务：$id', hint: '在设置里重新选择识别服务。');
     }
@@ -181,46 +48,62 @@ abstract final class Registry {
         hint: '第一期只对接在线 API。改选 OpenAI、Groq 或硅基流动。',
       );
     }
-    final endpoint = settings.endpointFor(info);
-    if (info.id == 'dashscope_qwen_asr') {
-      final resolved = _withModel(endpoint, model);
-      if (DashScopeFileTransProvider.isFileTransModel(resolved.model)) {
+    if (!info.transports.contains(model.transport)) {
+      // 声明与服务对不上（存档被手改过，或任务带着别家服务的模型）。
+      // 照着发只会把一种接口的请求打到另一种接口的地址上。
+      throw ActionableException(
+        '${info.name}不能按「${model.transport.label}」的方式接入 ${model.name}',
+        hint: '重新选一个模型；要用这个名字，去设置里删掉它，再按正确的接入方式添加。',
+      );
+    }
+    final endpoint = settings.endpointFor(info, model);
+    final context = GlossaryText.asrPrompt(glossary, prompt);
+    switch (model.transport) {
+      case AsrTransport.openaiTranscription:
+        return OpenAiCompatibleAsrProvider(
+          info: info,
+          endpoint: endpoint,
+          prompt: context,
+          temperature: model.options.number(ModelParams.asrTemperature),
+        );
+      case AsrTransport.dashscopeSync:
+        return DashScopeAsrProvider(
+          info: info,
+          endpoint: endpoint,
+          dialect: _dialectOf(model),
+          options: model.options,
+          prompt: context,
+          diarize: diarize,
+          // 说话人编号只在同一次请求里一致：开分离时把片段切得长一些，
+          // 跨片段对不上号的机会就少得多。同步接口其实不分离说话人，
+          // 建任务页也不再让同步的模型开这个开关；会带着它到这里的只有
+          // 旧版本建的任务，照它入队时的样子跑。
+          splitter: FfmpegAudioSplitter(
+            media ?? Ffmpeg(),
+            maxMs: diarize
+                ? DashScopeAsrProvider.diarizeClipMs
+                : SpeechSegments.defaultMaxMs,
+          ),
+        );
+      case AsrTransport.dashscopeFileTrans:
         return DashScopeFileTransProvider(
           info: info,
-          endpoint: resolved,
+          endpoint: endpoint,
+          dialect: _dialectOf(model),
           diarize: diarize,
           media: media ?? Ffmpeg(),
         );
-      }
-      return DashScopeAsrProvider(
-        info: info,
-        endpoint: _withModel(endpoint, model),
-        prompt: prompt ?? settings.asrPrompt,
-        diarize: diarize,
-        // 说话人编号只在同一次请求里一致：开分离时把片段切得长一些，
-        // 跨片段对不上号的机会就少得多。
-        splitter: FfmpegAudioSplitter(
-          media ?? Ffmpeg(),
-          maxMs: diarize
-              ? DashScopeAsrProvider.diarizeClipMs
-              : SpeechSegments.defaultMaxMs,
-        ),
-      );
     }
-    return OpenAiCompatibleAsrProvider(
-      info: info,
-      endpoint: _withModel(endpoint, model),
-      prompt: prompt ?? settings.asrPrompt,
-    );
   }
 
   static TranslationProvider buildTranslation(
     String id,
     AppSettings settings, {
-    String? model,
-    String? guidance,
+    required ChatModelSpec model,
+    String guidance = '',
+    List<GlossaryEntry> glossary = const [],
   }) {
-    final info = translationInfo(id);
+    final info = ProviderCatalog.translationInfo(id);
     if (info == null) {
       throw ActionableException('未知的翻译服务：$id', hint: '在设置里重新选择翻译服务。');
     }
@@ -230,21 +113,21 @@ abstract final class Registry {
         hint: '第一期只对接在线 API 与 Ollama / LM Studio。',
       );
     }
-    final endpoint = settings.endpointFor(info);
     return OpenAiCompatibleTranslationProvider(
       info: info,
-      endpoint: _withModel(endpoint, model),
-      extraGuidance: guidance ?? settings.translationGuidance,
+      endpoint: settings.endpointFor(info, model),
+      extraGuidance: guidance,
+      glossary: glossary,
+      temperature: model.options.number(ModelParams.chatTemperature),
     );
   }
 
-  static Endpoint _withModel(Endpoint endpoint, String? model) =>
-      model == null || model.trim().isEmpty
-      ? endpoint
-      : Endpoint(
-          baseUrl: endpoint.baseUrl,
-          model: model.trim(),
-          apiKey: endpoint.apiKey,
-          timeout: endpoint.timeout,
-        );
+  /// 百炼的两种接入方式必须知道报文族。声明的构造断言在发布版里不执行，
+  /// 残缺的声明走到这里时给一句能照着做的话，而不是空指针。
+  static DashScopeDialect _dialectOf(AsrModelSpec model) =>
+      model.dialect ??
+      (throw ActionableException(
+        '${model.name} 没有声明报文族',
+        hint: '去设置里删掉它，再添加一次并选好它属于哪一族。',
+      ));
 }

@@ -5,18 +5,21 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/language.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../domain/task_options.dart';
 import '../../services/readiness.dart';
-import '../../services/registry.dart';
+import '../shared/glossary_chips.dart';
 import '../shared/provider_fields.dart';
 import 'translate_form.dart';
 
-/// 「翻译」段：语言对（可对换）、翻译服务、模型、每批条数、术语表、就绪状态行。
+/// 「翻译」段：语言对（可对换）、翻译服务、模型、每批条数、词表、翻译要求、
+/// 就绪状态行。
 class TranslateLanguageSection extends StatelessWidget {
   const TranslateLanguageSection({
     super.key,
     required this.form,
     this.onOpenSettings,
+    this.onOpenGlossary,
     this.flat = false,
   });
 
@@ -25,6 +28,9 @@ class TranslateLanguageSection extends StatelessWidget {
   /// 缺密钥时那个「去设置」。为 null 就只显示文字。
   final VoidCallback? onOpenSettings;
 
+  /// 还没有词表时那个「去设置里建一个」，落到设置页的「词表」分区。
+  final VoidCallback? onOpenGlossary;
+
   /// 平铺（页面）还是卡片（对话框）。
   final bool flat;
 
@@ -32,7 +38,7 @@ class TranslateLanguageSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = context.colors;
     final o = form.options;
-    final info = Registry.translationInfo(o.translationProviderId);
+    final info = ProviderCatalog.translationInfo(o.translationProviderId);
     final readiness = form.readiness;
     final gap = flat ? AppSpacing.s3 : AppSpacing.s4;
 
@@ -89,7 +95,7 @@ class TranslateLanguageSection extends StatelessWidget {
         value: o.translationProviderId,
         error: readiness.isBlocked,
         groups: providerGroups(
-          Registry.translation,
+          ProviderCatalog.translation,
           (id) => ProviderReadiness.translation(
             id,
             form.settings,
@@ -99,11 +105,18 @@ class TranslateLanguageSection extends StatelessWidget {
         onChanged: form.selectTranslationProvider,
       ),
     );
-    final model = modelField(
+    final model = ModelField(
+      key: ValueKey('mt-model-${form.revision}'),
       info: info,
       model: o.translationModel,
       settings: form.settings,
       onChanged: (m) => form.update((o) => o.copyWith(translationModel: m)),
+    );
+    final glossary = GlossaryChips(
+      glossaries: form.settings.glossaries,
+      selectedIds: o.glossaryIds.toSet(),
+      onToggle: form.toggleGlossary,
+      onOpenSettings: onOpenGlossary,
     );
     final batchHint = Text(
       '一次送给模型的字幕条数。调大省 token，但更容易漏条或合并。'
@@ -118,13 +131,13 @@ class TranslateLanguageSection extends StatelessWidget {
       onChanged: (v) => form.update((o) => o.copyWith(translationBatchSize: v)),
     );
     final guidance = LabeledField(
-      label: '术语表与风格（可选）',
+      label: '翻译要求（可选）',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           MultilineField(
             value: o.translationGuidance,
-            hint: 'Ballistic Missile Defense=反导系统\n保持口语，不要书面化',
+            hint: '保持口语，不要书面化；人称用「你」',
             onChanged: (v) => form.update(
               (o) => o.copyWith(translationGuidance: v),
               notify: false,
@@ -132,7 +145,7 @@ class TranslateLanguageSection extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.s1 + 2),
           Text(
-            '术语一行一条，写成「原文=译文」；其余行当作风格要求。仅用于本次任务。',
+            '风格与说明；专有名词请用词表。仅用于本次任务。',
             style: context.texts.bodySmall?.copyWith(
               color: cs.onSurfaceVariant,
             ),
@@ -176,6 +189,7 @@ class TranslateLanguageSection extends StatelessWidget {
               ],
             ),
           ),
+          glossary,
           guidance,
           status,
         ],
@@ -198,6 +212,7 @@ class TranslateLanguageSection extends StatelessWidget {
             ],
           ),
         ),
+        glossary,
         guidance,
         status,
       ],

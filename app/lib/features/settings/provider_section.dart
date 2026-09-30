@@ -6,18 +6,108 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/indicators.dart';
+import '../../domain/providers/model_name.dart';
+import '../../domain/providers/model_spec.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../services/provider_api.dart';
 import '../../services/readiness.dart';
-import '../../services/registry.dart';
 import '../../services/settings.dart';
 import '../shared/provider_fields.dart';
+import 'model_list_editor.dart';
 import 'section_outline.dart';
 import 'settings_section.dart';
 
 /// 识别 / 翻译两种服务分区。
-enum ProviderKind { asr, mt }
+///
+/// 两边共用一份界面，差别全收在这里：哪个分区、各处文案、读写哪几项设置。
+/// 界面代码里不再逐处写「是翻译就这样，否则那样」—— 以前有十五处，
+/// 加一项差别要把它们挨个找一遍。
+enum ProviderKind {
+  asr(
+    section: SettingsSectionKey.asr,
+    note: '音视频转字幕。地址与密钥改动后，下一个开始的任务就用新的；模型与参数在新建任务时定下。',
+    service: '识别服务',
+    task: '转写',
+    modelExample: 'whisper-1',
+    promptLabel: '识别提示（风格与说明）',
+    promptNote: '场合、口音、标点习惯。专有名词、人名请用「词表」。',
+    promptHint: '例：技术分享录音，普通话夹英文术语；数字写成阿拉伯数字。',
+  ),
+  mt(
+    section: SettingsSectionKey.mt,
+    note: '字幕翻译。走 OpenAI 兼容的对话接口，本机服务与在线服务共用同一条链路。',
+    service: '翻译服务',
+    task: '翻译',
+    modelExample: 'deepseek-chat',
+    promptLabel: '翻译要求（风格与说明）',
+    promptNote: '语气、人称、句式。会作为系统提示随每批发送。专有名词、人名请用「词表」。',
+    promptHint: '例：人称用「你」；口语化，短句优先；不要添加原文没有的内容。',
+  );
 
-/// 一个服务分区（设计稿 C-ProviderSection）：选服务 + 地址 / 模型 / 密钥，
+  const ProviderKind({
+    required this.section,
+    required this.note,
+    required this.service,
+    required this.task,
+    required this.modelExample,
+    required this.promptLabel,
+    required this.promptNote,
+    required this.promptHint,
+  });
+
+  final SettingsSectionKey section;
+
+  /// 分区标题下的一句说明。
+  final String note;
+
+  /// 「识别服务」「翻译服务」，用在未配置横幅里。
+  final String service;
+
+  /// 这类服务干的事：「转写」「翻译」。拼出「开始转写」「转写任务」。
+  final String task;
+
+  /// 这家服务没有预置模型时，添加行占位里举的例子。
+  final String modelExample;
+
+  final String promptLabel;
+  final String promptNote;
+  final String promptHint;
+
+  List<ProviderInfo> get infos => switch (this) {
+    asr => ProviderCatalog.asr,
+    mt => ProviderCatalog.translation,
+  };
+
+  String selectedId(AppSettings s) => switch (this) {
+    asr => s.asrProviderId,
+    mt => s.translationProviderId,
+  };
+
+  void select(AppSettings s, String id) => switch (this) {
+    asr => s.asrProviderId = id,
+    mt => s.translationProviderId = id,
+  };
+
+  Readiness check(String id, AppSettings s) => switch (this) {
+    asr => ProviderReadiness.asr(id, s),
+    mt => ProviderReadiness.translation(id, s),
+  };
+
+  String prompt(AppSettings s) => switch (this) {
+    asr => s.asrPrompt,
+    mt => s.translationGuidance,
+  };
+
+  void setPrompt(AppSettings s, String value) => switch (this) {
+    asr => s.asrPrompt = value,
+    mt => s.translationGuidance = value,
+  };
+
+  /// 分批发请求的才有「每批条数」。
+  bool get batched => this == mt;
+}
+
+/// 一个服务分区（设计稿 C-ProviderSection）：选服务 + 地址 / 模型列表 / 密钥，
 /// 识别多一行「识别提示」，翻译多「每批条数」与「翻译要求」。
 ///
 /// 未配置时三处联动提醒：目录项红点（由页面画）、标题标签「未配置」、
@@ -45,27 +135,26 @@ class ProviderSection extends StatelessWidget {
   final bool stacked;
   final bool saved;
 
-  bool get _isMt => kind == ProviderKind.mt;
-
-  List<ProviderInfo> get _infos => _isMt ? Registry.translation : Registry.asr;
-
-  String get _selectedId =>
-      _isMt ? settings.translationProviderId : settings.asrProviderId;
-
-  Readiness _check(String id) => _isMt
-      ? ProviderReadiness.translation(id, settings)
-      : ProviderReadiness.asr(id, settings);
-
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
+    final infos = kind.infos;
+    final selectedId = kind.selectedId(settings);
     final info =
-        _infos.where((i) => i.id == _selectedId).firstOrNull ?? _infos.first;
+        infos.where((i) => i.id == selectedId).firstOrNull ?? infos.first;
     final config = settings.configFor(info.id);
-    final readiness = _check(info.id);
+    final readiness = kind.check(info.id, settings);
     final configured = settings.isConfigured(info);
-    final endpoint = settings.endpointFor(info);
+    final defaultModel = settings.defaultModel(info);
+    final endpoint = settings.endpointFor(info, defaultModel);
+    final models = settings.ownModels(info);
     final keyMissing = info.needsApiKey && endpoint.apiKey.isEmpty;
+    final start = '「开始${kind.task}」';
+    // 默认模型不接受上下文提示时说一声：提示照样能填（换个模型就用得上），
+    // 但眼下不会发出去。
+    final promptIgnored =
+        defaultModel is AsrModelSpec &&
+        !defaultModel.capabilities.contextPrompt;
 
     final tag = !info.implemented
         ? const StatusTag(label: '第一期未实施', tone: TagTone.muted)
@@ -82,10 +171,8 @@ class ProviderSection extends StatelessWidget {
           );
 
     return SettingsSection(
-      section: _isMt ? SettingsSectionKey.mt : SettingsSectionKey.asr,
-      note: _isMt
-          ? '字幕翻译。走 OpenAI 兼容的对话接口，本机服务与在线服务共用同一条链路。'
-          : '音视频转字幕。改动立即生效，下一个任务开始时采用新配置。',
+      section: kind.section,
+      note: kind.note,
       tag: tag,
       saved: saved,
       children: [
@@ -93,16 +180,16 @@ class ProviderSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.s3),
             child: _WarningBanner(
-              title: _isMt ? '翻译服务未配置完整，翻译任务无法启动' : '识别服务未配置完整，转写任务无法启动',
-              body:
-                  '${readiness.message}。填好后'
-                  '${_isMt ? '「开始翻译」' : '「开始转写」'}'
-                  '会自动恢复可用，已排队的任务不会丢失。',
+              title: '${kind.service}未配置完整，${kind.task}任务无法启动',
+              body: endpoint.baseUrl.isNotEmpty && defaultModel.isUnset
+                  ? '还没有添加模型。添加后$start会自动恢复可用，已排队的任务不会丢失。'
+                  : '${readiness.message}。填好后$start会自动恢复可用，'
+                        '已排队的任务不会丢失。',
             ),
           ),
         SettingsRow(
           label: '服务',
-          note: _infos
+          note: infos
               .where((i) => i.implemented)
               .map((i) => i.name)
               .join(' · '),
@@ -113,7 +200,10 @@ class ProviderSection extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 320),
               child: AppDropdown<String>(
                 value: info.id,
-                groups: providerGroups(_infos, _check),
+                groups: providerGroups(
+                  infos,
+                  (id) => kind.check(id, settings),
+                ),
                 leading: Icon(
                   info.runsLocally ? Symbols.computer : Symbols.cloud,
                   size: 18,
@@ -121,11 +211,7 @@ class ProviderSection extends StatelessWidget {
                   color: cs.onSurfaceVariant,
                 ),
                 onChanged: (id) {
-                  if (_isMt) {
-                    settings.translationProviderId = id;
-                  } else {
-                    settings.asrProviderId = id;
-                  }
+                  kind.select(settings, id);
                   onChanged();
                 },
               ),
@@ -150,20 +236,57 @@ class ProviderSection extends StatelessWidget {
         ),
         SettingsRow(
           label: '模型',
-          note: info.models.isEmpty
-              ? '填写模型名；多个用逗号分隔，第一个为默认，新建时可选'
-              : '多个用逗号分隔，第一个为默认，新建时可选。'
-                    '常用：${info.models.join(' / ')}',
+          note: info is AsrProviderInfo && info.multiTransport
+              ? '第一个是默认，新建任务时从这里选。'
+                    '${info.vendor}的模型要标明接入方式与模型族。'
+              : '第一个是默认，新建任务时从这里选。',
           stacked: stacked,
-          child: SettingsTextField(
-            key: ValueKey('${info.id}-model'),
-            value: config.model ?? info.defaultModel ?? '',
-            hint: '模型名',
-            mono: true,
-            error: info.implemented && endpoint.model.isEmpty,
-            onChanged: (v) {
-              settings.setConfig(info.id, config.copyWith(model: v));
-              onChanged(typed: true);
+          child: ModelListEditor(
+            // 换服务时重建：展开的行、添加行里打到一半的名字不带到另一家。
+            key: ValueKey('${info.id}-models'),
+            models: models,
+            presets: info.presets,
+            nameHint:
+                '模型名，例 '
+                '${info.presets.firstOrNull?.name ?? kind.modelExample}',
+            transports: info is AsrProviderInfo
+                ? info.transports.toList()
+                : const [],
+            suggest: info is AsrProviderInfo && info.multiTransport
+                ? info.guess
+                : null,
+            // 各个回调都在被调用时读设置里现在的列表（见
+            // [AppSettings.addModel]），不用这次 build 拿到的 models。
+            validate: (name) => ModelName.validate(
+              name,
+              existing: settings.ownModels(info).map((m) => m.name),
+            ),
+            onAdd: (name, transport, dialect) {
+              settings.addModel(info, switch (info) {
+                AsrProviderInfo() => info.declare(
+                  name,
+                  transport: transport,
+                  dialect: dialect,
+                ),
+                ChatProviderInfo() => info.guess(name),
+              });
+              onChanged();
+            },
+            onAddPreset: (preset) {
+              settings.addModel(info, preset);
+              onChanged();
+            },
+            onSetDefault: (model) {
+              settings.setDefaultModel(info, model.name);
+              onChanged();
+            },
+            onRemove: (model) {
+              settings.removeModel(info, model.name);
+              onChanged();
+            },
+            onOptionChanged: (model, key, value) {
+              settings.setModelOption(info, model.name, key, value);
+              onChanged();
             },
           ),
         ),
@@ -205,7 +328,7 @@ class ProviderSection extends StatelessWidget {
             padding: EdgeInsets.only(top: AppSpacing.s2 + 2, bottom: 2),
             child: InlineNote(text: '本机服务不需要密钥，已隐藏密钥一行。确认服务已在该地址监听即可。'),
           ),
-        if (_isMt)
+        if (kind.batched)
           SettingsRow(
             label: '每批条数',
             note: '一次请求送入的字幕条数，越大越省 token，越小越稳',
@@ -225,24 +348,28 @@ class ProviderSection extends StatelessWidget {
             ),
           ),
         SettingsRow(
-          label: _isMt ? '翻译要求' : '识别提示',
-          note: _isMt ? '术语表、语气、人称。会作为系统提示随每批发送。' : '专有名词、人名、术语。帮助识别模型选对同音词。',
+          label: kind.promptLabel,
+          note: kind.promptNote,
           stacked: stacked,
-          child: MultilineField(
-            key: ValueKey('${kind.name}-prompt'),
-            value: _isMt ? settings.translationGuidance : settings.asrPrompt,
-            minHeight: 76,
-            hint: _isMt
-                ? '例：保留英文专有名词原文；人称用「你」；口语化，短句优先。'
-                : '例：术语：缓存穿透、布隆过滤器。人名：陈嘉行。',
-            onChanged: (v) {
-              if (_isMt) {
-                settings.translationGuidance = v;
-              } else {
-                settings.asrPrompt = v;
-              }
-              onChanged(typed: true);
-            },
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MultilineField(
+                key: ValueKey('${kind.name}-prompt'),
+                value: kind.prompt(settings),
+                minHeight: 76,
+                hint: kind.promptHint,
+                onChanged: (v) {
+                  kind.setPrompt(settings, v);
+                  onChanged(typed: true);
+                },
+              ),
+              if (promptIgnored) ...[
+                const SizedBox(height: AppSpacing.s1 + 2),
+                const InlineNote(text: '当前默认模型不接受上下文提示，词表与识别提示不会发送'),
+              ],
+            ],
           ),
         ),
       ],

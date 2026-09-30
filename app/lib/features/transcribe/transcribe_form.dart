@@ -6,7 +6,6 @@ import '../../domain/paths.dart';
 import '../../domain/task_options.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/readiness.dart';
-import '../../services/registry.dart';
 import '../shared/enqueue_request.dart';
 import '../shared/footer_message.dart';
 import '../shared/new_task_form.dart';
@@ -47,12 +46,24 @@ class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
     Ffmpeg? media,
     super.initial,
     super.pickDirectory,
-  }) : media = media ?? Ffmpeg();
+  }) : media = media ?? Ffmpeg() {
+    // 传进来的初始参数也过一遍 [normalize]。
+    options = options;
+  }
 
   final Ffmpeg media;
 
   @override
   TaskOptions? get lastUsedOptions => settings.lastTranscribeOptions;
+
+  /// 说话人分离开着，选中的模型就得能分离。模型换成不能分离的那一刻把开关
+  /// 关掉：开关只在模型支持时才显示，留着一个看不见又开着的开关，用户没
+  /// 地方关它。
+  @override
+  TaskOptions normalize(TaskOptions options) =>
+      options.diarize && !options.asrModel.capabilities.diarization
+      ? options.copyWith(diarize: false)
+      : options;
 
   @override
   XTypeGroup get browseTypes =>
@@ -64,13 +75,17 @@ class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
   void selectAsrProvider(String id) => update(
     (o) => o.withAsrProvider(
       id,
-      supportsDiarization: Registry.asrInfo(id)?.supportsDiarization ?? false,
+      defaultModel: settings.defaultAsrModelOf(id),
     ),
   );
 
   /// 换翻译服务（规则见 [TaskOptions.withTranslationProvider]）。
-  void selectTranslationProvider(String id) =>
-      update((o) => o.withTranslationProvider(id));
+  void selectTranslationProvider(String id) => update(
+    (o) => o.withTranslationProvider(
+      id,
+      defaultModel: settings.defaultChatModelOf(id),
+    ),
+  );
 
   // —— 文件 ————————————————————————————————————————————————
 
@@ -224,7 +239,7 @@ class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
     settings.lastTranscribeOptions = options;
     return EnqueueRequest(
       paths: enqueueable.map((f) => f.path).toList(),
-      options: options,
+      options: frozenOptions(),
     );
   }
 }

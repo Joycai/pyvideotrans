@@ -1,6 +1,7 @@
 import '../domain/language.dart';
+import '../domain/providers/model_spec.dart';
+import '../domain/providers/provider_catalog.dart';
 import 'provider_api.dart';
-import 'registry.dart';
 import 'settings.dart';
 
 /// 一项检查的严重程度。
@@ -39,15 +40,16 @@ class Readiness {
 
 /// 服务可用性检查。界面拿它决定「开始转写」是否可点、状态行显示什么。
 abstract final class ProviderReadiness {
-  /// 识别服务。[language] 为 null 或 auto 时跳过语种检查。
+  /// 识别服务。[language] 为 null 或 auto 时跳过语种检查；[model] 不给就
+  /// 查这家服务的默认模型。
   static Readiness asr(
     String id,
     AppSettings settings, {
     Language? language,
-    String? model,
+    AsrModelSpec? model,
     bool diarize = false,
   }) {
-    final info = Registry.asrInfo(id);
+    final info = ProviderCatalog.asrInfo(id);
     if (info == null) {
       return Readiness(
         ReadinessLevel.blocked,
@@ -55,10 +57,20 @@ abstract final class ProviderReadiness {
         hint: '重新选择一个识别服务。',
       );
     }
-    final basic = _checkEndpoint(info, settings, model: model);
+    final chosen = model ?? settings.defaultAsrModel(info);
+    final basic = _checkEndpoint(info, settings, chosen);
     if (basic != null) return basic;
+    // 声明与服务对不上（存档被手改过、登记表换过接法）：建实例时会报错，
+    // 在这里先拦住，别让任务排到了才失败。
+    if (!info.transports.contains(chosen.transport) ||
+        (chosen.transport.needsDialect && chosen.dialect == null)) {
+      return Readiness(
+        ReadinessLevel.blocked,
+        message: '${info.name}不能按现在的声明接入 ${chosen.name}',
+        hint: '重新选一个模型；要用这个名字，去设置里删掉它，再按正确的接入方式添加。',
+      );
+    }
 
-    final chosen = model ?? settings.endpointFor(info).model;
     final unsupported = _languageNote(chosen, language);
     if (unsupported != null) {
       return Readiness(
@@ -67,34 +79,53 @@ abstract final class ProviderReadiness {
         hint: '换一个模型，或把源语言留给「自动检测」。',
       );
     }
-    if (diarize) {
-      if (!info.supportsDiarization) {
+    // 转写表单会在模型换成不能分离的那一刻把开关关掉，从表单走不到这里；
+    // 留着是防别的来路（手改的存档、以后不经表单的入队）。
+    if (diarize && !chosen.capabilities.diarization) {
+      // 能不能分离看模型声明的能力表，不看名字。推荐的得是用户在下拉里
+      // 选得到的：先看这家服务现在的候选，没有再看登记表预置里有没有
+      // （有就说去设置里加上）；预置里也没有，说明这家服务整个做不了。
+      bool capable(AsrModelSpec m) => m.capabilities.diarization;
+      final offered = settings.asrModelsFor(info).where(capable).firstOrNull;
+      if (offered != null) {
         return Readiness(
           ReadinessLevel.advisory,
-          message: '${info.name}不支持说话人分离',
-          hint: '这一项会被忽略；需要分离请改用阿里百炼 · Qwen3-ASR。',
+          message: '${chosen.name} 不支持说话人分离',
+          hint: '换 ${offered.name}（${offered.transport.label}）。',
         );
       }
-      // 实测：同步接口忽略 diarization_enabled，只有录音文件转写
-      // （-filetrans）真会给说话人编号；qwen3 族在文档里就不支持。
-      if (!chosen.endsWith('-filetrans') || chosen.startsWith('qwen3-asr')) {
+      final preset = info.presets.where(capable).firstOrNull;
+      if (preset != null) {
         return Readiness(
           ReadinessLevel.advisory,
-          message: '$chosen 不支持说话人分离',
-          hint: '换 qwen-audio-3.0-asr-flash-filetrans（整段上传、异步转写）。',
+          message: '${chosen.name} 不支持说话人分离',
+          hint:
+              '去设置里把 ${preset.name}（${preset.transport.label}）'
+              '加进模型列表，再换过去。',
         );
       }
+      return Readiness(
+        ReadinessLevel.advisory,
+        message: '${info.name}不支持说话人分离',
+        hint: '这一项会被忽略；需要分离请改用${_diarizingService ?? '支持分离的服务'}。',
+      );
     }
     return Readiness.ok;
   }
 
-  /// 翻译服务。
+  /// 登记表里第一家有模型能分离说话人的服务，给「改用哪家」的提示用。
+  static String? get _diarizingService => ProviderCatalog.asr
+      .where((info) => info.presets.any((p) => p.capabilities.diarization))
+      .firstOrNull
+      ?.name;
+
+  /// 翻译服务。[model] 不给就查这家服务的默认模型。
   static Readiness translation(
     String id,
     AppSettings settings, {
-    String? model,
+    ChatModelSpec? model,
   }) {
-    final info = Registry.translationInfo(id);
+    final info = ProviderCatalog.translationInfo(id);
     if (info == null) {
       return Readiness(
         ReadinessLevel.blocked,
@@ -102,15 +133,20 @@ abstract final class ProviderReadiness {
         hint: '重新选择一个翻译服务。',
       );
     }
-    return _checkEndpoint(info, settings, model: model) ?? Readiness.ok;
+    return _checkEndpoint(
+          info,
+          settings,
+          model ?? settings.defaultChatModel(info),
+        ) ??
+        Readiness.ok;
   }
 
-  /// 未实施 / 缺地址 / 缺密钥 —— 三种一定跑不起来的情况。
+  /// 未实施 / 缺地址 / 缺模型 / 缺密钥 —— 几种一定跑不起来的情况。
   static Readiness? _checkEndpoint(
     ProviderInfo info,
-    AppSettings settings, {
-    String? model,
-  }) {
+    AppSettings settings,
+    ModelSpec model,
+  ) {
     if (!info.implemented) {
       return Readiness(
         ReadinessLevel.blocked,
@@ -118,7 +154,7 @@ abstract final class ProviderReadiness {
         hint: info.runsLocally ? '本地模型服务是第二期内容，先选一个在线服务。' : '先选一个已实施的服务。',
       );
     }
-    final endpoint = settings.endpointFor(info);
+    final endpoint = settings.endpointFor(info, model);
     if (endpoint.baseUrl.trim().isEmpty) {
       return Readiness(
         ReadinessLevel.blocked,
@@ -126,14 +162,11 @@ abstract final class ProviderReadiness {
         hint: '去设置里填入 baseUrl 后可开始。',
       );
     }
-    final chosenModel = model?.trim().isNotEmpty == true
-        ? model!.trim()
-        : endpoint.model.trim();
-    if (chosenModel.isEmpty) {
+    if (model.isUnset) {
       return Readiness(
         ReadinessLevel.blocked,
         message: '${info.name}未选择模型',
-        hint: '去设置里填入模型名后可开始。',
+        hint: '选一个模型，或去设置里添加。',
       );
     }
     if (info.needsApiKey && endpoint.apiKey.trim().isEmpty) {
@@ -146,19 +179,15 @@ abstract final class ProviderReadiness {
     return null;
   }
 
-  /// 模型支持哪些语种。
+  /// 模型对这个语种的支持有限时给一句提示。
   ///
-  /// Whisper 系列号称支持全部语种，不必检查；真正会翻车的是那些
-  /// 只训了少数语种的小模型 —— 原实现在 `recognition/__init__.py`
-  /// 的 `is_allow_lang` 里做同样的事。
-  static const _limited = <String, Set<String>>{
-    'FunAudioLLM/SenseVoiceSmall': {'zh', 'yue', 'en', 'ja', 'ko'},
-  };
-
-  static String? _languageNote(String model, Language? language) {
+  /// Whisper 系列号称支持全部语种，不必检查；真正会翻车的是那些只训了
+  /// 少数语种的小模型 —— 原实现在 `recognition/__init__.py` 的
+  /// `is_allow_lang` 里做同样的事。支持哪些语种写在模型声明里。
+  static String? _languageNote(AsrModelSpec model, Language? language) {
     if (language == null || language.isAuto) return null;
-    final supported = _limited[model];
+    final supported = model.languages;
     if (supported == null || supported.contains(language.code)) return null;
-    return '$model 对${language.name}的支持有限';
+    return '${model.name} 对${language.name}的支持有限';
   }
 }

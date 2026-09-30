@@ -4,17 +4,19 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/language.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../services/readiness.dart';
-import '../../services/registry.dart';
+import '../shared/glossary_chips.dart';
 import '../shared/provider_fields.dart';
 import 'transcribe_form.dart';
 
-/// 「识别」段：语音语言、识别服务、模型、就绪状态行。
+/// 「识别」段：语音语言、识别服务、模型、说话人分离、词表、就绪状态行。
 class TranscribeRecognizeSection extends StatelessWidget {
   const TranscribeRecognizeSection({
     super.key,
     required this.form,
     this.onOpenSettings,
+    this.onOpenGlossary,
     this.flat = false,
   });
 
@@ -24,13 +26,16 @@ class TranscribeRecognizeSection extends StatelessWidget {
   /// 也不要给一个点了没反应的链接。
   final VoidCallback? onOpenSettings;
 
+  /// 还没有词表时那个「去设置里建一个」，落到设置页的「词表」分区。
+  final VoidCallback? onOpenGlossary;
+
   /// 平铺（页面）还是卡片（对话框）。
   final bool flat;
 
   @override
   Widget build(BuildContext context) {
     final o = form.options;
-    final info = Registry.asrInfo(o.asrProviderId);
+    final info = ProviderCatalog.asrInfo(o.asrProviderId);
     final readiness = form.asrReadiness;
     final gap = flat ? AppSpacing.s3 : AppSpacing.s4;
 
@@ -56,18 +61,20 @@ class TranscribeRecognizeSection extends StatelessWidget {
       child: AppDropdown<String>(
         value: o.asrProviderId,
         error: readiness.isBlocked,
-        display: serviceLabel(info, o.asrModel, form.settings),
+        display: serviceLabel(info, o.asrModel),
         groups: providerGroups(
-          Registry.asr,
+          ProviderCatalog.asr,
           (id) => ProviderReadiness.asr(id, form.settings),
         ),
         onChanged: form.selectAsrProvider,
       ),
     );
-    final model = modelField(
+    final model = ModelField(
+      key: ValueKey('asr-model-${form.revision}'),
       info: info,
       model: o.asrModel,
       settings: form.settings,
+      onOpenSettings: onOpenSettings,
       onChanged: (m) => form.update((o) => o.copyWith(asrModel: m)),
     );
     final status = ReadinessLine(
@@ -75,10 +82,24 @@ class TranscribeRecognizeSection extends StatelessWidget {
       needsApiKey: info?.needsApiKey ?? true,
       onOpenSettings: onOpenSettings,
     );
-    // 只有支持的服务才有这个开关；不支持的连灰掉的都不给，免得用户去找原因。
-    final diarize = info != null && info.supportsDiarization
+    final capabilities = o.asrModel.capabilities;
+    // 选中的模型能分离说话人才有这个开关；不能的连灰掉的都不给，免得
+    // 用户去找原因。模型换成不能分离的那一刻，表单会把开关关掉
+    // （[TranscribeFormController.normalize]），不会留下看不见又开着的。
+    final diarize = capabilities.diarization
         ? _DiarizeToggle(form: form)
         : null;
+    // 识别与接着的翻译共用这一行勾选。
+    final glossary = GlossaryChips(
+      glossaries: form.settings.glossaries,
+      selectedIds: o.glossaryIds.toSet(),
+      onToggle: form.toggleGlossary,
+      onOpenSettings: onOpenGlossary,
+      note: capabilities.contextPrompt
+          ? null
+          : '当前模型不接受上下文提示，识别时不会发送词表与识别提示；'
+                '接着翻译时仍会用词表。',
+    );
 
     if (flat) {
       return flatSection(
@@ -100,6 +121,7 @@ class TranscribeRecognizeSection extends StatelessWidget {
           twoColumn(language, service, gap: gap),
           model,
           ?diarize,
+          glossary,
           status,
         ],
       );
@@ -131,6 +153,8 @@ class TranscribeRecognizeSection extends StatelessWidget {
           const SizedBox(height: AppSpacing.s3),
           diarize,
         ],
+        const SizedBox(height: AppSpacing.s3),
+        glossary,
         const SizedBox(height: AppSpacing.s2),
         status,
       ],
@@ -164,9 +188,11 @@ class _DiarizeToggle extends StatelessWidget {
                 Text('说话人分离', style: context.texts.titleSmall),
                 const SizedBox(height: 1),
                 Text(
+                  // 时间码从哪来取自选中模型的能力，不写死某个模型的名字。
                   on
                       ? '按说话人切开字幕并标上「说话人1：」；多人会议、访谈适用。'
-                            '需选 qwen-audio-3.0-asr-flash-filetrans 模型。'
+                            '时间码取自'
+                            '${form.options.asrModel.capabilities.timing}。'
                       : '区分多位说话人，给每条字幕标上说话人编号',
                   style: context.texts.bodySmall?.copyWith(
                     color: cs.onSurfaceVariant,

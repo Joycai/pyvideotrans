@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
+import 'package:subtitle_studio/domain/glossary.dart';
+import 'package:subtitle_studio/features/settings/glossary_section.dart';
 import 'package:subtitle_studio/features/settings/section_outline.dart';
 import 'package:subtitle_studio/features/settings/settings_page.dart';
 import 'package:subtitle_studio/features/settings/settings_section.dart';
@@ -158,6 +160,62 @@ void main() {
       tester.widgetList<SavedIndicator>(indicators).any((i) => i.visible),
       isTrue,
     );
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('词表分区排在翻译服务之后；恢复默认不动词表，也不给「仅词表」', (tester) async {
+    settings.setGlossary(
+      const Glossary(
+        id: 'g',
+        name: '访谈',
+        entries: [GlossaryEntry(term: '百炼', translation: 'Bailian')],
+      ),
+    );
+    final page = await pump(tester);
+    final labels = [
+      for (final key in SettingsSectionKey.values) key.outlineLabel,
+    ];
+    expect(labels.sublist(2, 5), ['翻译服务', '词表', '语言']);
+
+    await tester.tap(outlineItem('词表'));
+    await tester.pumpAndSettle();
+    expect(page.active, SettingsSectionKey.glossary);
+    expect(find.byType(GlossarySection), findsOneWidget);
+
+    unawaited(page.confirmReset());
+    await tester.pumpAndSettle();
+    expect(find.textContaining('词表不受影响'), findsOneWidget);
+    // 词表没有可恢复的默认值：只有「全部恢复」。
+    expect(find.text('仅「词表」'), findsNothing);
+    await tester.tap(find.text('全部恢复'));
+    await tester.pumpAndSettle();
+    expect(settings.glossaries.single.entries, hasLength(1));
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('词表里键入的改动：停止输入后在词表分区提示已保存', (tester) async {
+    settings.setGlossary(const Glossary(id: 'g', name: '访谈'));
+    final page = await pump(tester);
+    page.jumpTo(SettingsSectionKey.glossary);
+    await tester.pumpAndSettle();
+
+    final cells = find.descendant(
+      of: find.byType(GlossarySection),
+      matching: find.byType(TextField),
+    );
+    await tester.enterText(cells.first, '百炼');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(settings.glossaries.single.entries.single.term, '百炼');
+
+    SavedIndicator glossarySaved() => tester
+        .widgetList<SavedIndicator>(find.byType(SavedIndicator))
+        .elementAt(
+          SettingsSectionKey.values.indexOf(SettingsSectionKey.glossary),
+        );
+    expect(glossarySaved().visible, isFalse);
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(glossarySaved().visible, isTrue);
     await tester.pump(const Duration(seconds: 3));
   });
 

@@ -12,6 +12,8 @@ import 'package:subtitle_studio/features/translate/new_translate_dialog.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
+import 'glossary_fixtures.dart';
+
 /// 与 render_test.dart 同样的字体处理：测试默认字体不含汉字。
 Future<void> _loadCjkFont() async {
   const candidates = [
@@ -79,6 +81,8 @@ void main() {
     String? layout,
   }) async {
     final settings = await settingsWith(key: key, mt: mt);
+    // 空态留着「还没有词表」那句；有文件的几张带上词表筹码。
+    if (paths.isNotEmpty) sampleGlossaries.forEach(settings.setGlossary);
 
     tester.view
       ..physicalSize = const Size(880, 1400)

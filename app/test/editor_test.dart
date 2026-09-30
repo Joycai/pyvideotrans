@@ -3,11 +3,15 @@ import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/glossary.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
+import 'package:subtitle_studio/services/openai_compatible.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
+import 'editor_fixtures.dart';
 import 'helpers.dart';
 
 Future<EditorController> _controller() async {
@@ -669,6 +673,100 @@ void main() {
           if (!cue.hasTranslation && cue.source.trim().isNotEmpty) i,
       ];
       expect(pending, [0, 2]);
+    });
+  });
+
+  group('重新翻译用哪份模型与词表', () {
+    const frozen = GlossaryEntry(term: '百炼', translation: 'Bailian');
+    const current = GlossaryEntry(term: '百炼', translation: 'Model Studio');
+    late AppSettings settings;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      settings = await AppSettings.load();
+      settings
+        ..setConfig('deepseek', const ProviderConfig(apiKey: 'sk'))
+        ..setModels('deepseek', [const ChatModelSpec(name: 'now')])
+        ..setGlossary(
+          const Glossary(id: 'g', name: '访谈', entries: [current]),
+        );
+    });
+
+    OpenAiCompatibleTranslationProvider providerOf(EditorSession session) =>
+        EditorController(
+              session: session,
+              settings: settings,
+            ).buildTranslationProvider()
+            as OpenAiCompatibleTranslationProvider;
+
+    // 任务的参数在入队时定死：在编辑器里补翻几条，用的也得是那一份。
+    test('任务会话：用任务里冻结的，不看设置现在是什么', () {
+      final task = SubtitleTask(
+        id: 't',
+        sourcePath: '/v/demo.mp4',
+        kind: TaskKind.transcribeAndTranslate,
+        status: TaskStatus.done,
+        options: testOptions(
+          mt: 'deepseek',
+          translationModel: 'then',
+        ).copyWith(glossaryIds: ['g'], glossary: [frozen]),
+      );
+      final provider = providerOf(TaskSession(task));
+      expect(provider.endpoint.model, 'then');
+      expect(provider.glossary, [frozen]);
+    });
+
+    // 翻译任务的模型是用户在翻译页上选的，同样是冻结的那一份。
+    test('翻译任务的会话：用任务里冻结的', () {
+      final task = SubtitleTask(
+        id: 't',
+        sourcePath: '/v/demo.srt',
+        kind: TaskKind.translate,
+        status: TaskStatus.done,
+        options: testOptions(mt: 'deepseek', translationModel: 'then'),
+      );
+      expect(providerOf(TaskSession(task)).endpoint.model, 'then');
+    });
+
+    // 只转写的任务，翻译模型是入队时顺手从设置里抄的，用户没选过它。
+    // 那时还没配模型的话抄下来的是空的：之后配好了，在编辑器里补翻得用得上。
+    test('只转写的任务会话：翻译模型现取设置里的，词表仍用任务里冻结的', () {
+      final task = SubtitleTask(
+        id: 't',
+        sourcePath: '/v/demo.mp4',
+        kind: TaskKind.transcribe,
+        status: TaskStatus.done,
+        options: testOptions(
+          mt: 'deepseek',
+          translationModel: '',
+        ).copyWith(glossaryIds: ['g'], glossary: [frozen]),
+      );
+      final provider = providerOf(TaskSession(task));
+      expect(provider.endpoint.model, 'now');
+      // 词表是建任务时勾的：识别用的是哪份，补翻也用哪份。
+      expect(provider.glossary, [frozen]);
+
+      settings.setModels('deepseek', [const ChatModelSpec(name: 'later')]);
+      expect(providerOf(TaskSession(task)).endpoint.model, 'later');
+    });
+
+    // 本地文件没有入队这一步。用户发现模型没选、去设置里填好再回来，
+    // 不该还要把文件关掉重开。
+    test('本地文件会话：每次现取设置里的模型与默认启用的词表', () {
+      final session = FileSession.open(
+        source: localZhFile(),
+        defaults: testOptions(mt: 'deepseek', translationModel: 'at-open'),
+      );
+      final provider = providerOf(session);
+      expect(provider.endpoint.model, 'now');
+      expect(provider.glossary, [current]);
+
+      settings
+        ..setModels('deepseek', [const ChatModelSpec(name: 'later')])
+        ..removeGlossary('g');
+      final again = providerOf(session);
+      expect(again.endpoint.model, 'later');
+      expect(again.glossary, isEmpty);
     });
   });
 }

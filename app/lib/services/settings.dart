@@ -2,30 +2,46 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import '../domain/enum_by_name.dart';
+import '../domain/glossary.dart';
 import '../domain/language.dart';
 import '../domain/mux/merge_options.dart';
+import '../domain/providers/model_spec.dart';
+import '../domain/providers/provider_catalog.dart';
 import '../domain/task_options.dart';
 import '../domain/transcode/options.dart';
 import 'provider_api.dart';
 
 /// 单个服务的连接配置。
 class ProviderConfig {
-  const ProviderConfig({this.baseUrl, this.model, this.apiKey});
+  const ProviderConfig({
+    this.baseUrl,
+    this.apiKey,
+    this.models = const [],
+    this.legacyModelText,
+  });
 
   final String? baseUrl;
-
-  /// 模型名。可以用逗号写多个（中英文逗号都认），第一个是默认值，
-  /// 其余在「新建转写」「新建翻译」的模型下拉里可选。
-  final String? model;
   final String? apiKey;
 
-  /// [model] 拆成的列表：去空白、去空项、去重，保持书写顺序。
-  List<String> get models => splitModels(model);
+  /// 用户给这家服务配的模型声明，第一个是默认。空表示没配过，
+  /// 用 [legacyModelText]，再没有就用登记表的预置。
+  final List<ModelSpec> models;
 
-  /// 逗号分隔的模型名 → 列表。中英文逗号都认。
-  static List<String> splitModels(String? raw) {
+  /// 旧版本存的模型名：一串逗号分隔的文本（中英文逗号都认）。
+  ///
+  /// 只在 [models] 为空时有意义。留着原文而不是读的时候就转成声明：
+  /// 转换要知道这家服务有哪些接入方式，这里不知道；而且不写盘就不会
+  /// 把推断的结果固化下来。见 [AppSettings.asrModelsFor]。
+  final String? legacyModelText;
+
+  /// [legacyModelText] 拆成的名字列表。
+  List<String> get legacyModelNames => _splitModels(legacyModelText);
+
+  /// 逗号分隔的模型名 → 列表：去空白、去空项、去重，保持书写顺序。
+  static List<String> _splitModels(String? raw) {
     if (raw == null) return const [];
     final seen = <String>{};
     return [
@@ -34,24 +50,46 @@ class ProviderConfig {
     ];
   }
 
-  ProviderConfig copyWith({String? baseUrl, String? model, String? apiKey}) =>
-      ProviderConfig(
-        baseUrl: baseUrl ?? this.baseUrl,
-        model: model ?? this.model,
-        apiKey: apiKey ?? this.apiKey,
-      );
+  /// 换地址或密钥，模型原样带着。改模型列表不走这里：那要在调用的那一刻
+  /// 读现在的列表（见 [AppSettings.addModel] 等），存过之后旧的那串模型名
+  /// 也得一起清掉。
+  ProviderConfig copyWith({String? baseUrl, String? apiKey}) => ProviderConfig(
+    baseUrl: baseUrl ?? this.baseUrl,
+    apiKey: apiKey ?? this.apiKey,
+    models: models,
+    legacyModelText: legacyModelText,
+  );
 
   Map<String, Object?> toJson() => {
     if (baseUrl != null) 'baseUrl': baseUrl,
-    if (model != null) 'model': model,
+    // 有了声明就只写声明；旧的那串文本到此为止。还没有声明时照旧写回去，
+    // 否则用户只是改了一下密钥，以前填的模型名就丢了。
+    if (models.isNotEmpty)
+      'models': [for (final model in models) model.toJson()]
+    else if (legacyModelText != null)
+      'model': legacyModelText,
     if (apiKey != null) 'apiKey': apiKey,
   };
 
-  factory ProviderConfig.fromJson(Map<String, Object?> json) => ProviderConfig(
-    baseUrl: json['baseUrl'] as String?,
-    model: json['model'] as String?,
-    apiKey: json['apiKey'] as String?,
-  );
+  factory ProviderConfig.fromJson(Map<String, Object?> json) {
+    final models = json['models'];
+    // 同一种模型里重名的只留前一个：第二个永远选不中，界面按名字认行，
+    // 存档被手改出重名时不该让设置页起不来。
+    final seen = <(Type, String)>{};
+    return ProviderConfig(
+      baseUrl: json['baseUrl'] as String?,
+      apiKey: json['apiKey'] as String?,
+      // 读不出来的那一条丢掉，其余照常。
+      models: List.unmodifiable([
+        if (models is List)
+          for (final model in models)
+            if (ModelSpec.fromJson(model) case final spec?
+                when seen.add((spec.runtimeType, spec.name)))
+              spec,
+      ]),
+      legacyModelText: json['model'] as String?,
+    );
+  }
 }
 
 /// 设置页上的分区，「恢复默认」按它分组作用。
@@ -86,13 +124,16 @@ class AppSettings extends ChangeNotifier {
   static const _kLastTranslate = 'lastTranslateOptions';
   static const _kLastTranscode = 'lastTranscodeOptions';
   static const _kLastMerge = 'lastMergeOptions';
+  static const _kGlossaries = 'glossaries';
 
   Map<String, ProviderConfig> _configs = {};
+  List<Glossary> _glossaries = const [];
 
   static Future<AppSettings> load() async {
     final prefs = await SharedPreferences.getInstance();
     final settings = AppSettings._(prefs);
     settings._configs = _readConfigs(prefs);
+    settings._glossaries = _readGlossaries(prefs);
     return settings;
   }
 
@@ -110,6 +151,23 @@ class AppSettings extends ChangeNotifier {
     } catch (_) {
       // 配置损坏时宁可回到默认值，也不要让应用起不来。
       return {};
+    }
+  }
+
+  static List<Glossary> _readGlossaries(SharedPreferences prefs) {
+    final raw = prefs.getString(_kGlossaries);
+    if (raw == null) return const [];
+    try {
+      final seen = <String>{};
+      return List.unmodifiable([
+        for (final item in jsonDecode(raw) as List)
+          // 读不出来的那一份丢掉，其余照常；id 撞了的只留前一份。
+          if (Glossary.fromJson(item) case final glossary?
+              when seen.add(glossary.id))
+            glossary,
+      ]);
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -189,25 +247,35 @@ class AppSettings extends ChangeNotifier {
 
   /// 「新建转写」「新建翻译」打开时的默认参数。用户在对话框里改动的是这份拷贝，
   /// 全局设置不会被顺手改掉。
-  TaskOptions defaultTaskOptions() => TaskOptions(
-    sourceLanguage: Languages.resolve(sourceLanguage),
-    asrProviderId: asrProviderId,
-    asrPrompt: asrPrompt,
-    targetLanguage: Languages.resolve(targetLanguage),
-    translationProviderId: translationProviderId,
-    translationBatchSize: translationBatchSize,
-    translationGuidance: translationGuidance,
-    bilingual: bilingual,
-    cjkLineLength: cjkLineLength,
-    latinLineLength: latinLineLength,
-    minCueMs: minCueMs,
-    maxCueMs: maxCueMs,
-    format: outputFormat,
-    outputLocation: outputDir == null
-        ? OutputLocation.besideSource
-        : OutputLocation.custom,
-    outputDir: outputDir,
-  );
+  ///
+  /// 默认启用的词表在这里就展开成条目：有的调用方不经过建任务表单，拿到
+  /// 这份参数就直接用（拖进来直接入队、编辑器里的本地字幕文件）。
+  TaskOptions defaultTaskOptions() {
+    final glossaryIds = defaultGlossaryIds;
+    return TaskOptions(
+      sourceLanguage: Languages.resolve(sourceLanguage),
+      asrProviderId: asrProviderId,
+      asrModel: defaultAsrModelOf(asrProviderId),
+      asrPrompt: asrPrompt,
+      targetLanguage: Languages.resolve(targetLanguage),
+      translationProviderId: translationProviderId,
+      translationModel: defaultChatModelOf(translationProviderId),
+      translationBatchSize: translationBatchSize,
+      translationGuidance: translationGuidance,
+      glossaryIds: glossaryIds,
+      glossary: glossaryEntries(glossaryIds),
+      bilingual: bilingual,
+      cjkLineLength: cjkLineLength,
+      latinLineLength: latinLineLength,
+      minCueMs: minCueMs,
+      maxCueMs: maxCueMs,
+      format: outputFormat,
+      outputLocation: outputDir == null
+          ? OutputLocation.besideSource
+          : OutputLocation.custom,
+      outputDir: outputDir,
+    );
+  }
 
   /// 最近一次成功提交的「新建转写」参数，供页面上的「上次参数」整份填回。
   /// 只留最近一份；没有或存档损坏时为 null。
@@ -276,10 +344,17 @@ class AppSettings extends ChangeNotifier {
     final raw = _prefs.getString(key);
     if (raw == null) return null;
     try {
-      return TaskOptions.fromJson(
-        jsonDecode(raw) as Map<String, Object?>,
+      final json = jsonDecode(raw) as Map<String, Object?>;
+      final options = TaskOptions.fromJson(
+        json,
         fallback: defaultTaskOptions(),
+        defaultModels: defaultModels,
       );
+      // 有词表之前存的「上次参数」没有勾选这一项，意思是「那时还没有词表」，
+      // 不是「不用词表」：按默认勾选来，否则填回时会把默认启用的词表关掉。
+      return json.containsKey('glossaryIds')
+          ? options
+          : options.copyWith(glossaryIds: defaultGlossaryIds);
     } catch (_) {
       return null;
     }
@@ -289,9 +364,86 @@ class AppSettings extends ChangeNotifier {
     if (v == null) {
       _prefs.remove(key);
     } else {
-      _prefs.setString(key, jsonEncode(v.toJson()));
+      // 只记勾选了哪几份词表，不把条目也存进偏好：整份词表已经在
+      // [glossaries] 里了，再提交时按勾选重新展开。
+      _prefs.setString(
+        key,
+        jsonEncode(v.copyWith(glossary: const []).toJson()),
+      );
     }
     // 不 notify：这份参数只被「上次参数」按钮读取，不影响任何常显内容。
+  }
+
+  /// 用户建的词表，按建立的先后排。
+  ///
+  /// 词表是用户数据，不是设置：[reset] / [resetAll] 都不动它，和「上次参数」
+  /// 同类 —— 攒了几百条的词表不该因为「恢复默认」没了。
+  List<Glossary> get glossaries => _glossaries;
+
+  /// 新建任务时默认勾上的那几份。
+  List<String> get defaultGlossaryIds => [
+    for (final glossary in _glossaries)
+      if (glossary.enabledByDefault) glossary.id,
+  ];
+
+  /// 存一份词表：id 已有的就地换掉（位置不变），没有的加在末尾。
+  void setGlossary(Glossary glossary) {
+    final cleaned = glossary.normalized();
+    final at = _glossaries.indexWhere((g) => g.id == cleaned.id);
+    _writeGlossaries([
+      for (final (i, existing) in _glossaries.indexed)
+        i == at ? cleaned : existing,
+      if (at < 0) cleaned,
+    ]);
+  }
+
+  /// 新建一份空词表并存下，返回建好的那份。
+  ///
+  /// 名字是「词表 N」：N 从现有份数加一起，取第一个没被占用的。新词表
+  /// 默认启用 —— 建它多半就是为了马上用。
+  Glossary addGlossary() {
+    final taken = {for (final glossary in _glossaries) glossary.name};
+    var n = _glossaries.length + 1;
+    while (taken.contains('词表 $n')) {
+      n++;
+    }
+    final glossary = Glossary(id: const Uuid().v4(), name: '词表 $n');
+    setGlossary(glossary);
+    return glossary;
+  }
+
+  void removeGlossary(String id) {
+    if (!_glossaries.any((g) => g.id == id)) return;
+    _writeGlossaries([
+      for (final glossary in _glossaries)
+        if (glossary.id != id) glossary,
+    ]);
+  }
+
+  /// 把勾选的几份词表展开成一份条目，给任务入队时冻结用。
+  ///
+  /// 顺序跟着 [glossaries]，不跟着 [ids]：勾选的先后不该改变发出去的提示词。
+  /// 同一个原文在两份词表里都有时留排在前面那份的译法；已经删掉的 id 跳过。
+  List<GlossaryEntry> glossaryEntries(Iterable<String> ids) {
+    final wanted = ids.toSet();
+    // 存进来的词表都已经收拾过（[setGlossary]、读偏好时），这里只去掉跨表
+    // 重复的原文，不再逐条规整：取默认参数时每次都会走到这里。
+    final seen = <String>{};
+    return [
+      for (final glossary in _glossaries)
+        if (wanted.contains(glossary.id))
+          for (final entry in glossary.entries)
+            if (seen.add(entry.term)) entry,
+    ];
+  }
+
+  void _writeGlossaries(List<Glossary> glossaries) {
+    _glossaries = List.unmodifiable(glossaries);
+    _prefs.setString(
+      _kGlossaries,
+      jsonEncode([for (final glossary in _glossaries) glossary.toJson()]),
+    );
+    notifyListeners();
   }
 
   /// 把一组设置恢复成默认值。
@@ -328,7 +480,8 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 全部恢复默认。「上次参数」不在其列 —— 它是历史记录，不是设置。
+  /// 全部恢复默认。「上次参数」不在其列 —— 它是历史记录，不是设置；
+  /// 词表也不在其列，见 [glossaries]。
   void resetAll({
     Iterable<String> asrProviderIds = const [],
     Iterable<String> translationProviderIds = const [],
@@ -369,28 +522,154 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 用户填的值优先，没填就用登记表里的默认值。
-  /// 模型框里写了多个时，取第一个作为默认模型。
-  Endpoint endpointFor(ProviderInfo info) {
+  /// 这家识别服务可选的模型声明，第一个是默认。
+  ///
+  /// 三层来源，前面的有就不看后面的：用户配的声明 → 旧版本存的那串模型名
+  /// （逐个按名字补成声明）→ 登记表的预置。旧存档是**读的时候**补，不写盘：
+  /// 升级后什么都不碰的用户，发出去的请求与升级前一样。
+  List<AsrModelSpec> asrModelsFor(AsrProviderInfo info) {
+    final own = _own<AsrModelSpec>(info);
+    return own.isNotEmpty ? own : info.presets;
+  }
+
+  /// 这家翻译服务可选的模型声明，规则同 [asrModelsFor]。
+  List<ChatModelSpec> chatModelsFor(ChatProviderInfo info) {
+    final own = _own<ChatModelSpec>(info);
+    return own.isNotEmpty ? own : info.presets;
+  }
+
+  /// 用户自己配的模型：声明，或旧版本那串模型名补成的声明。没配过是空的，
+  /// 这时候选来自登记表的预置。设置页的模型列表编辑的是这一份 —— 把预置
+  /// 也当成用户的列出来，删光之后它们又会自己长回来。
+  List<ModelSpec> ownModels(ProviderInfo info) => switch (info) {
+    AsrProviderInfo() => _own<AsrModelSpec>(info),
+    ChatProviderInfo() => _own<ChatModelSpec>(info),
+  };
+
+  List<T> _own<T extends ModelSpec>(ProviderInfo info) {
     final config = configFor(info.id);
-    return Endpoint(
-      baseUrl: _firstNonEmpty(config.baseUrl, info.defaultBaseUrl) ?? '',
-      model: _firstNonEmpty(config.models.firstOrNull, info.defaultModel) ?? '',
-      apiKey: config.apiKey ?? '',
+    final declared = config.models.whereType<T>().toList();
+    if (declared.isNotEmpty) return declared;
+    return [for (final name in config.legacyModelNames) info.guess(name) as T];
+  }
+
+  /// 默认模型：列表里的第一个。一个都没有时是空名的占位。
+  AsrModelSpec defaultAsrModel(AsrProviderInfo info) =>
+      asrModelsFor(info).firstOrNull ?? info.unsetModel;
+
+  ChatModelSpec defaultChatModel(ChatProviderInfo info) =>
+      chatModelsFor(info).firstOrNull ?? ChatModelSpec.unset;
+
+  ModelSpec defaultModel(ProviderInfo info) => switch (info) {
+    AsrProviderInfo() => defaultAsrModel(info),
+    ChatProviderInfo() => defaultChatModel(info),
+  };
+
+  /// 不分识别还是翻译的候选列表，给两边共用的界面零件用。
+  List<ModelSpec> modelChoices(ProviderInfo info) => switch (info) {
+    AsrProviderInfo() => asrModelsFor(info),
+    ChatProviderInfo() => chatModelsFor(info),
+  };
+
+  /// 按服务 id 取默认模型。服务不认识时是空名的占位，不抛 —— 旧存档、
+  /// 手改过的偏好里可能有登记表里已经没有的 id，由就绪检查去说。
+  AsrModelSpec defaultAsrModelOf(String providerId) {
+    final info = ProviderCatalog.asrInfo(providerId);
+    return info == null
+        ? ProviderCatalog.defaultAsrSpec(providerId)
+        : defaultAsrModel(info);
+  }
+
+  ChatModelSpec defaultChatModelOf(String providerId) {
+    final info = ProviderCatalog.translationInfo(providerId);
+    return info == null
+        ? ProviderCatalog.defaultChatSpec(providerId)
+        : defaultChatModel(info);
+  }
+
+  /// 读旧存档时用：没写模型的旧任务，跑的是设置里给那家服务配的模型。
+  DefaultModels get defaultModels =>
+      (asr: defaultAsrModelOf, chat: defaultChatModelOf);
+
+  /// 存这家服务的模型列表。存过之后旧版本那串模型名就不再用了。
+  void setModels(String providerId, List<ModelSpec> models) {
+    final config = configFor(providerId);
+    setConfig(
+      providerId,
+      ProviderConfig(
+        baseUrl: config.baseUrl,
+        apiKey: config.apiKey,
+        models: List.unmodifiable(models),
+      ),
     );
   }
 
-  /// 「新建转写」「新建翻译」模型下拉的候选：用户在设置里填的那串优先，
-  /// 没填才用登记表里的常用列表。为空表示没有候选，只能手填。
-  List<String> modelsFor(ProviderInfo info) {
-    final own = configFor(info.id).models;
-    return own.isNotEmpty ? own : info.models;
+  // —— 改模型列表 ——————————————————————————————————————————————
+  //
+  // 设置页的每一种改动都走下面四个入口。它们在被调用的那一刻读现在的
+  // 列表，算出新的，整份存回去 —— 界面不自己拿着一份列表算：数字框失焦
+  // 提交与紧跟着的一次点击可能落在同一帧里，后一次拿旧列表算，前一次的
+  // 改动就被盖掉了。行按模型名认，不按下标。
+
+  /// 加一个模型；已有同名的就地换掉。
+  ///
+  /// 列表还空着时，这家服务一直在用登记表的常用模型。这时先把它们落进
+  /// 列表再加：不然「多加一个」会把默认模型换成刚加的这个，其余常用的
+  /// 也从新建任务的下拉里消失，而用户只是想多一个选择。
+  void addModel(ProviderInfo info, ModelSpec model) {
+    final own = ownModels(info);
+    final base = own.isEmpty ? info.presets : own;
+    final at = base.indexWhere((m) => m.name == model.name);
+    setModels(info.id, [
+      for (final (i, existing) in base.indexed) i == at ? model : existing,
+      if (at < 0) model,
+    ]);
+  }
+
+  /// 删掉一个模型。删光之后回到「没配过」，候选重新来自常用模型。
+  void removeModel(ProviderInfo info, String name) => setModels(info.id, [
+    for (final model in ownModels(info))
+      if (model.name != name) model,
+  ]);
+
+  /// 把一个模型挪到第一位（第一个是默认），其余顺延。
+  void setDefaultModel(ProviderInfo info, String name) {
+    final own = ownModels(info);
+    final chosen = own.where((m) => m.name == name).firstOrNull;
+    if (chosen == null) return;
+    setModels(info.id, [
+      chosen,
+      for (final model in own)
+        if (model.name != name) model,
+    ]);
+  }
+
+  /// 改一个模型的一项参数；[value] 为 null 表示「不发送」。
+  void setModelOption(
+    ProviderInfo info,
+    String name,
+    String key,
+    Object? value,
+  ) => setModels(info.id, [
+    for (final model in ownModels(info))
+      model.name == name ? model.withOption(key, value) : model,
+  ]);
+
+  /// 发请求用的连接参数：地址与密钥取用户填的，没填地址就用登记表的默认；
+  /// 模型名取 [model] 的。
+  Endpoint endpointFor(ProviderInfo info, ModelSpec model) {
+    final config = configFor(info.id);
+    return Endpoint(
+      baseUrl: _firstNonEmpty(config.baseUrl, info.defaultBaseUrl) ?? '',
+      model: model.name,
+      apiKey: config.apiKey ?? '',
+    );
   }
 
   /// 配置是否足以发起请求。设置页用它来标注「未配置」。
   bool isConfigured(ProviderInfo info) {
     if (!info.implemented) return false;
-    final endpoint = endpointFor(info);
+    final endpoint = endpointFor(info, defaultModel(info));
     if (endpoint.baseUrl.isEmpty || endpoint.model.isEmpty) return false;
     return !info.needsApiKey || endpoint.apiKey.isNotEmpty;
   }

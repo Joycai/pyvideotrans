@@ -6,6 +6,11 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/glossary.dart';
+import 'package:subtitle_studio/domain/providers/asr_transport.dart';
+import 'package:subtitle_studio/domain/providers/model_params.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
+import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/services/audio_splitter.dart';
@@ -14,12 +19,11 @@ import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
-const _info = ProviderInfo(
+const _info = AsrProviderInfo(
   id: 'dashscope_qwen_asr',
   name: '阿里百炼 · Qwen3-ASR',
   vendor: '阿里百炼',
   defaultBaseUrl: 'https://dashscope.aliyuncs.com/api/v1',
-  defaultModel: 'qwen3-asr-flash',
 );
 
 Endpoint _endpoint([String model = 'qwen3-asr-flash']) => Endpoint(
@@ -133,6 +137,7 @@ void main() {
       final provider = DashScopeAsrProvider(
         info: _info,
         endpoint: _endpoint(),
+        dialect: DashScopeDialect.qwen3Asr,
         splitter: FakeSplitter(2),
         prompt: '术语：字幕工具',
         client: client,
@@ -172,6 +177,7 @@ void main() {
       await DashScopeAsrProvider(
         info: _info,
         endpoint: _endpoint(),
+        dialect: DashScopeDialect.qwen3Asr,
         splitter: FakeSplitter(1),
         client: client,
       ).transcribe(
@@ -195,6 +201,7 @@ void main() {
       final cues = await DashScopeAsrProvider(
         info: _info,
         endpoint: _endpoint('fun-asr-flash-2026-06-15'),
+        dialect: DashScopeDialect.funAsr,
         splitter: FakeSplitter(1),
         client: client,
       ).transcribe(
@@ -309,6 +316,7 @@ void main() {
           await DashScopeAsrProvider(
             info: _info,
             endpoint: _endpoint('qwen-audio-3.0-asr-flash'),
+            dialect: DashScopeDialect.qwenAudio3,
             splitter: splitter,
             diarize: true,
             client: client,
@@ -390,6 +398,7 @@ void main() {
           await DashScopeAsrProvider(
             info: _info,
             endpoint: _endpoint('qwen-audio-3.0-asr-flash'),
+            dialect: DashScopeDialect.qwenAudio3,
             splitter: FakeSplitter(1),
             diarize: true,
             client: client,
@@ -412,13 +421,14 @@ void main() {
         bodies.add(jsonDecode(req.body) as Map<String, Object?>);
         return _ok(_qwen3Reply('x'));
       });
-      for (final (model, diarize) in [
-        ('qwen3-asr-flash', true),
-        ('qwen-audio-3.0-asr-flash', false),
+      for (final (model, dialect, diarize) in [
+        ('qwen3-asr-flash', DashScopeDialect.qwen3Asr, true),
+        ('qwen-audio-3.0-asr-flash', DashScopeDialect.qwenAudio3, false),
       ]) {
         await DashScopeAsrProvider(
           info: _info,
           endpoint: _endpoint(model),
+          dialect: dialect,
           splitter: FakeSplitter(1),
           diarize: diarize,
           client: client,
@@ -448,6 +458,7 @@ void main() {
       final provider = DashScopeAsrProvider(
         info: _info,
         endpoint: _endpoint(),
+        dialect: DashScopeDialect.qwen3Asr,
         splitter: FakeSplitter(2),
         client: client,
       );
@@ -500,6 +511,7 @@ void main() {
       final provider = DashScopeAsrProvider(
         info: _info,
         endpoint: _endpoint(),
+        dialect: DashScopeDialect.qwen3Asr,
         splitter: FakeSplitter(2),
         client: client,
       );
@@ -539,6 +551,7 @@ void main() {
         DashScopeAsrProvider(
           info: _info,
           endpoint: _endpoint(),
+          dialect: DashScopeDialect.qwen3Asr,
           splitter: FakeSplitter(3),
           client: client,
         ).transcribe(
@@ -573,6 +586,7 @@ void main() {
       final cues = await DashScopeAsrProvider(
         info: _info,
         endpoint: _endpoint(),
+        dialect: DashScopeDialect.qwen3Asr,
         splitter: FakeSplitter(2),
         client: client,
       ).transcribe(
@@ -594,6 +608,7 @@ void main() {
     }) => DashScopeAsrProvider(
       info: _info,
       endpoint: _endpoint(),
+      dialect: DashScopeDialect.qwen3Asr,
       splitter: FakeSplitter(clips),
       client: client,
       delay: (d) async => waits?.add(d),
@@ -668,6 +683,7 @@ void main() {
       final p = DashScopeAsrProvider(
         info: _info,
         endpoint: _endpoint(),
+        dialect: DashScopeDialect.qwen3Asr,
         splitter: FakeSplitter(1),
         client: client,
         delay: (_) async => token.cancel(),
@@ -719,6 +735,7 @@ void main() {
       final provider = DashScopeAsrProvider(
         info: _info,
         endpoint: _endpoint(),
+        dialect: DashScopeDialect.qwen3Asr,
         splitter: FakeSplitter(3),
         client: client,
       );
@@ -752,6 +769,7 @@ void main() {
       final cues = await DashScopeAsrProvider(
         info: _info,
         endpoint: _endpoint(),
+        dialect: DashScopeDialect.qwen3Asr,
         splitter: FakeSplitter(2),
         client: client,
       ).transcribe(
@@ -772,6 +790,7 @@ void main() {
         () => DashScopeAsrProvider(
           info: _info,
           endpoint: _endpoint(),
+          dialect: DashScopeDialect.qwen3Asr,
           splitter: FakeSplitter(2),
           client: client,
         ).transcribe(
@@ -796,6 +815,7 @@ void main() {
         DashScopeAsrProvider(
           info: _info,
           endpoint: _endpoint(),
+          dialect: DashScopeDialect.qwen3Asr,
           splitter: FakeSplitter(3),
           client: client,
         ).transcribe(
@@ -824,6 +844,7 @@ void main() {
         DashScopeAsrProvider(
           info: _info,
           endpoint: _endpoint(),
+          dialect: DashScopeDialect.qwen3Asr,
           splitter: FakeSplitter(3),
           client: client,
         ).transcribe(
@@ -837,14 +858,141 @@ void main() {
       expect(calls, 1);
     });
 
-    test('登记表把它建成独立实现类', () async {
+    test('报文形状跟着声明的报文族走，不看模型名', () async {
+      // 名字故意取得和报文族对不上：以前按前缀猜，这两个都会猜错。
+      Future<Map<String, Object?>> bodyOf(
+        String model,
+        DashScopeDialect dialect,
+      ) async {
+        late Map<String, Object?> body;
+        await DashScopeAsrProvider(
+          info: _info,
+          endpoint: _endpoint(model),
+          dialect: dialect,
+          splitter: FakeSplitter(1),
+          prompt: '术语',
+          client: MockClient((req) async {
+            body = jsonDecode(req.body) as Map<String, Object?>;
+            return _ok(
+              dialect == DashScopeDialect.qwen3Asr
+                  ? _qwen3Reply('x')
+                  : jsonEncode({
+                      'output': {'text': 'x'},
+                    }),
+            );
+          }),
+        ).transcribe(
+          audioPath: audio,
+          language: 'zh',
+          token: CancellationToken(),
+          onProgress: _noProgress,
+        );
+        return body;
+      }
+
+      final qwen3 = await bodyOf(
+        'fun-asr-flash-自部署',
+        DashScopeDialect.qwen3Asr,
+      );
+      expect((qwen3['parameters']! as Map).keys, contains('asr_options'));
+      expect((qwen3['input']! as Map)['messages'], hasLength(2));
+
+      for (final dialect in [
+        DashScopeDialect.qwenAudio3,
+        DashScopeDialect.funAsr,
+      ]) {
+        final other = await bodyOf('qwen3-asr-flash', dialect);
+        expect((other['parameters']! as Map).keys, ['format', 'sample_rate']);
+        // 这两族的报文里没有放提示词的位置。
+        expect((other['input']! as Map)['messages'], hasLength(1));
+      }
+    });
+
+    test('逆文本规范化跟着模型参数走：没动过是开，关了就发 false', () async {
+      Future<Object?> itnOf(ModelOptions options) async {
+        late Map<String, Object?> body;
+        await DashScopeAsrProvider(
+          info: _info,
+          endpoint: _endpoint(),
+          dialect: DashScopeDialect.qwen3Asr,
+          options: options,
+          splitter: FakeSplitter(1),
+          client: MockClient((req) async {
+            body = jsonDecode(req.body) as Map<String, Object?>;
+            return _ok(_qwen3Reply('x'));
+          }),
+        ).transcribe(
+          audioPath: audio,
+          language: 'zh',
+          token: CancellationToken(),
+          onProgress: _noProgress,
+        );
+        final parameters = body['parameters']! as Map;
+        return (parameters['asr_options'] as Map)['enable_itn'];
+      }
+
+      expect(await itnOf(ModelOptions.none), isTrue);
+      expect(
+        await itnOf(ModelOptions.none.set(ModelParams.enableItn.key, false)),
+        isFalse,
+      );
+    });
+
+    test('登记表按接入方式选实现类，报文族与参数照声明传进去', () async {
       SharedPreferences.setMockInitialValues({});
       final settings = await AppSettings.load();
-      expect(
-        Registry.buildAsr('dashscope_qwen_asr', settings),
-        isA<DashScopeAsrProvider>(),
+      final info = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+      expect(info.implemented, isTrue);
+
+      // 自填的名字不带任何后缀：接法只看声明。
+      final options = ModelOptions.none.set(ModelParams.enableItn.key, false);
+      final provider = Registry.buildAsr(
+        info.id,
+        settings,
+        model: const AsrModelSpec(
+          name: 'my-model',
+          transport: AsrTransport.dashscopeSync,
+          dialect: DashScopeDialect.qwen3Asr,
+        ).withOptions(options),
+        prompt: '任务的提示',
+        glossary: const [GlossaryEntry(term: '百炼')],
       );
-      expect(Registry.asrInfo('dashscope_qwen_asr')!.implemented, isTrue);
+      expect(provider, isA<DashScopeAsrProvider>());
+      provider as DashScopeAsrProvider;
+      expect(provider.endpoint.model, 'my-model');
+      expect(provider.dialect, DashScopeDialect.qwen3Asr);
+      expect(provider.options, options);
+      expect(provider.prompt, '百炼\n任务的提示');
+
+      // 报文族照声明传，不是写死的：另两族各建一次。
+      for (final dialect in [
+        DashScopeDialect.qwenAudio3,
+        DashScopeDialect.funAsr,
+      ]) {
+        final other = Registry.buildAsr(
+          info.id,
+          settings,
+          model: AsrModelSpec(
+            name: 'my-model',
+            transport: AsrTransport.dashscopeSync,
+            dialect: dialect,
+          ),
+        );
+        expect((other as DashScopeAsrProvider).dialect, dialect);
+        expect(other.options, ModelOptions.none);
+      }
+
+      // 什么都没配时的默认模型就是同步逐段的 qwen3-asr-flash。
+      final byDefault = Registry.buildAsr(
+        info.id,
+        settings,
+        model: settings.defaultAsrModel(info),
+      );
+      expect(byDefault, isA<DashScopeAsrProvider>());
+      expect(
+        (byDefault as DashScopeAsrProvider).dialect,
+        DashScopeDialect.qwen3Asr,
+      );
     });
   });
 }

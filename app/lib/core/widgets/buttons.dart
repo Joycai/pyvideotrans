@@ -203,6 +203,7 @@ class IconActionButton extends StatelessWidget {
     this.iconSize = 20,
     this.selected = false,
     this.fill = false,
+    this.color,
   });
 
   final IconData icon;
@@ -210,6 +211,10 @@ class IconActionButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final double size;
   final double iconSize;
+
+  /// 图标颜色，缺省 onSurfaceVariant。表示「这一项正开着」又不想要
+  /// [selected] 那块底色时传 primary。禁用与选中时不生效。
+  final Color? color;
 
   /// 选中态用 secondaryContainer 做底，与 Rail 的选中指示一致。
   final bool selected;
@@ -223,7 +228,7 @@ class IconActionButton extends StatelessWidget {
         ? cs.onSurface.withValues(alpha: AppStateLayer.disabledContent)
         : selected
         ? cs.onSecondaryContainer
-        : cs.onSurfaceVariant;
+        : color ?? cs.onSurfaceVariant;
 
     return Tooltip(
       message: tooltip,
@@ -416,79 +421,97 @@ class FilterChipBar extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (final it in items) ...[
+        FilterChipButton(
+          label: it.label,
+          count: it.count,
+          selected: it.key == value,
+          onTap: () => onChanged(it.key),
+        ),
+        const SizedBox(width: AppSpacing.s2),
+      ],
+    ],
+  );
+}
+
+/// 一颗筹码。[FilterChipBar] 是单选的一排；要多选、要换行的地方
+/// （词表勾选）直接用它自己排。
+class FilterChipButton extends StatelessWidget {
+  const FilterChipButton({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.count,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  /// 标签后面的数量；不给就不显示。
+  final int? count;
+
+  @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    final e = context.elevation;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final it in items) ...[
-          Builder(
-            builder: (context) {
-              final active = it.key == value;
-              return Container(
-                height: 32,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  color: active ? cs.secondaryContainer : null,
-                  border: Border.all(
-                    color: active ? Colors.transparent : cs.outlineVariant,
+    final fg = selected ? cs.onSecondaryContainer : cs.onSurfaceVariant;
+    return Container(
+      height: 32,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        color: selected ? cs.secondaryContainer : null,
+        border: Border.all(
+          color: selected ? Colors.transparent : cs.outlineVariant,
+        ),
+        boxShadow: selected ? null : context.elevation.controlShadow,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          hoverColor: cs.onSurface.withValues(alpha: AppStateLayer.hover),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (selected) ...[
+                  Icon(
+                    Symbols.check,
+                    size: 18,
+                    color: cs.onSecondaryContainer,
+                    weight: 400,
                   ),
-                  boxShadow: active ? null : e.controlShadow,
-                ),
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: InkWell(
-                    onTap: () => onChanged(it.key),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    hoverColor: cs.onSurface.withValues(
-                      alpha: AppStateLayer.hover,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.s3,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (active) ...[
-                            Icon(
-                              Symbols.check,
-                              size: 18,
-                              color: cs.onSecondaryContainer,
-                              weight: 400,
-                            ),
-                            const SizedBox(width: AppSpacing.s1 + 2),
-                          ],
-                          Text(
-                            it.label,
-                            style: context.texts.labelLarge?.copyWith(
-                              color: active
-                                  ? cs.onSecondaryContainer
-                                  : cs.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.s1 + 2),
-                          Text(
-                            '${it.count}',
-                            style: AppTextStyles.timecode.copyWith(
-                              fontSize: 12,
-                              color: active
-                                  ? cs.onSecondaryContainer
-                                  : cs.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  const SizedBox(width: AppSpacing.s1 + 2),
+                ],
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.texts.labelLarge?.copyWith(color: fg),
                   ),
                 ),
-              );
-            },
+                if (count case final count?) ...[
+                  const SizedBox(width: AppSpacing.s1 + 2),
+                  Text(
+                    '$count',
+                    style: AppTextStyles.timecode.copyWith(
+                      fontSize: 12,
+                      color: fg,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-          const SizedBox(width: AppSpacing.s2),
-        ],
-      ],
+        ),
+      ),
     );
   }
 }

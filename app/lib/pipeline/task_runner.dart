@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import '../domain/cue.dart';
 import '../domain/media_job.dart';
 import '../domain/recognition_checkpoint.dart';
@@ -76,6 +78,9 @@ class TaskRunner {
   final AsrFactory? _asrOverride;
   final TranslationFactory _translationFactory;
 
+  @visibleForTesting
+  TranslationFactory get translationFactory => _translationFactory;
+
   final TaskStageRunner _stages = const TaskStageRunner();
 
   late final TranscodeTaskPipeline _transcodePipeline =
@@ -84,15 +89,18 @@ class TaskRunner {
   late final MergeTaskPipeline _mergePipeline =
       MergeTaskPipeline(transcoder: transcoder, stages: _stages);
 
-  /// 任务参数里的模型与提示词覆盖设置里的值 —— 参数在入队时就定死了。
+  /// 模型、提示词、词表都取任务参数里的，不读设置 —— 参数在入队时就定死了，
+  /// 设置只提供地址与密钥。
   /// 默认实现把本实例的 [media] 交给需要切分音频的服务，共用同一份 ffmpeg 定位。
-  AsrFactory get _asrFactory =>
+  @visibleForTesting
+  AsrFactory get asrFactory =>
       _asrOverride ??
       (id, settings, options) => Registry.buildAsr(
         id,
         settings,
         model: options.asrModel,
         prompt: options.asrPrompt,
+        glossary: options.glossary,
         media: media,
         diarize: options.diarize,
       );
@@ -106,6 +114,7 @@ class TaskRunner {
     settings,
     model: options.translationModel,
     guidance: options.translationGuidance,
+    glossary: options.glossary,
   );
 
   /// 翻译一批失败时最多把批量减半几次。
@@ -249,7 +258,7 @@ class TaskRunner {
     skip: !task.kind.needsRecognition,
     skipNote: 'SRT 无需识别',
     () async {
-      final provider = _asrFactory(task.asrProviderId, settings, task.options);
+      final provider = asrFactory(task.asrProviderId, settings, task.options);
       // 检查点挂在任务上：失败或取消后续跑，只重试没完成的段。
       final checkpoint = task.recognition ??= RecognitionCheckpoint();
       if (checkpoint.doneCount > 0) {

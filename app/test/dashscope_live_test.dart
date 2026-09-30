@@ -5,12 +5,13 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/providers/asr_transport.dart';
+import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/services/audio_splitter.dart';
 import 'package:subtitle_studio/services/dashscope_asr.dart';
 import 'package:subtitle_studio/services/dashscope_filetrans.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
-import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 /// 对真实的百炼服务跑一遍：macOS `say` 合成两句中文，中间留 1.2s 停顿，
@@ -22,9 +23,9 @@ void main() {
   final baseUrl =
       Platform.environment['DASHSCOPE_BASE_URL'] ??
       'https://dashscope.aliyuncs.com/api/v1';
-  final models = ProviderConfig.splitModels(
-    Platform.environment['DASHSCOPE_MODELS'],
-  );
+  final models = ProviderConfig(
+    legacyModelText: Platform.environment['DASHSCOPE_MODELS'],
+  ).legacyModelNames;
   final media = Ffmpeg();
 
   test(
@@ -47,14 +48,22 @@ void main() {
         token: CancellationToken(),
       );
 
-      // 登记表里列出的每个模型都真跑一遍：两族报文形态都要能通。
-      for (final model in models.isEmpty
-          ? Registry.asrInfo('dashscope_qwen_asr')!.models
-          : models) {
+      // 同步逐段的每个模型都真跑一遍：两族报文形态都要能通。录音文件转写
+      // 的模型不在这里跑 —— 发到同步接口只会被拒，它们走下面那条用例。
+      final info = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+      final candidates = models.isEmpty
+          ? [for (final preset in info.presets) preset.name]
+          : models;
+      // 环境变量里只有名字，接法按名字推断（预置里有的用预置的声明）。
+      for (final spec in candidates
+          .map(info.guess)
+          .where((m) => m.transport == AsrTransport.dashscopeSync)) {
+        final model = spec.name;
         final notes = <String>[];
         final provider = DashScopeAsrProvider(
-          info: Registry.asrInfo('dashscope_qwen_asr')!,
+          info: info,
           endpoint: Endpoint(baseUrl: baseUrl, model: model, apiKey: key),
+          dialect: spec.dialect!,
           splitter: FfmpegAudioSplitter(media),
         );
         final cues = await provider.transcribe(
@@ -110,15 +119,20 @@ void main() {
       ]);
       expect(concat.exitCode, 0, reason: concat.stderr.toString());
 
-      final model = models
-          .where(DashScopeFileTransProvider.isFileTransModel)
-          .firstOrNull ?? 'qwen-audio-3.0-asr-flash-filetrans';
+      final info = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+      final spec = models
+              .map(info.guess)
+              .where((m) => m.transport == AsrTransport.dashscopeFileTrans)
+              .firstOrNull ??
+          info.guess('qwen-audio-3.0-asr-flash-filetrans');
+      final model = spec.name;
       final notes = <String>[];
       final List<Cue> cues;
       try {
         cues = await DashScopeFileTransProvider(
-          info: Registry.asrInfo('dashscope_qwen_asr')!,
+          info: info,
           endpoint: Endpoint(baseUrl: baseUrl, model: model, apiKey: key),
+          dialect: spec.dialect!,
           media: media,
           diarize: true,
         ).transcribe(

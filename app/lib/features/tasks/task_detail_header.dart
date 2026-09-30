@@ -6,9 +6,9 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/indicators.dart';
 import '../../domain/media_job.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../domain/srt.dart';
 import '../../domain/task.dart';
-import '../../services/registry.dart';
 
 class TaskDetailHeader extends StatelessWidget {
   const TaskDetailHeader({super.key, required this.task, required this.onClose});
@@ -19,8 +19,8 @@ class TaskDetailHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    final asr = Registry.asrInfo(task.asrProviderId);
-    final mt = Registry.translationInfo(task.translationProviderId);
+    final asr = ProviderCatalog.asrInfo(task.asrProviderId);
+    final mt = ProviderCatalog.translationInfo(task.translationProviderId);
     final runsLocally =
         (task.kind.needsRecognition ? asr : mt)?.runsLocally ?? false;
     final job = task.media;

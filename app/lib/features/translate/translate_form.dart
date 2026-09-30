@@ -83,8 +83,12 @@ class TranslateFormController extends TaskOptionsFormBase<StagedSubtitle> {
   }
 
   /// 换翻译服务（规则见 [TaskOptions.withTranslationProvider]）。
-  void selectTranslationProvider(String id) =>
-      update((o) => o.withTranslationProvider(id));
+  void selectTranslationProvider(String id) => update(
+    (o) => o.withTranslationProvider(
+      id,
+      defaultModel: settings.defaultChatModelOf(id),
+    ),
+  );
 
   // —— 文件 ————————————————————————————————————————————————
 
@@ -289,7 +293,7 @@ class TranslateFormController extends TaskOptionsFormBase<StagedSubtitle> {
     settings.lastTranslateOptions = options;
     return EnqueueRequest(
       paths: enqueueable.map((f) => f.path).toList(),
-      options: options,
+      options: frozenOptions(),
     );
   }
 }

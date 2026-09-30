@@ -11,6 +11,7 @@ import '../../domain/line_wrap.dart';
 import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
 import '../../domain/srt.dart';
+import '../../domain/task_kind.dart';
 import '../../domain/task_options.dart';
 import '../../services/editor_store.dart';
 import '../../services/file_io.dart';
@@ -1031,12 +1032,34 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
 
   TranslationProvider _translationProvider() {
     if (translator case final build?) return build();
+    return buildTranslationProvider();
+  }
+
+  /// 任务会话用任务里冻结的模型与词表。本地文件会话没有「入队」这一步，
+  /// 冻结没有意义：模型与词表每次翻译时现取设置里的 —— 否则用户发现没选
+  /// 模型、去设置里填好再回来，还得把文件关掉重开才生效。
+  ///
+  /// 只转写的任务介于两者之间：词表是用户建任务时勾的，用冻结的；翻译
+  /// 模型却是入队时顺手从设置里抄下来的，建任务页上翻译那一段是收起的，
+  /// 用户没看到也没选过它，就绪检查也没查过它。那时要是还没配模型，抄下
+  /// 来的就是空的，之后在设置里配好了这个任务也用不上 —— 所以现取。
+  @visibleForTesting
+  TranslationProvider buildTranslationProvider() {
     final options = session.options;
+    final (liveModel, liveGlossary) = switch (session) {
+      FileSession() => (true, true),
+      TaskSession(:final task) => (task.kind == TaskKind.transcribe, false),
+    };
     return Registry.buildTranslation(
       options.translationProviderId,
       settings,
-      model: options.translationModel,
+      model: liveModel
+          ? settings.defaultChatModelOf(options.translationProviderId)
+          : options.translationModel,
       guidance: options.translationGuidance,
+      glossary: liveGlossary
+          ? settings.glossaryEntries(settings.defaultGlossaryIds)
+          : options.glossary,
     );
   }
 

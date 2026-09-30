@@ -4,8 +4,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/indicators.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../services/local/local_backend.dart';
-import '../../services/registry.dart';
 import 'section_outline.dart';
 import 'settings_section.dart';
 
@@ -46,7 +46,7 @@ class LocalBackendSection extends StatelessWidget {
                       alignment: PlaceholderAlignment.baseline,
                       baseline: TextBaseline.alphabetic,
                       child: Timecode(
-                        Registry.asrInfo(LocalBackend.asrProviderId)
+                        ProviderCatalog.asrInfo(LocalBackend.asrProviderId)
                                 ?.defaultBaseUrl ??
                             'http://127.0.0.1:8765/v1',
                       ),
