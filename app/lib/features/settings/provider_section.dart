@@ -65,7 +65,13 @@ class ProviderSection extends StatelessWidget {
     final config = settings.configFor(info.id);
     final readiness = _check(info.id);
     final configured = settings.isConfigured(info);
-    final endpoint = settings.endpointFor(info);
+    final endpoint = settings.endpointFor(info, settings.defaultModel(info));
+    // 过渡：这一行还是旧的逗号串输入框（下一片换成模型列表编辑器）。
+    // 「常用」照旧只在登记了不止一个模型的服务上列出来。
+    final presetNames = [for (final preset in info.presets) preset.name];
+    final common = info is ChatProviderInfo && presetNames.length < 2
+        ? const <String>[]
+        : presetNames;
     final keyMissing = info.needsApiKey && endpoint.apiKey.isEmpty;
 
     final tag = !info.implemented
@@ -151,14 +157,14 @@ class ProviderSection extends StatelessWidget {
         ),
         SettingsRow(
           label: '模型',
-          note: info.models.isEmpty
+          note: common.isEmpty
               ? '填写模型名；多个用逗号分隔，第一个为默认，新建时可选'
               : '多个用逗号分隔，第一个为默认，新建时可选。'
-                    '常用：${info.models.join(' / ')}',
+                    '常用：${common.join(' / ')}',
           stacked: stacked,
           child: SettingsTextField(
             key: ValueKey('${info.id}-model'),
-            value: config.legacyModelText ?? info.defaultModel ?? '',
+            value: config.legacyModelText ?? presetNames.firstOrNull ?? '',
             hint: '模型名',
             mono: true,
             error: info.implemented && endpoint.model.isEmpty,

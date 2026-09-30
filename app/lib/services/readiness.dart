@@ -60,6 +60,16 @@ abstract final class ProviderReadiness {
     final chosen = model ?? settings.defaultAsrModel(info);
     final basic = _checkEndpoint(info, settings, chosen);
     if (basic != null) return basic;
+    // 声明与服务对不上（存档被手改过、登记表换过接法）：建实例时会报错，
+    // 在这里先拦住，别让任务排到了才失败。
+    if (!info.transports.contains(chosen.transport) ||
+        (chosen.transport.needsDialect && chosen.dialect == null)) {
+      return Readiness(
+        ReadinessLevel.blocked,
+        message: '${info.name}不能按现在的声明接入 ${chosen.name}',
+        hint: '重新选一次模型，或去设置里编辑它的接入方式。',
+      );
+    }
 
     final unsupported = _languageNote(chosen, language);
     if (unsupported != null) {

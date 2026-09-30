@@ -169,6 +169,23 @@ void main() {
       expect(r.hint, '这一项会被忽略；需要分离请改用阿里百炼 · Qwen3-ASR。');
     });
 
+    test('声明的接入方式这家服务没有：拦住，别等任务排到了才失败', () async {
+      final s = await freshSettings()
+        ..setConfig('openai', const ProviderConfig(apiKey: 'k'));
+      final r = ProviderReadiness.asr(
+        'openai',
+        s,
+        model: const AsrModelSpec(
+          name: 'qwen3-asr-flash',
+          transport: AsrTransport.dashscopeSync,
+          dialect: DashScopeDialect.qwen3Asr,
+        ),
+      );
+      expect(r.isBlocked, isTrue);
+      expect(r.message, contains('qwen3-asr-flash'));
+      expect(r.hint, contains('重新选一次模型'));
+    });
+
     test('语种限制跟着模型声明走', () async {
       final s = await freshSettings()
         ..setConfig('openai', const ProviderConfig(apiKey: 'k'));
@@ -259,7 +276,7 @@ void main() {
       ]) {
         if (!info.implemented || info.id.contains('custom')) continue;
         expect(
-          s.endpointFor(info).baseUrl,
+          s.endpointFor(info, s.defaultModel(info)).baseUrl,
           isNotEmpty,
           reason: '${info.id} 缺默认 baseUrl',
         );

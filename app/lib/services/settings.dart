@@ -37,10 +37,10 @@ class ProviderConfig {
   final String? legacyModelText;
 
   /// [legacyModelText] 拆成的名字列表。
-  List<String> get legacyModelNames => splitModels(legacyModelText);
+  List<String> get legacyModelNames => _splitModels(legacyModelText);
 
   /// 逗号分隔的模型名 → 列表：去空白、去空项、去重，保持书写顺序。
-  static List<String> splitModels(String? raw) {
+  static List<String> _splitModels(String? raw) {
     if (raw == null) return const [];
     final seen = <String>{};
     return [
@@ -242,25 +242,35 @@ class AppSettings extends ChangeNotifier {
 
   /// 「新建转写」「新建翻译」打开时的默认参数。用户在对话框里改动的是这份拷贝，
   /// 全局设置不会被顺手改掉。
-  TaskOptions defaultTaskOptions() => TaskOptions(
-    sourceLanguage: Languages.resolve(sourceLanguage),
-    asrProviderId: asrProviderId,
-    asrPrompt: asrPrompt,
-    targetLanguage: Languages.resolve(targetLanguage),
-    translationProviderId: translationProviderId,
-    translationBatchSize: translationBatchSize,
-    translationGuidance: translationGuidance,
-    bilingual: bilingual,
-    cjkLineLength: cjkLineLength,
-    latinLineLength: latinLineLength,
-    minCueMs: minCueMs,
-    maxCueMs: maxCueMs,
-    format: outputFormat,
-    outputLocation: outputDir == null
-        ? OutputLocation.besideSource
-        : OutputLocation.custom,
-    outputDir: outputDir,
-  );
+  ///
+  /// 默认启用的词表在这里就展开成条目：有的调用方不经过建任务表单，拿到
+  /// 这份参数就直接用（拖进来直接入队、编辑器里的本地字幕文件）。
+  TaskOptions defaultTaskOptions() {
+    final glossaryIds = defaultGlossaryIds;
+    return TaskOptions(
+      sourceLanguage: Languages.resolve(sourceLanguage),
+      asrProviderId: asrProviderId,
+      asrModel: defaultAsrModelOf(asrProviderId),
+      asrPrompt: asrPrompt,
+      targetLanguage: Languages.resolve(targetLanguage),
+      translationProviderId: translationProviderId,
+      translationModel: defaultChatModelOf(translationProviderId),
+      translationBatchSize: translationBatchSize,
+      translationGuidance: translationGuidance,
+      glossaryIds: glossaryIds,
+      glossary: glossaryEntries(glossaryIds),
+      bilingual: bilingual,
+      cjkLineLength: cjkLineLength,
+      latinLineLength: latinLineLength,
+      minCueMs: minCueMs,
+      maxCueMs: maxCueMs,
+      format: outputFormat,
+      outputLocation: outputDir == null
+          ? OutputLocation.besideSource
+          : OutputLocation.custom,
+      outputDir: outputDir,
+    );
+  }
 
   /// 最近一次成功提交的「新建转写」参数，供页面上的「上次参数」整份填回。
   /// 只留最近一份；没有或存档损坏时为 null。
@@ -342,7 +352,12 @@ class AppSettings extends ChangeNotifier {
     if (v == null) {
       _prefs.remove(key);
     } else {
-      _prefs.setString(key, jsonEncode(v.toJson()));
+      // 只记勾选了哪几份词表，不把条目也存进偏好：整份词表已经在
+      // [glossaries] 里了，再提交时按勾选重新展开。
+      _prefs.setString(
+        key,
+        jsonEncode(v.copyWith(glossary: const []).toJson()),
+      );
     }
     // 不 notify：这份参数只被「上次参数」按钮读取，不影响任何常显内容。
   }
@@ -511,25 +526,33 @@ class AppSettings extends ChangeNotifier {
     ChatProviderInfo() => defaultChatModel(info),
   };
 
-  // 过渡：任务参数里的模型眼下还只是个名字（分片 5 换成整份声明）。
-  // 这两个函数把名字变回声明：没给名字用默认的；设置里有同名的用那份
-  // （带着用户调过的参数）；都没有才按名字推断。
-  AsrModelSpec asrModelNamed(String providerId, String? name) {
-    final wanted = name?.trim() ?? '';
+  /// 不分识别还是翻译的候选列表，给两边共用的界面零件用。
+  List<ModelSpec> modelChoices(ProviderInfo info) => switch (info) {
+    AsrProviderInfo() => asrModelsFor(info),
+    ChatProviderInfo() => chatModelsFor(info),
+  };
+
+  /// 按服务 id 取默认模型。服务不认识时是空名的占位，不抛 —— 旧存档、
+  /// 手改过的偏好里可能有登记表里已经没有的 id，由就绪检查去说。
+  AsrModelSpec defaultAsrModelOf(String providerId) {
     final info = ProviderCatalog.asrInfo(providerId);
-    if (info == null) return ProviderCatalog.legacyAsrSpec(providerId, wanted);
-    if (wanted.isEmpty) return defaultAsrModel(info);
-    return asrModelsFor(info).where((m) => m.name == wanted).firstOrNull ??
-        info.guess(wanted);
+    return info == null
+        ? ProviderCatalog.defaultAsrSpec(providerId)
+        : defaultAsrModel(info);
   }
 
-  ChatModelSpec chatModelNamed(String providerId, String? name) {
-    final wanted = name?.trim() ?? '';
+  ChatModelSpec defaultChatModelOf(String providerId) {
     final info = ProviderCatalog.translationInfo(providerId);
-    if (info == null) return ProviderCatalog.legacyChatSpec(providerId, wanted);
-    if (wanted.isEmpty) return defaultChatModel(info);
-    return chatModelsFor(info).where((m) => m.name == wanted).firstOrNull ??
-        info.guess(wanted);
+    return info == null
+        ? ProviderCatalog.defaultChatSpec(providerId)
+        : defaultChatModel(info);
+  }
+
+  /// 这家服务有没有用户自己配的模型（声明，或旧版本那串模型名）。
+  /// 没有时候选来自登记表的预置。
+  bool hasOwnModels(String providerId) {
+    final config = configFor(providerId);
+    return config.models.isNotEmpty || config.legacyModelNames.isNotEmpty;
   }
 
   /// 存这家服务的模型列表。存过之后旧版本那串模型名就不再用了。
@@ -547,32 +570,19 @@ class AppSettings extends ChangeNotifier {
 
   /// 发请求用的连接参数：地址与密钥取用户填的，没填地址就用登记表的默认；
   /// 模型名取 [model] 的。
-  ///
-  /// 过渡：不给 [model] 时用这家的默认模型（分片 5 起调用方都给）。
-  Endpoint endpointFor(ProviderInfo info, [ModelSpec? model]) {
+  Endpoint endpointFor(ProviderInfo info, ModelSpec model) {
     final config = configFor(info.id);
     return Endpoint(
       baseUrl: _firstNonEmpty(config.baseUrl, info.defaultBaseUrl) ?? '',
-      model: (model ?? defaultModel(info)).name,
+      model: model.name,
       apiKey: config.apiKey ?? '',
     );
-  }
-
-  /// 过渡（分片 5 删）：「新建转写」「新建翻译」模型下拉的候选名字。
-  /// 用户配过的优先，没配才用登记表里的常用列表；为空表示只能手填。
-  List<String> modelsFor(ProviderInfo info) {
-    final config = configFor(info.id);
-    if (config.models.isNotEmpty) {
-      return [for (final model in config.models) model.name];
-    }
-    final legacy = config.legacyModelNames;
-    return legacy.isNotEmpty ? legacy : info.models;
   }
 
   /// 配置是否足以发起请求。设置页用它来标注「未配置」。
   bool isConfigured(ProviderInfo info) {
     if (!info.implemented) return false;
-    final endpoint = endpointFor(info);
+    final endpoint = endpointFor(info, defaultModel(info));
     if (endpoint.baseUrl.isEmpty || endpoint.model.isEmpty) return false;
     return !info.needsApiKey || endpoint.apiKey.isNotEmpty;
   }

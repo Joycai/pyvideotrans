@@ -2,7 +2,12 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:subtitle_studio/domain/glossary.dart';
 import 'package:subtitle_studio/domain/language.dart';
+import 'package:subtitle_studio/domain/providers/asr_transport.dart';
+import 'package:subtitle_studio/domain/providers/model_params.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
+import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/features/shared/footer_message.dart';
 import 'package:subtitle_studio/features/transcribe/transcribe_form.dart';
@@ -216,24 +221,193 @@ void main() {
   });
 
   group('换服务', () {
-    test('模型清掉；新识别服务不支持说话人分离时关掉开关', () async {
+    test('模型换成新服务的默认；新模型分不了说话人时关掉开关', () async {
+      final settings = await _settings();
       final form = TranscribeFormController(
-        settings: await _settings(),
+        settings: settings,
         media: GatedFfmpeg(),
       );
+      final dashscope = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+      final filetrans = dashscope.presets.firstWhere(
+        (p) => p.capabilities.diarization,
+      );
+
+      form.selectAsrProvider(dashscope.id);
+      expect(form.options.asrModel, same(dashscope.presets.first));
       form
-        ..selectAsrProvider('dashscope_qwen_asr')
-        ..update((o) => o.copyWith(asrModel: 'm1', diarize: true))
+        ..update((o) => o.copyWith(asrModel: filetrans, diarize: true))
         ..selectAsrProvider('openai');
       expect(form.options.asrProviderId, 'openai');
-      expect(form.options.asrModel, isNull);
+      // 不会把上一家的模型带到下一家去。
+      expect(form.options.asrModel.name, 'whisper-1');
       expect(form.options.diarize, isFalse);
 
+      // 新服务的默认取的是设置里配的那个，不是登记表的第一个预置。
+      settings.setModels(dashscope.id, [filetrans, dashscope.presets.first]);
       form
-        ..update((o) => o.copyWith(translationModel: 'm2'))
+        ..update((o) => o.copyWith(diarize: true))
+        ..selectAsrProvider(dashscope.id);
+      expect(form.options.asrModel, filetrans);
+
+      form
+        ..update(
+          (o) => o.copyWith(translationModel: const ChatModelSpec(name: 'm2')),
+        )
         ..selectTranslationProvider('ollama');
       expect(form.options.translationProviderId, 'ollama');
-      expect(form.options.translationModel, isNull);
+      expect(form.options.translationModel.name, 'qwen2.5:14b');
+
+      // 登记表里没有的 id：不抛，模型是空名占位，就绪检查会拦。
+      form.selectAsrProvider('不存在');
+      expect(form.options.asrModel.isUnset, isTrue);
+      expect(form.asrReadiness.isBlocked, isTrue);
+    });
+  });
+
+  // 表单挂在根节点上长期存活，参数里的模型是一份声明的拷贝。用户去设置里
+  // 改了模型再回来，没动过的那几项要跟着变，否则任务用的还是旧的。
+  group('跟着设置走', () {
+    late AppSettings settings;
+    late TranscribeFormController form;
+    late int notified;
+
+    setUp(() async {
+      settings = await _settings();
+      form = TranscribeFormController(settings: settings, media: GatedFfmpeg());
+      notified = 0;
+      form.addListener(() => notified++);
+    });
+
+    const custom = AsrModelSpec(
+      name: 'my-whisper',
+      transport: AsrTransport.openaiTranscription,
+    );
+
+    test('没动过模型：设置里换了默认模型，表单跟着换', () {
+      expect(form.options.asrModel.name, 'whisper-1');
+      settings.setModels('openai', [custom]);
+      expect(form.options.asrModel, custom);
+      expect(notified, 1);
+
+      settings.setModels('deepseek', [const ChatModelSpec(name: 'my-chat')]);
+      expect(form.options.translationModel.name, 'my-chat');
+      // 接连改也跟得上：每次都和「上一次的默认」比。
+      settings.setModels('deepseek', [const ChatModelSpec(name: 'again')]);
+      expect(form.options.translationModel.name, 'again');
+    });
+
+    test('一开始没有模型可选：在设置里填好之后回来就能开始', () {
+      form.selectAsrProvider('asr_custom');
+      expect(form.options.asrModel.isUnset, isTrue);
+      settings.setConfig(
+        'asr_custom',
+        const ProviderConfig(
+          baseUrl: 'https://asr.example/v1',
+          apiKey: 'k',
+          legacyModelText: 'whisper-x',
+        ),
+      );
+      expect(form.options.asrModel.name, 'whisper-x');
+      expect(form.asrReadiness.isBlocked, isFalse);
+    });
+
+    test('自己选了别的模型：默认模型变了不跟，同名声明的参数照样刷新', () {
+      final openai = ProviderCatalog.asrInfo('openai')!;
+      form.update((o) => o.copyWith(asrModel: openai.presets[1]));
+
+      settings.setModels('openai', [custom, ...openai.presets]);
+      expect(form.options.asrModel, same(openai.presets[1]));
+
+      final tuned = openai.presets[1].withOptions(
+        ModelOptions.none.set(ModelParams.asrTemperature.key, 0.2),
+      );
+      settings.setModels('openai', [custom, tuned]);
+      expect(form.options.asrModel, tuned);
+    });
+
+    test('选的模型设置里已经没有了：留着不动（手填的、上次参数带来的）', () {
+      form.update((o) => o.copyWith(asrModel: custom));
+      settings.setModels('openai', [
+        ProviderCatalog.asrInfo('openai')!.presets.first,
+      ]);
+      expect(form.options.asrModel, custom);
+    });
+
+    test('与模型无关的设置改动不触发刷新', () {
+      settings.themeMode = 'dark';
+      settings.asrPrompt = '后来改的提示';
+      expect(notified, 0);
+      // 提示词这类不是「跟着走」的项：表单里的是打开那一刻的拷贝。
+      expect(form.options.asrPrompt, '');
+    });
+
+    test('默认启用的词表：没动过勾选就跟着设置变，动过的不碰', () {
+      expect(form.options.glossaryIds, isEmpty);
+      settings.setGlossary(const Glossary(id: 'a', name: '访谈'));
+      expect(form.options.glossaryIds, ['a']);
+
+      form.update((o) => o.copyWith(glossaryIds: const []));
+      settings.setGlossary(const Glossary(id: 'b', name: '技术'));
+      expect(form.options.glossaryIds, isEmpty);
+    });
+
+    test('表单销毁后不再听设置', () {
+      form.dispose();
+      settings.setModels('openai', [custom]);
+      expect(notified, 0);
+    });
+  });
+
+  group('提交时冻结词表', () {
+    test('按勾选把条目展开进任务参数；「上次参数」只记勾选', () async {
+      final settings = await _settings();
+      settings
+        ..setGlossary(
+          const Glossary(
+            id: 'a',
+            name: '访谈',
+            entries: [GlossaryEntry(term: '百炼', translation: 'Bailian')],
+          ),
+        )
+        ..setGlossary(
+          const Glossary(
+            id: 'b',
+            name: '技术',
+            enabledByDefault: false,
+            entries: [GlossaryEntry(term: 'Ollama')],
+          ),
+        );
+      final media = GatedFfmpeg();
+      final form = TranscribeFormController(settings: settings, media: media);
+      final done = form.add(['/v/a.mp4']);
+      media.finish('/v/a.mp4');
+      await done;
+
+      // 表单打开之后词表又加了一条：提交时取的是此刻的内容。
+      form.update((o) => o.copyWith(glossaryIds: ['b', 'a', '已删']));
+      settings.setGlossary(
+        const Glossary(
+          id: 'b',
+          name: '技术',
+          enabledByDefault: false,
+          entries: [
+            GlossaryEntry(term: 'Ollama'),
+            GlossaryEntry(term: 'LM Studio'),
+          ],
+        ),
+      );
+
+      final request = form.submit()!;
+      expect(request.options.glossary, const [
+        GlossaryEntry(term: '百炼', translation: 'Bailian'),
+        GlossaryEntry(term: 'Ollama'),
+        GlossaryEntry(term: 'LM Studio'),
+      ]);
+      expect(request.options.asrModel, form.options.asrModel);
+
+      final last = settings.lastTranscribeOptions!;
+      expect(last.glossaryIds, ['b', 'a', '已删']);
+      expect(last.glossary, isEmpty);
     });
   });
 }

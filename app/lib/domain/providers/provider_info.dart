@@ -36,14 +36,9 @@ sealed class ProviderInfo {
   /// 为空表示只能自己填（自定义接口）。
   List<ModelSpec> get presets;
 
-  // ——— 过渡：下面三个是重构前的字段，现在由 [presets] 派生。————————
-  // 界面与设置层改用模型声明之后删掉（见任务参数冻结模型声明的那次提交）。
-
-  String? get defaultModel => presets.firstOrNull?.name;
-
-  List<String> get models => [for (final p in presets) p.name];
-
-  bool get supportsDiarization => false;
+  /// 只有名字时补出一份声明：预置里有同名的用预置，否则按名字推断。
+  /// 只给读旧存档、手填模型名时用；任务跑的时候只看声明。
+  ModelSpec guess(String name);
 }
 
 /// 识别服务。
@@ -73,17 +68,12 @@ final class AsrProviderInfo extends ProviderInfo {
   /// 还没选模型时的占位声明。
   AsrModelSpec get unsetModel => AsrModelSpec.unset(transports.first);
 
-  /// 只有名字时补出一份声明：预置里有同名的用预置，否则按名字推断。
-  /// 只给读旧存档、新增模型时预填用。
+  @override
   AsrModelSpec guess(String name) => AsrModelSpec.guessFromName(
     name,
     transports: transports,
     presets: presets,
   );
-
-  @override
-  bool get supportsDiarization =>
-      presets.any((p) => p.capabilities.diarization);
 }
 
 /// 翻译服务。都说 OpenAI 对话协议。
@@ -102,15 +92,7 @@ final class ChatProviderInfo extends ProviderInfo {
   @override
   final List<ChatModelSpec> presets;
 
-  // 过渡：重构前，只登记了一个默认模型的翻译服务（硅基流动、OpenRouter、
-  // Ollama）没有候选列表，建任务页给的是输入框 —— 这几家的模型本来就是
-  // 用户自己挑的。预置里现在有那个默认模型，照 [presets] 派生会把输入框
-  // 变成只有一项的下拉，手填不了。建任务页有了「其他模型…」之后随上面
-  // 三个过渡字段一起删。
   @override
-  List<String> get models => presets.length > 1 ? super.models : const [];
-
-  /// 只有名字时补出一份声明：预置里有同名的用预置。
   ChatModelSpec guess(String name) {
     final trimmed = name.trim();
     for (final preset in presets) {

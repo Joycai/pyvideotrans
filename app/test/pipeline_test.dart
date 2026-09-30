@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/glossary.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task.dart';
@@ -13,7 +15,9 @@ import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/file_io.dart';
+import 'package:subtitle_studio/services/openai_compatible.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
+import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 import 'helpers.dart';
@@ -492,6 +496,63 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 1));
       }
       expect(first.status, TaskStatus.done);
+    });
+
+    // 任务是排队串行跑的：前一个还在跑，用户已经去改设置建下一个了。
+    // 模型与词表必须是入队那一刻的，不能是跑的时候再去设置里读的。
+    test('入队时冻结模型声明与词表内容，之后改设置不影响排着队的任务', () async {
+      const bailian = GlossaryEntry(term: '百炼', translation: 'Bailian');
+      settings
+        ..setModels('deepseek', [const ChatModelSpec(name: 'before')])
+        ..setGlossary(
+          const Glossary(id: 'g', name: '访谈', entries: [bailian]),
+        );
+      final runner = _BlockingRunner(settings: settings, workDir: work.path);
+      final queue = TaskQueue(runner: runner, settings: settings);
+      queue.enqueue(sourcePath: '/v/first.srt');
+      await runner.started.future;
+      // 没给参数的入队（拖进来直接建）：取的是此刻设置里的默认。
+      final queued = queue.enqueue(sourcePath: '/v/second.srt');
+
+      settings
+        ..setModels('deepseek', [const ChatModelSpec(name: 'after')])
+        ..setGlossary(
+          const Glossary(
+            id: 'g',
+            name: '访谈',
+            entries: [GlossaryEntry(term: '百炼', translation: 'Model Studio')],
+          ),
+        )
+        ..removeGlossary('g');
+
+      expect(queued.options.translationModel.name, 'before');
+      expect(queued.options.glossaryIds, ['g']);
+      expect(queued.options.glossary, [bailian]);
+
+      // 重启后从存档读回来也还是那一份，不拿新的默认来补。
+      final reloaded = SubtitleTask.fromJson(
+        queued.toJson(),
+        fallbackOptions: settings.defaultTaskOptions(),
+      );
+      expect(reloaded.options.translationModel.name, 'before');
+      expect(reloaded.options.glossary, [bailian]);
+
+      // 建实例时从设置里拿的只有地址与密钥。
+      final provider =
+          Registry.buildTranslation(
+                queued.options.translationProviderId,
+                settings,
+                model: queued.options.translationModel,
+                glossary: queued.options.glossary,
+              )
+              as OpenAiCompatibleTranslationProvider;
+      expect(provider.endpoint.model, 'before');
+      expect(provider.glossary, [bailian]);
+
+      runner.release.complete();
+      for (var i = 0; i < 100 && queue.running != null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
     });
 
     test('串行执行，完成后自动取下一个', () async {

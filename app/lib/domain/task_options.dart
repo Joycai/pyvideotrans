@@ -1,7 +1,10 @@
 import 'enum_by_name.dart';
+import 'glossary.dart';
 import 'language.dart';
 import 'numbers.dart';
 import 'paths.dart';
+import 'providers/model_spec.dart';
+import 'providers/provider_catalog.dart';
 import 'srt.dart';
 import 'task_kind.dart';
 
@@ -81,15 +84,17 @@ class TaskOptions {
   const TaskOptions({
     required this.sourceLanguage,
     required this.asrProviderId,
-    this.asrModel,
+    required this.asrModel,
     this.asrPrompt = '',
     this.diarize = false,
     this.translate = true,
     required this.targetLanguage,
     required this.translationProviderId,
-    this.translationModel,
+    required this.translationModel,
     this.translationBatchSize = 20,
     this.translationGuidance = '',
+    this.glossaryIds = const [],
+    this.glossary = const [],
     this.bilingual = BilingualLayout.targetOnly,
     this.cjkLineLength = 15,
     this.latinLineLength = 40,
@@ -104,10 +109,15 @@ class TaskOptions {
   final Language sourceLanguage;
   final String asrProviderId;
 
-  /// 覆盖服务的默认模型；null 表示用登记表/设置里的值。
-  final String? asrModel;
+  /// 用哪个识别模型、怎么接：整份声明，不只是名字。
+  ///
+  /// 以前这里是个可空的名字，null 表示「跑的时候用设置里的默认模型」——
+  /// 排着队的任务会被后来的设置改动换掉模型。现在入队时就是完整的声明，
+  /// 接入方式、报文族、参数都跟着冻结。名字为空表示还没选模型，就绪检查
+  /// 会拦。
+  final AsrModelSpec asrModel;
 
-  /// 给识别服务的提示词，用来固定专有名词的写法。
+  /// 给识别服务的提示：风格与说明。专有名词放词表（[glossary]）。
   final String asrPrompt;
 
   /// 说话人分离：给每条字幕标上说话人编号。只有支持的识别服务理会。
@@ -117,13 +127,24 @@ class TaskOptions {
   final bool translate;
   final Language targetLanguage;
   final String translationProviderId;
-  final String? translationModel;
+
+  /// 用哪个翻译模型，同样是整份声明。
+  final ChatModelSpec translationModel;
 
   /// 每批送给模型的字幕条数。太大容易丢条，太小费 token。
   final int translationBatchSize;
 
-  /// 术语表与语气要求，拼进系统提示词。
+  /// 翻译的风格与语气要求，拼进系统提示词。专有名词放词表（[glossary]）。
   final String translationGuidance;
+
+  /// 勾选了哪几份词表。只给界面恢复勾选用（「上次参数」）；任务跑的时候
+  /// 不看它，看 [glossary]。
+  final List<String> glossaryIds;
+
+  /// 入队那一刻从勾选的词表里展开的条目，识别与翻译都用它。
+  ///
+  /// 存内容而不是只存 id：词表之后被改、被删，排着队的任务不受影响。
+  final List<GlossaryEntry> glossary;
 
   /// 译文产物的排版。只影响写出，不影响文档本身。
   final BilingualLayout bilingual;
@@ -166,15 +187,17 @@ class TaskOptions {
   Map<String, Object?> toJson() => {
     'sourceLanguage': sourceLanguage.code,
     'asrProviderId': asrProviderId,
-    'asrModel': asrModel,
+    'asrModel': asrModel.toJson(),
     'asrPrompt': asrPrompt,
     'diarize': diarize,
     'translate': translate,
     'targetLanguage': targetLanguage.code,
     'translationProviderId': translationProviderId,
-    'translationModel': translationModel,
+    'translationModel': translationModel.toJson(),
     'translationBatchSize': translationBatchSize,
     'translationGuidance': translationGuidance,
+    'glossaryIds': glossaryIds,
+    'glossary': [for (final entry in glossary) entry.toJson()],
     'bilingual': bilingual.name,
     'cjkLineLength': cjkLineLength,
     'latinLineLength': latinLineLength,
@@ -199,25 +222,30 @@ class TaskOptions {
         OutputLocation.values.tryByName(json['outputLocation']) ??
         fallback.outputLocation;
     final dir = pick<String?>('outputDir', fallback.outputDir);
+    final asrProviderId = pick('asrProviderId', fallback.asrProviderId);
+    final translationProviderId = pick(
+      'translationProviderId',
+      fallback.translationProviderId,
+    );
+    final ids = json['glossaryIds'];
+    final glossary = json['glossary'];
     return TaskOptions(
       sourceLanguage: Languages.resolve(
         pick('sourceLanguage', fallback.sourceLanguage.code),
       ),
-      asrProviderId: pick('asrProviderId', fallback.asrProviderId),
-      asrModel: pick<String?>('asrModel', fallback.asrModel),
+      asrProviderId: asrProviderId,
+      asrModel: _readAsrModel(json['asrModel'], asrProviderId, fallback),
       asrPrompt: pick('asrPrompt', fallback.asrPrompt),
       diarize: pick('diarize', fallback.diarize),
       translate: pick('translate', fallback.translate),
       targetLanguage: Languages.resolve(
         pick('targetLanguage', fallback.targetLanguage.code),
       ),
-      translationProviderId: pick(
-        'translationProviderId',
-        fallback.translationProviderId,
-      ),
-      translationModel: pick<String?>(
-        'translationModel',
-        fallback.translationModel,
+      translationProviderId: translationProviderId,
+      translationModel: _readChatModel(
+        json['translationModel'],
+        translationProviderId,
+        fallback,
       ),
       translationBatchSize: batchSizeRange.clamp(
         pick('translationBatchSize', fallback.translationBatchSize),
@@ -226,6 +254,15 @@ class TaskOptions {
         'translationGuidance',
         fallback.translationGuidance,
       ),
+      // 词表不从 [fallback] 补：旧存档里没有这两项，意思就是那个任务没用
+      // 词表，不能因为现在设置里有默认启用的词表就给它加上。
+      glossaryIds: [
+        if (ids is List) ...ids.whereType<String>(),
+      ],
+      glossary: GlossaryText.clean([
+        if (glossary is List)
+          for (final entry in glossary) ?GlossaryEntry.fromJson(entry),
+      ]),
       bilingual:
           BilingualLayout.values.tryByName(
             pick('bilingual', fallback.bilingual.name).trim(),
@@ -250,18 +287,65 @@ class TaskOptions {
     );
   }
 
+  /// 读模型。新存档是一份声明；旧存档是模型名，或 null（「用设置里的默认」）。
+  ///
+  /// 旧格式的处理：
+  /// - 名字与 [fallback] 里同一家服务的模型同名 → 用 [fallback] 的那份，
+  ///   用户在设置里给它调过的参数还在；
+  /// - 别的名字 → 登记表预置里有同名的用预置，否则按名字推断接法；
+  /// - null → 服务与 [fallback] 相同就用它的模型，否则用那家服务的第一个
+  ///   预置。后一种（旧任务的服务不是现在的默认服务、又没写模型名）极少，
+  ///   设置不在这一层，够不着用户给那家服务配的默认模型，接受这个近似。
+  static AsrModelSpec _readAsrModel(
+    Object? raw,
+    String providerId,
+    TaskOptions fallback,
+  ) {
+    if (ModelSpec.fromJson(raw) case final AsrModelSpec spec) return spec;
+    final sameProvider = providerId == fallback.asrProviderId;
+    final name = raw is String ? raw.trim() : '';
+    if (name.isEmpty) {
+      return sameProvider
+          ? fallback.asrModel
+          : ProviderCatalog.defaultAsrSpec(providerId);
+    }
+    return sameProvider && name == fallback.asrModel.name
+        ? fallback.asrModel
+        : ProviderCatalog.legacyAsrSpec(providerId, name);
+  }
+
+  static ChatModelSpec _readChatModel(
+    Object? raw,
+    String providerId,
+    TaskOptions fallback,
+  ) {
+    if (ModelSpec.fromJson(raw) case final ChatModelSpec spec) return spec;
+    final sameProvider = providerId == fallback.translationProviderId;
+    final name = raw is String ? raw.trim() : '';
+    if (name.isEmpty) {
+      return sameProvider
+          ? fallback.translationModel
+          : ProviderCatalog.defaultChatSpec(providerId);
+    }
+    return sameProvider && name == fallback.translationModel.name
+        ? fallback.translationModel
+        : ProviderCatalog.legacyChatSpec(providerId, name);
+  }
+
   TaskOptions copyWith({
     Language? sourceLanguage,
     String? asrProviderId,
-    Object? asrModel = _unset,
+    AsrModelSpec? asrModel,
     String? asrPrompt,
     bool? diarize,
     bool? translate,
     Language? targetLanguage,
     String? translationProviderId,
-    Object? translationModel = _unset,
+    ChatModelSpec? translationModel,
     int? translationBatchSize,
     String? translationGuidance,
+    List<String>? glossaryIds,
+    List<GlossaryEntry>? glossary,
     BilingualLayout? bilingual,
     int? cjkLineLength,
     int? latinLineLength,
@@ -273,17 +357,17 @@ class TaskOptions {
   }) => TaskOptions(
     sourceLanguage: sourceLanguage ?? this.sourceLanguage,
     asrProviderId: asrProviderId ?? this.asrProviderId,
-    asrModel: identical(asrModel, _unset) ? this.asrModel : asrModel as String?,
+    asrModel: asrModel ?? this.asrModel,
     asrPrompt: asrPrompt ?? this.asrPrompt,
     diarize: diarize ?? this.diarize,
     translate: translate ?? this.translate,
     targetLanguage: targetLanguage ?? this.targetLanguage,
     translationProviderId: translationProviderId ?? this.translationProviderId,
-    translationModel: identical(translationModel, _unset)
-        ? this.translationModel
-        : translationModel as String?,
+    translationModel: translationModel ?? this.translationModel,
     translationBatchSize: translationBatchSize ?? this.translationBatchSize,
     translationGuidance: translationGuidance ?? this.translationGuidance,
+    glossaryIds: glossaryIds ?? this.glossaryIds,
+    glossary: glossary ?? this.glossary,
     bilingual: bilingual ?? this.bilingual,
     cjkLineLength: cjkLineLength ?? this.cjkLineLength,
     latinLineLength: latinLineLength ?? this.latinLineLength,
@@ -296,18 +380,23 @@ class TaskOptions {
         : outputDir as String?,
   );
 
-  /// 换识别服务。模型一并清掉，否则会把上一家的模型名发给下一家；新服务
-  /// 不支持说话人分离就把开关关掉，别留一个界面上看不见的 true。
-  TaskOptions withAsrProvider(String id, {required bool supportsDiarization}) =>
-      copyWith(
-        asrProviderId: id,
-        asrModel: null,
-        diarize: diarize && supportsDiarization,
-      );
+  /// 换识别服务。模型换成新服务的默认模型（调用方从设置里取），否则会把
+  /// 上一家的模型发给下一家；新模型分不了说话人就把开关关掉，别留一个
+  /// 界面上看不见的 true。
+  TaskOptions withAsrProvider(
+    String id, {
+    required AsrModelSpec defaultModel,
+  }) => copyWith(
+    asrProviderId: id,
+    asrModel: defaultModel,
+    diarize: diarize && defaultModel.capabilities.diarization,
+  );
 
-  /// 换翻译服务。模型一并清掉，理由同上。
-  TaskOptions withTranslationProvider(String id) =>
-      copyWith(translationProviderId: id, translationModel: null);
+  /// 换翻译服务。模型换成新服务的默认模型，理由同上。
+  TaskOptions withTranslationProvider(
+    String id, {
+    required ChatModelSpec defaultModel,
+  }) => copyWith(translationProviderId: id, translationModel: defaultModel);
 
   /// 产物目录：设了自定义输出目录就用它，否则与源文件同目录。
   String outputDirFor(String sourcePath) => switch (outputLocation) {

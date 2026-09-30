@@ -2,6 +2,9 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../domain/paths.dart';
+import '../../domain/providers/model_spec.dart';
+import '../../domain/providers/provider_catalog.dart';
+import '../../domain/providers/provider_info.dart';
 import '../../domain/task_options.dart';
 import '../../services/settings.dart';
 import 'footer_message.dart';
@@ -220,10 +223,97 @@ abstract class TaskOptionsFormBase<TFile extends StagedPath>
     required super.settings,
     TaskOptions? initial,
     super.pickDirectory,
-  }) : super(initial: initial ?? settings.defaultTaskOptions());
+  }) : super(initial: initial ?? settings.defaultTaskOptions()) {
+    _defaults = _snapshotDefaults();
+    settings.addListener(_followSettings);
+  }
 
   @override
   TaskOptions get defaultOptions => settings.defaultTaskOptions();
+
+  // —— 跟着设置走 ——————————————————————————————————————————
+  //
+  // 表单挂在根节点上，活得比任何一次「去设置里改点东西」都久，而参数里的
+  // 模型是一整份声明的拷贝。不跟着刷新的话：用户在设置里填好模型再回来，
+  // 表单里还是「未选择模型」；换了默认模型，建出来的任务用的还是旧的。
+  // 规则只有一条 —— 用户没动过的跟着设置变，动过的不碰。
+
+  /// 上一次看到的设置：各服务的默认模型，与默认启用的词表。设置变了之后
+  /// 就查不到「变之前是什么」了，所以每次都留一份。
+  late ({Map<String, ModelSpec> models, List<String> glossaryIds}) _defaults;
+
+  ({Map<String, ModelSpec> models, List<String> glossaryIds})
+  _snapshotDefaults() => (
+    models: {
+      for (final info in <ProviderInfo>[
+        ...ProviderCatalog.asr,
+        ...ProviderCatalog.translation,
+      ])
+        info.id: settings.defaultModel(info),
+    },
+    glossaryIds: settings.defaultGlossaryIds,
+  );
+
+  void _followSettings() {
+    final before = _defaults;
+    _defaults = _snapshotDefaults();
+    final o = options;
+    final next = o.copyWith(
+      asrModel: _follow(
+        o.asrModel,
+        ProviderCatalog.asrInfo(o.asrProviderId),
+        before.models,
+      ),
+      translationModel: _follow(
+        o.translationModel,
+        ProviderCatalog.translationInfo(o.translationProviderId),
+        before.models,
+      ),
+      glossaryIds: listEquals(o.glossaryIds, before.glossaryIds)
+          ? _defaults.glossaryIds
+          : null,
+    );
+    if (next.asrModel == o.asrModel &&
+        next.translationModel == o.translationModel &&
+        listEquals(next.glossaryIds, o.glossaryIds)) {
+      return;
+    }
+    options = next;
+    notifyIfAlive();
+  }
+
+  /// 表单里的模型还是原来的默认 → 换成现在的默认。不是默认、但设置里有
+  /// 同名的 → 换成设置里那份（参数、接入方式以设置为准）。都不是（手填的、
+  /// 「上次参数」带来的）→ 不动。
+  T _follow<T extends ModelSpec>(
+    T current,
+    ProviderInfo? info,
+    Map<String, ModelSpec> before,
+  ) {
+    if (info == null) return current;
+    if (current == before[info.id]) return _defaults.models[info.id]! as T;
+    return settings
+            .modelChoices(info)
+            .whereType<T>()
+            .where((m) => m.name == current.name)
+            .firstOrNull ??
+        current;
+  }
+
+  /// 交给队列的那份参数：按勾选的词表把条目展开进去。
+  ///
+  /// 表单里只记勾选了哪几份；内容在提交这一刻才取，取的就是提交时词表里
+  /// 的内容，之后再改词表不影响这批任务。
+  @protected
+  TaskOptions frozenOptions() => options.copyWith(
+    glossary: settings.glossaryEntries(options.glossaryIds),
+  );
+
+  @override
+  void dispose() {
+    settings.removeListener(_followSettings);
+    super.dispose();
+  }
 
   @override
   String? outputDirOf(TaskOptions o) => o.outputDir;

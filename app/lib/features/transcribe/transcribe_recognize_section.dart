@@ -56,7 +56,7 @@ class TranscribeRecognizeSection extends StatelessWidget {
       child: AppDropdown<String>(
         value: o.asrProviderId,
         error: readiness.isBlocked,
-        display: serviceLabel(info, o.asrModel, form.settings),
+        display: serviceLabel(info, o.asrModel),
         groups: providerGroups(
           ProviderCatalog.asr,
           (id) => ProviderReadiness.asr(id, form.settings),
@@ -75,8 +75,13 @@ class TranscribeRecognizeSection extends StatelessWidget {
       needsApiKey: info?.needsApiKey ?? true,
       onOpenSettings: onOpenSettings,
     );
-    // 只有支持的服务才有这个开关；不支持的连灰掉的都不给，免得用户去找原因。
-    final diarize = info != null && info.supportsDiarization
+    // 这家服务有模型能分离说话人才有这个开关；没有的连灰掉的都不给，
+    // 免得用户去找原因。选中的模型不支持时由就绪状态行提示。
+    final diarize =
+        info != null &&
+            form.settings
+                .asrModelsFor(info)
+                .any((m) => m.capabilities.diarization)
         ? _DiarizeToggle(form: form)
         : null;
 

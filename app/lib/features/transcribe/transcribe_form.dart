@@ -3,7 +3,6 @@ import 'package:file_selector/file_selector.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
-import '../../domain/providers/provider_catalog.dart';
 import '../../domain/task_options.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/readiness.dart';
@@ -64,14 +63,17 @@ class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
   void selectAsrProvider(String id) => update(
     (o) => o.withAsrProvider(
       id,
-      supportsDiarization:
-          ProviderCatalog.asrInfo(id)?.supportsDiarization ?? false,
+      defaultModel: settings.defaultAsrModelOf(id),
     ),
   );
 
   /// 换翻译服务（规则见 [TaskOptions.withTranslationProvider]）。
-  void selectTranslationProvider(String id) =>
-      update((o) => o.withTranslationProvider(id));
+  void selectTranslationProvider(String id) => update(
+    (o) => o.withTranslationProvider(
+      id,
+      defaultModel: settings.defaultChatModelOf(id),
+    ),
+  );
 
   // —— 文件 ————————————————————————————————————————————————
 
@@ -163,17 +165,14 @@ class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
     options.asrProviderId,
     settings,
     language: options.sourceLanguage,
-    model: settings.asrModelNamed(options.asrProviderId, options.asrModel),
+    model: options.asrModel,
     diarize: options.diarize,
   );
 
   Readiness get translationReadiness => ProviderReadiness.translation(
     options.translationProviderId,
     settings,
-    model: settings.chatModelNamed(
-      options.translationProviderId,
-      options.translationModel,
-    ),
+    model: options.translationModel,
   );
 
   List<Readiness> get _checks => [
@@ -228,7 +227,7 @@ class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
     settings.lastTranscribeOptions = options;
     return EnqueueRequest(
       paths: enqueueable.map((f) => f.path).toList(),
-      options: options,
+      options: frozenOptions(),
     );
   }
 }

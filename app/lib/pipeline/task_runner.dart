@@ -84,18 +84,17 @@ class TaskRunner {
   late final MergeTaskPipeline _mergePipeline =
       MergeTaskPipeline(transcoder: transcoder, stages: _stages);
 
-  /// 提示词取任务参数里的，不读设置 —— 参数在入队时就定死了。
+  /// 模型、提示词、词表都取任务参数里的，不读设置 —— 参数在入队时就定死了，
+  /// 设置只提供地址与密钥。
   /// 默认实现把本实例的 [media] 交给需要切分音频的服务，共用同一份 ffmpeg 定位。
   AsrFactory get _asrFactory =>
       _asrOverride ??
       (id, settings, options) => Registry.buildAsr(
         id,
         settings,
-        // 过渡：任务里眼下只有模型名，运行时经设置补成声明；没有模型名的
-        // 任务用的是运行时设置里的默认模型，和重构前一样还没有真正冻结。
-        // 分片 5 起任务里就是整份声明，不再回头读设置。
-        model: settings.asrModelNamed(id, options.asrModel),
+        model: options.asrModel,
         prompt: options.asrPrompt,
+        glossary: options.glossary,
         media: media,
         diarize: options.diarize,
       );
@@ -107,8 +106,9 @@ class TaskRunner {
   ) => Registry.buildTranslation(
     id,
     settings,
-    model: settings.chatModelNamed(id, options.translationModel),
+    model: options.translationModel,
     guidance: options.translationGuidance,
+    glossary: options.glossary,
   );
 
   /// 翻译一批失败时最多把批量减半几次。

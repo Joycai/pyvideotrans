@@ -23,9 +23,9 @@ void main() {
   final baseUrl =
       Platform.environment['DASHSCOPE_BASE_URL'] ??
       'https://dashscope.aliyuncs.com/api/v1';
-  final models = ProviderConfig.splitModels(
-    Platform.environment['DASHSCOPE_MODELS'],
-  );
+  final models = ProviderConfig(
+    legacyModelText: Platform.environment['DASHSCOPE_MODELS'],
+  ).legacyModelNames;
   final media = Ffmpeg();
 
   test(

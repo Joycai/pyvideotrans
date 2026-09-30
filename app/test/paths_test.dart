@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/language.dart';
 import 'package:subtitle_studio/domain/output_naming.dart';
 import 'package:subtitle_studio/domain/paths.dart';
+import 'package:subtitle_studio/domain/providers/asr_transport.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task_kind.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
@@ -49,8 +51,10 @@ void main() {
       const options = TaskOptions(
         sourceLanguage: Language('zh', '中文'),
         asrProviderId: 'openai',
+        asrModel: AsrModelSpec.unset(AsrTransport.openaiTranscription),
         targetLanguage: Language('en', '英语'),
         translationProviderId: 'deepseek',
+        translationModel: ChatModelSpec.unset,
         translate: true,
         bilingual: BilingualLayout.targetBelow,
       );
@@ -75,8 +79,10 @@ void main() {
     const translate = TaskOptions(
       sourceLanguage: Language('en', '英语'),
       asrProviderId: 'openai',
+      asrModel: AsrModelSpec.unset(AsrTransport.openaiTranscription),
       targetLanguage: Language('zh', '中文'),
       translationProviderId: 'deepseek',
+      translationModel: ChatModelSpec.unset,
       translate: true,
     );
 

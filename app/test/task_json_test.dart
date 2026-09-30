@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/media_job.dart';
+import 'package:subtitle_studio/domain/providers/asr_transport.dart';
 import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
 import 'package:subtitle_studio/domain/task.dart';
 
@@ -98,6 +99,47 @@ void main() {
     expect(job.outputBytes, 42);
     expect(task.toJson().keys, contains('transcode'));
     expect(task.kind.isMedia, isTrue);
+  });
+
+  // 升级前排着队的任务：options 里模型是名字或 null，没有词表两项。
+  test('旧版本存的任务参数读得回来，再存就是新形状', () {
+    final fallback = testOptions(asr: 'openai', mt: 'deepseek');
+    final old = SubtitleTask.fromJson({
+      'id': 'old',
+      'sourcePath': '/v/a.mp4',
+      'kind': 'transcribeAndTranslate',
+      'options': {
+        'asrProviderId': 'dashscope_qwen_asr',
+        'asrModel': 'qwen-audio-3.0-asr-flash-filetrans',
+        'diarize': true,
+        'translationProviderId': 'deepseek',
+        'translationModel': null,
+        'translationGuidance': '口语化',
+      },
+    }, fallbackOptions: fallback);
+
+    final asr = old.options.asrModel;
+    expect(asr.name, 'qwen-audio-3.0-asr-flash-filetrans');
+    expect(asr.transport, AsrTransport.dashscopeFileTrans);
+    expect(asr.capabilities.diarization, isTrue);
+    expect(old.options.diarize, isTrue);
+    expect(old.options.translationModel, fallback.translationModel);
+    expect(old.options.translationModel.name, 'deepseek-chat');
+    expect(old.options.translationGuidance, '口语化');
+    expect(old.options.glossary, isEmpty);
+
+    final json = old.toJson()['options']! as Map<String, Object?>;
+    expect(json['asrModel'], {
+      'kind': 'asr',
+      'name': 'qwen-audio-3.0-asr-flash-filetrans',
+      'transport': 'dashscopeFileTrans',
+      'dialect': 'qwenAudio3',
+    });
+    expect(json['translationModel'], {'kind': 'chat', 'name': 'deepseek-chat'});
+    expect(json['glossaryIds'], isEmpty);
+    expect(json['glossary'], isEmpty);
+    // 新形状再读一遍不变。
+    expect(_roundTrip(old).toJson(), old.toJson());
   });
 
   test('字幕任务没有 media，存档里也不出现媒体键', () {

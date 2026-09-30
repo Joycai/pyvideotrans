@@ -78,6 +78,19 @@ const _whisper = AsrModelSpec(
 
 const _chat = ChatModelSpec(name: 'm');
 
+/// 这家服务默认模型的连接参数：设置解析出来、什么任务都没建时会用的那份。
+Endpoint _endpointOf(AppSettings settings, ProviderInfo info) =>
+    settings.endpointFor(info, settings.defaultModel(info));
+
+/// 建任务页模型下拉里的候选名字。
+List<String> _namesOf(AppSettings settings, ProviderInfo info) => [
+  for (final model in settings.modelChoices(info)) model.name,
+];
+
+List<String> _presetNames(ProviderInfo info) => [
+  for (final preset in info.presets) preset.name,
+];
+
 Future<AppSettings> _settings() async {
   SharedPreferences.setMockInitialValues({});
   return AppSettings.load();
@@ -558,48 +571,23 @@ void main() {
         );
       });
 
-      // 过渡：任务参数里眼下还只有模型名，建实例前经设置补成声明。
-      test('只有模型名时补成声明：没给用默认，设置里有的用那份，否则按名字推断', () {
-        expect(settings.asrModelNamed('openai', null).name, 'my-whisper');
-        expect(settings.asrModelNamed('openai', '  ').name, 'my-whisper');
+      test('按服务 id 取默认模型：服务认不出来时是空名占位，不抛', () {
+        expect(settings.defaultAsrModelOf('openai').name, 'my-whisper');
         expect(
-          settings.asrModelNamed('openai', ' gpt-4o-transcribe '),
-          const AsrModelSpec(
-            name: 'gpt-4o-transcribe',
-            transport: AsrTransport.openaiTranscription,
-          ),
-        );
-        expect(
-          settings.chatModelNamed('deepseek', null).name,
+          settings.defaultChatModelOf('deepseek').name,
           'deepseek-reasoner',
         );
-        expect(
-          settings.chatModelNamed('deepseek', '').name,
-          'deepseek-reasoner',
-        );
-        expect(
-          settings.chatModelNamed('deepseek', ' my-chat '),
-          const ChatModelSpec(name: 'my-chat'),
-        );
-        // 服务也认不出来：不抛，留给就绪检查去说。
-        expect(settings.asrModelNamed('不存在', 'x').name, 'x');
-        expect(settings.chatModelNamed('不存在', null).isUnset, isTrue);
-
-        // 设置里那份带着用户调过的参数，按名字找回来时参数还在。
-        final tuned = const ChatModelSpec(name: 'tuned').withOptions(
-          ModelOptions.none.set(ModelParams.chatTemperature.key, 1.0),
-        );
-        settings.setModels('deepseek', [_chat, tuned]);
-        expect(settings.chatModelNamed('deepseek', 'tuned'), tuned);
+        expect(settings.defaultAsrModelOf('不存在').isUnset, isTrue);
+        expect(settings.defaultChatModelOf('不存在').isUnset, isTrue);
       });
 
       test('建好的实例不跟着之后的设置改动变', () {
         final recognizer = asr(
-          model: settings.asrModelNamed('openai', null),
+          model: settings.defaultAsrModelOf('openai'),
           prompt: '任务的提示',
         );
         final translator = mt(
-          model: settings.chatModelNamed('deepseek', null),
+          model: settings.defaultChatModelOf('deepseek'),
           guidance: '任务的要求',
         );
 
@@ -638,7 +626,7 @@ void main() {
       final settings = await _settings();
       final info = ProviderCatalog.translationInfo('deepseek')!;
 
-      expect(settings.endpointFor(info).model, 'deepseek-chat');
+      expect(_endpointOf(settings, info).model, 'deepseek-chat');
 
       settings.setConfig(
         'deepseek',
@@ -647,7 +635,7 @@ void main() {
           apiKey: 'sk-x',
         ),
       );
-      final endpoint = settings.endpointFor(info);
+      final endpoint = _endpointOf(settings, info);
       expect(endpoint.model, 'deepseek-reasoner');
       // 没填的字段仍然回落到默认值。
       expect(endpoint.baseUrl, 'https://api.deepseek.com/v1');
@@ -658,7 +646,7 @@ void main() {
       final info = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
 
       // 没填时候选来自登记表。
-      expect(settings.modelsFor(info), info.models);
+      expect(_namesOf(settings, info), _presetNames(info));
 
       settings.setConfig(
         'dashscope_qwen_asr',
@@ -669,15 +657,18 @@ void main() {
           apiKey: 'sk-x',
         ),
       );
-      expect(settings.modelsFor(info), [
+      expect(_namesOf(settings, info), [
         'qwen-audio-3.0-asr-flash',
         'fun-asr-flash',
       ]);
-      expect(settings.endpointFor(info).model, 'qwen-audio-3.0-asr-flash');
+      expect(_endpointOf(settings, info).model, 'qwen-audio-3.0-asr-flash');
 
       // 只有逗号和空白等于没填。
-      expect(ProviderConfig.splitModels(' , ，'), isEmpty);
-      expect(ProviderConfig.splitModels(null), isEmpty);
+      expect(
+        const ProviderConfig(legacyModelText: ' , ，').legacyModelNames,
+        isEmpty,
+      );
+      expect(const ProviderConfig().legacyModelNames, isEmpty);
     });
 
     // 真实用户的存档是 prefs 里的一段 JSON 字符串，不经过 setConfig。
@@ -702,31 +693,31 @@ void main() {
       final settings = await AppSettings.load();
 
       final dashscope = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
-      expect(settings.modelsFor(dashscope), [
+      expect(_namesOf(settings, dashscope), [
         'qwen-audio-3.0-asr-flash-filetrans',
         'fun-asr-flash',
         'my-model',
       ]);
-      final asr = settings.endpointFor(dashscope);
+      final asr = _endpointOf(settings, dashscope);
       expect(asr.model, 'qwen-audio-3.0-asr-flash-filetrans');
       expect(asr.baseUrl, 'https://dashscope.aliyuncs.com/api/v1');
       expect(asr.apiKey, 'sk-asr');
       expect(settings.isConfigured(dashscope), isTrue);
 
       final deepseek = ProviderCatalog.translationInfo('deepseek')!;
-      expect(settings.modelsFor(deepseek), [
+      expect(_namesOf(settings, deepseek), [
         'deepseek-reasoner',
         'deepseek-chat',
       ]);
-      final mt = settings.endpointFor(deepseek);
+      final mt = _endpointOf(settings, deepseek);
       expect(mt.model, 'deepseek-reasoner');
       expect(mt.baseUrl, 'https://proxy.example/v1');
       expect(mt.apiKey, '');
       expect(settings.isConfigured(deepseek), isFalse);
 
       final openai = ProviderCatalog.asrInfo('openai')!;
-      expect(settings.modelsFor(openai), openai.models);
-      expect(settings.endpointFor(openai).model, 'whisper-1');
+      expect(_namesOf(settings, openai), _presetNames(openai));
+      expect(_endpointOf(settings, openai).model, 'whisper-1');
       expect(settings.isConfigured(openai), isTrue);
     });
 
@@ -739,8 +730,8 @@ void main() {
       final settings = await AppSettings.load();
       final groq = ProviderCatalog.asrInfo('groq')!;
 
-      expect(settings.modelsFor(groq), groq.models);
-      expect(settings.endpointFor(groq).model, 'whisper-large-v3');
+      expect(_namesOf(settings, groq), _presetNames(groq));
+      expect(_endpointOf(settings, groq).model, 'whisper-large-v3');
     });
 
     test('旧存档的模型名读的时候补成声明，不写盘', () async {
@@ -808,7 +799,7 @@ void main() {
       expect(settings.asrModelsFor(custom), isEmpty);
       expect(settings.defaultAsrModel(custom).isUnset, isTrue);
       expect(settings.defaultChatModel(lmstudio).isUnset, isTrue);
-      expect(settings.endpointFor(custom).model, '');
+      expect(_endpointOf(settings, custom).model, '');
       expect(settings.isConfigured(lmstudio), isFalse);
     });
 
@@ -826,8 +817,8 @@ void main() {
 
       final reloaded = await AppSettings.load();
       final openai = ProviderCatalog.asrInfo('openai')!;
-      expect(reloaded.endpointFor(openai).model, 'my-whisper');
-      expect(reloaded.endpointFor(openai).apiKey, 'new');
+      expect(_endpointOf(reloaded, openai).model, 'my-whisper');
+      expect(_endpointOf(reloaded, openai).apiKey, 'new');
     });
 
     test('存模型列表：第一个是默认，参数一起落盘，旧的那串模型名不再用', () async {
@@ -864,11 +855,11 @@ void main() {
           s.defaultAsrModel(info).transport,
           AsrTransport.dashscopeFileTrans,
         );
-        final endpoint = s.endpointFor(info);
+        final endpoint = _endpointOf(s, info);
         expect(endpoint.model, 'my-model');
         expect(endpoint.baseUrl, 'https://proxy.example/api/v1');
         expect(endpoint.apiKey, 'sk-asr');
-        expect(s.modelsFor(info), ['my-model', 'qwen3-asr-flash']);
+        expect(_namesOf(s, info), ['my-model', 'qwen3-asr-flash']);
         final config = s.configFor(info.id);
         expect(config.legacyModelText, isNull);
         expect(config.toJson().keys, isNot(contains('model')));
@@ -925,7 +916,7 @@ void main() {
 
         expect(settings.configFor('groq').apiKey, isNull, reason: broken);
         expect(
-          settings.endpointFor(ProviderCatalog.asrInfo('openai')!).model,
+          _endpointOf(settings, ProviderCatalog.asrInfo('openai')!).model,
           'whisper-1',
           reason: broken,
         );
@@ -954,7 +945,7 @@ void main() {
       expect(settings.asrPrompt, '');
       expect(settings.configFor('openai').apiKey, isNull);
       expect(
-        settings.endpointFor(ProviderCatalog.asrInfo('openai')!).model,
+        _endpointOf(settings, ProviderCatalog.asrInfo('openai')!).model,
         'whisper-1',
       );
 
@@ -966,9 +957,10 @@ void main() {
       final reloaded = await AppSettings.load();
       expect(reloaded.configFor('openai').apiKey, isNull);
       expect(
-        reloaded
-            .endpointFor(ProviderCatalog.translationInfo('deepseek')!)
-            .model,
+        _endpointOf(
+          reloaded,
+          ProviderCatalog.translationInfo('deepseek')!,
+        ).model,
         'deepseek-reasoner',
       );
     });

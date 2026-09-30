@@ -27,7 +27,7 @@ class LocalBackend {
   /// 后端的服务地址。与在线服务走同一套配置存储。
   Endpoint get endpoint {
     final info = ProviderCatalog.asrInfo(asrProviderId)!;
-    return settings.endpointFor(info);
+    return settings.endpointFor(info, settings.defaultAsrModel(info));
   }
 
   /// 第一期恒为 false。

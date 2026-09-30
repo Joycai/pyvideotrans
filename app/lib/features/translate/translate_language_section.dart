@@ -93,9 +93,7 @@ class TranslateLanguageSection extends StatelessWidget {
           (id) => ProviderReadiness.translation(
             id,
             form.settings,
-            model: id == o.translationProviderId
-                ? form.settings.chatModelNamed(id, o.translationModel)
-                : null,
+            model: id == o.translationProviderId ? o.translationModel : null,
           ),
         ),
         onChanged: form.selectTranslationProvider,

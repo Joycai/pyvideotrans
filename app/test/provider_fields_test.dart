@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/core/widgets/fields.dart';
+import 'package:subtitle_studio/domain/providers/asr_transport.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/features/shared/provider_fields.dart';
 import 'package:subtitle_studio/features/transcribe/transcribe_form.dart';
@@ -52,7 +54,7 @@ void main() {
       tester,
       modelField(
         info: info,
-        model: null,
+        model: settings.defaultAsrModel(info),
         settings: settings,
         onChanged: (_) {},
       ),
@@ -61,7 +63,7 @@ void main() {
     expect(entries(tester), ['qwen-audio-3.0-asr-flash', 'fun-asr-flash']);
     // 服务下拉旁的标签也得是这个模型，而不是登记表默认值。
     expect(
-      serviceLabel(info, null, settings),
+      serviceLabel(info, settings.defaultAsrModel(info)),
       '阿里百炼 · Qwen3-ASR · qwen-audio-3.0-asr-flash',
     );
   });
@@ -76,7 +78,7 @@ void main() {
       tester,
       modelField(
         info: info,
-        model: null,
+        model: settings.defaultAsrModel(info),
         settings: settings,
         onChanged: (_) {},
       ),
@@ -91,19 +93,19 @@ void main() {
       tester,
       modelField(
         info: info,
-        model: 'gpt-4o-transcribe',
+        model: info.guess('gpt-4o-transcribe'),
         settings: settings,
         onChanged: (_) {},
       ),
     );
     expect(dropdown(tester).value, 'gpt-4o-transcribe');
-    expect(entries(tester), info.models);
+    expect(entries(tester), [for (final p in info.presets) p.name]);
 
     await pump(
       tester,
       modelField(
         info: info,
-        model: 'legacy-model',
+        model: info.guess('legacy-model'),
         settings: settings,
         onChanged: (_) {},
       ),
@@ -120,7 +122,7 @@ void main() {
         tester,
         modelField(
           info: info,
-          model: null,
+          model: settings.defaultChatModel(info),
           settings: settings,
           onChanged: (_) {},
         ),
@@ -130,8 +132,110 @@ void main() {
         find.byType(SingleLineField),
       );
       // 框里先放着默认模型：不改就用它。
-      expect(field.value, info.defaultModel, reason: id);
+      expect(field.value, info.presets.single.name, reason: id);
     }
+  });
+
+  testWidgets('在下拉里选中的是整份声明，不只是名字', (tester) async {
+    final info = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+    final picked = <AsrModelSpec>[];
+    await pump(
+      tester,
+      modelField(
+        info: info,
+        model: settings.defaultAsrModel(info),
+        settings: settings,
+        onChanged: picked.add,
+      ),
+    );
+    dropdown(tester).onChanged('qwen-audio-3.0-asr-flash-filetrans');
+    // 接入方式与报文族跟着一起来：任务冻结的就是这一份。
+    expect(picked.single, same(info.presets[3]));
+    expect(picked.single.transport, AsrTransport.dashscopeFileTrans);
+  });
+
+  testWidgets('手填：填了按名字补成声明，清空回到默认模型', (tester) async {
+    final custom = ProviderCatalog.asrInfo('asr_custom')!;
+    final typed = <AsrModelSpec>[];
+    await pump(
+      tester,
+      modelField(
+        info: custom,
+        model: settings.defaultAsrModel(custom),
+        settings: settings,
+        onChanged: typed.add,
+      ),
+    );
+    final field = tester.widget<SingleLineField>(find.byType(SingleLineField));
+    field.onChanged(' my-whisper ');
+    field.onChanged('  ');
+    expect(typed, [
+      const AsrModelSpec(
+        name: 'my-whisper',
+        transport: AsrTransport.openaiTranscription,
+      ),
+      settings.defaultAsrModel(custom),
+    ]);
+    expect(typed.last.isUnset, isTrue);
+
+    // 翻译侧同理：清空回到登记表里那个例子。
+    final ollama = ProviderCatalog.translationInfo('ollama')!;
+    final chat = <ChatModelSpec>[];
+    await pump(
+      tester,
+      modelField(
+        info: ollama,
+        model: settings.defaultChatModel(ollama),
+        settings: settings,
+        onChanged: chat.add,
+      ),
+    );
+    tester.widget<SingleLineField>(find.byType(SingleLineField))
+      ..onChanged('llama3.1')
+      ..onChanged('');
+    expect(chat, [
+      const ChatModelSpec(name: 'llama3.1'),
+      ollama.presets.single,
+    ]);
+  });
+
+  testWidgets('只登记了一个预置的翻译服务：用户配过模型之后就给下拉', (tester) async {
+    final info = ProviderCatalog.translationInfo('ollama')!;
+    settings.setConfig(
+      info.id,
+      const ProviderConfig(legacyModelText: 'llama3.1'),
+    );
+    await pump(
+      tester,
+      modelField(
+        info: info,
+        model: settings.defaultChatModel(info),
+        settings: settings,
+        onChanged: (_) {},
+      ),
+    );
+    expect(find.byType(SingleLineField), findsNothing);
+    expect(entries(tester), ['llama3.1']);
+  });
+
+  testWidgets('还没选模型的声明：下拉里列成「未选择」，服务标签只有服务名', (tester) async {
+    final info = ProviderCatalog.asrInfo('openai')!;
+    await pump(
+      tester,
+      modelField(
+        info: info,
+        model: info.unsetModel,
+        settings: settings,
+        onChanged: (_) {},
+      ),
+    );
+    expect(dropdown(tester).value, '');
+    expect(
+      dropdown(tester).groups.single.entries.first.label,
+      '未选择',
+    );
+    expect(serviceLabel(info, info.unsetModel), 'OpenAI');
+    expect(serviceLabel(null, info.unsetModel), '—');
   });
 
   testWidgets('自定义接口：设置里填了就按填的列，没填才给输入框', (tester) async {
@@ -140,7 +244,7 @@ void main() {
       tester,
       modelField(
         info: info,
-        model: null,
+        model: settings.defaultAsrModel(info),
         settings: settings,
         onChanged: (_) {},
       ),
@@ -156,7 +260,7 @@ void main() {
       tester,
       modelField(
         info: info,
-        model: null,
+        model: settings.defaultAsrModel(info),
         settings: settings,
         onChanged: (_) {},
       ),

@@ -313,7 +313,7 @@ class _ServiceCell extends StatelessWidget {
     final secondary = task.kind == TaskKind.transcribeAndTranslate
         ? '→ ${mt?.name ?? ''} 翻译'
         : task.kind == TaskKind.translate
-        ? (mt?.defaultModel ?? '')
+        ? task.options.translationModel.name
         : task.sourceLanguage.name;
 
     return Column(
