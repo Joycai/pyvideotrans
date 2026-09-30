@@ -53,7 +53,7 @@ abstract final class Registry {
       // 照着发只会把一种接口的请求打到另一种接口的地址上。
       throw ActionableException(
         '${info.name}不能按「${model.transport.label}」的方式接入 ${model.name}',
-        hint: '在设置里重新选择或编辑该模型。',
+        hint: '重新选一个模型；要用这个名字，去设置里删掉它，再按正确的接入方式添加。',
       );
     }
     final endpoint = settings.endpointFor(info, model);
@@ -75,7 +75,9 @@ abstract final class Registry {
           prompt: context,
           diarize: diarize,
           // 说话人编号只在同一次请求里一致：开分离时把片段切得长一些，
-          // 跨片段对不上号的机会就少得多。
+          // 跨片段对不上号的机会就少得多。同步接口其实不分离说话人，
+          // 建任务页也不再让同步的模型开这个开关；会带着它到这里的只有
+          // 旧版本建的任务，照它入队时的样子跑。
           splitter: FfmpegAudioSplitter(
             media ?? Ffmpeg(),
             maxMs: diarize
@@ -126,6 +128,6 @@ abstract final class Registry {
       model.dialect ??
       (throw ActionableException(
         '${model.name} 没有声明报文族',
-        hint: '在设置里编辑该模型，选择它属于哪一族。',
+        hint: '去设置里删掉它，再添加一次并选好它属于哪一族。',
       ));
 }

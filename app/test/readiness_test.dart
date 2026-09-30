@@ -217,7 +217,9 @@ void main() {
       );
       expect(r.isBlocked, isTrue);
       expect(r.message, contains('qwen3-asr-flash'));
-      expect(r.hint, contains('重新选一次模型'));
+      // 设置页改不了已添加模型的接入方式：提示得是能照着做的。
+      expect(r.hint, contains('重新选一个模型'));
+      expect(r.hint, contains('删掉它，再按正确的接入方式添加'));
     });
 
     test('语种限制跟着模型声明走', () async {

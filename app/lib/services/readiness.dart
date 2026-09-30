@@ -67,7 +67,7 @@ abstract final class ProviderReadiness {
       return Readiness(
         ReadinessLevel.blocked,
         message: '${info.name}不能按现在的声明接入 ${chosen.name}',
-        hint: '重新选一次模型，或去设置里编辑它的接入方式。',
+        hint: '重新选一个模型；要用这个名字，去设置里删掉它，再按正确的接入方式添加。',
       );
     }
 
@@ -166,7 +166,7 @@ abstract final class ProviderReadiness {
       return Readiness(
         ReadinessLevel.blocked,
         message: '${info.name}未选择模型',
-        hint: '去设置里填入模型名后可开始。',
+        hint: '选一个模型，或去设置里添加。',
       );
     }
     if (info.needsApiKey && endpoint.apiKey.trim().isEmpty) {

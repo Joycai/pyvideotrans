@@ -50,16 +50,14 @@ class ProviderConfig {
     ];
   }
 
-  ProviderConfig copyWith({
-    String? baseUrl,
-    String? apiKey,
-    List<ModelSpec>? models,
-    String? legacyModelText,
-  }) => ProviderConfig(
+  /// 换地址或密钥，模型原样带着。改模型列表不走这里：那要在调用的那一刻
+  /// 读现在的列表（见 [AppSettings.addModel] 等），存过之后旧的那串模型名
+  /// 也得一起清掉。
+  ProviderConfig copyWith({String? baseUrl, String? apiKey}) => ProviderConfig(
     baseUrl: baseUrl ?? this.baseUrl,
     apiKey: apiKey ?? this.apiKey,
-    models: models ?? this.models,
-    legacyModelText: legacyModelText ?? this.legacyModelText,
+    models: models,
+    legacyModelText: legacyModelText,
   );
 
   Map<String, Object?> toJson() => {
@@ -592,13 +590,6 @@ class AppSettings extends ChangeNotifier {
   /// 读旧存档时用：没写模型的旧任务，跑的是设置里给那家服务配的模型。
   DefaultModels get defaultModels =>
       (asr: defaultAsrModelOf, chat: defaultChatModelOf);
-
-  /// 这家服务有没有用户自己配的模型（声明，或旧版本那串模型名）。
-  /// 没有时候选来自登记表的预置。
-  bool hasOwnModels(String providerId) {
-    final config = configFor(providerId);
-    return config.models.isNotEmpty || config.legacyModelNames.isNotEmpty;
-  }
 
   /// 存这家服务的模型列表。存过之后旧版本那串模型名就不再用了。
   void setModels(String providerId, List<ModelSpec> models) {

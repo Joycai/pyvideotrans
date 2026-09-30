@@ -137,7 +137,7 @@ core/       domain/ ←──── services/
 
 | 文件 | 内容 |
 |---|---|
-| `provider_info.dart` | sealed `ProviderInfo` → `AsrProviderInfo`（支持哪些接入方式）/ `ChatProviderInfo`；预置模型 `presets`；按名字补声明 `guess`（只给旧存档与手填用） |
+| `provider_info.dart` | sealed `ProviderInfo` → `AsrProviderInfo`（支持哪些接入方式）/ `ChatProviderInfo`；预置模型 `presets`；按名字补声明 `guess`（只在手里只有一个名字时用：读旧存档、添加模型时预填并认出同名预置、建任务页手填）；用户添加模型时的声明 `declare` |
 | `provider_catalog.dart` | 登记表 `ProviderCatalog`：全部识别 / 翻译服务及其预置模型；按 id 查；旧存档的模型名 → 声明（`legacyAsrSpec` / `legacyChatSpec`）；什么都没配时的默认模型 |
 | `model_spec.dart` | sealed `ModelSpec` → `AsrModelSpec`（接入方式、报文族、语种限制、参数取值）/ `ChatModelSpec`；JSON；`guessFromName` |
 | `asr_transport.dart` | 接入方式 `AsrTransport`、百炼报文族 `DashScopeDialect`、能力表 `AsrCapabilities.of(transport, dialect)` |

@@ -40,7 +40,8 @@ app/lib/
   main.dart          唯一装配点
   core/theme/        设计令牌 → ThemeData / ThemeExtension
   core/widgets/      无业务语义控件（fields.dart 是公共入口）
-  domain/            纯数据与纯规则；转码子域在 domain/transcode/，合并 / 重混流在 domain/mux/
+  domain/            纯数据与纯规则；转码子域在 domain/transcode/，合并 / 重混流在 domain/mux/，
+                     服务登记表与模型声明在 domain/providers/
   services/          网络、外部进程、设置与持久化
   pipeline/          队列、任务编排、阶段壳、字幕写出、转码与合并执行
   features/shared/   跨 feature 共用组件
@@ -69,7 +70,7 @@ Ollama、LM Studio 和第二期的本地 Python 后端都说 OpenAI 兼容协议
 **走哪个实现、发哪一族报文，看模型声明（`ModelSpec`），不看模型名。** 识别模型的声明写明
 接入方式（`AsrTransport`）与百炼的报文族（`DashScopeDialect`），能力（能不能分离说话人、
 时间码从哪来）由这两项查 `AsrCapabilities` 得出。按名字推断（`guessFromName`）只在
-「手里只有一个名字」时用来补出声明：读旧存档、添加模型时预填建议、建任务页手填模型名
+「手里只有一个名字」时用来补出声明：读旧存档、添加模型时预填建议并认出同名预置、建任务页手填模型名
 （只有一种接入方式的服务才能手填，结果与名字无关）。任务跑起来之后任何地方都不调它。
 
 ### 任务参数在入队那一刻定死

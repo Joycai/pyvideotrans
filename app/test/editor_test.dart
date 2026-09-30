@@ -716,6 +716,28 @@ void main() {
       expect(provider.glossary, [frozen]);
     });
 
+    // 只转写的任务，翻译模型是入队时顺手从设置里抄的，用户没选过它。
+    // 那时还没配模型的话抄下来的是空的：之后配好了，在编辑器里补翻得用得上。
+    test('只转写的任务会话：翻译模型现取设置里的，词表仍用任务里冻结的', () {
+      final task = SubtitleTask(
+        id: 't',
+        sourcePath: '/v/demo.mp4',
+        kind: TaskKind.transcribe,
+        status: TaskStatus.done,
+        options: testOptions(
+          mt: 'deepseek',
+          translationModel: '',
+        ).copyWith(glossaryIds: ['g'], glossary: [frozen]),
+      );
+      final provider = providerOf(TaskSession(task));
+      expect(provider.endpoint.model, 'now');
+      // 词表是建任务时勾的：识别用的是哪份，补翻也用哪份。
+      expect(provider.glossary, [frozen]);
+
+      settings.setModels('deepseek', [const ChatModelSpec(name: 'later')]);
+      expect(providerOf(TaskSession(task)).endpoint.model, 'later');
+    });
+
     // 本地文件没有入队这一步。用户发现模型没选、去设置里填好再回来，
     // 不该还要把文件关掉重开。
     test('本地文件会话：每次现取设置里的模型与默认启用的词表', () {
