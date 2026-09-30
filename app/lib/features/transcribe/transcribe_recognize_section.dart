@@ -99,11 +99,8 @@ class TranscribeRecognizeSection extends StatelessWidget {
       // 补翻才用得上，别说成「接着翻译」。
       note: capabilities.contextPrompt
           ? null
-          : o.translate
-          ? '当前模型不接受上下文提示，识别时不会发送词表与识别提示；'
-                '接着翻译时仍会用词表。'
           : '当前模型不接受上下文提示，识别时不会发送词表与识别提示；'
-                '之后在编辑器里翻译时仍会用词表。',
+                '${o.translate ? '接着翻译时' : '之后在编辑器里翻译时'}仍会用词表。',
     );
 
     if (flat) {

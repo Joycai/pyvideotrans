@@ -305,7 +305,8 @@ class _ModelFieldState<T extends ModelSpec> extends State<ModelField<T>> {
       controller: _name,
       focusNode: _focus,
       style: AppTextStyles.timecode.copyWith(color: cs.onSurface),
-      // 不举例子：走到输入框说明这家服务没有预置模型可举。
+      // 不举例子：没有候选的服务无例可举；从「其他模型…」进来的，列表里
+      // 的名字刚看过，再举一个只会让人以为该填它。
       decoration: bareInputDecoration(context, hint: '填写模型名'),
       onChanged: _onTyped,
     );
