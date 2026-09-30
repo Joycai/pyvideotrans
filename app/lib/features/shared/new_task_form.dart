@@ -128,10 +128,15 @@ abstract class NewTaskFormBase<TOptions, TFile extends StagedPath>
   bool applyLastUsed() {
     final last = lastUsedOptions;
     if (last == null) return false;
-    _options = last;
+    _options = refreshLastUsed(last);
     notifyIfAlive();
     return true;
   }
+
+  /// 「上次参数」填回之前过一遍：存档是上次提交时的样子，子类在这里把
+  /// 它对齐到现在的设置。
+  @protected
+  TOptions refreshLastUsed(TOptions last) => last;
 
   bool get hasLastUsed => lastUsedOptions != null;
 
@@ -310,22 +315,16 @@ abstract class TaskOptionsFormBase<TFile extends StagedPath>
   /// 它的参数或接入方式；下拉里名字一样，看不出是旧的，所以填回时按名字
   /// 换成设置里现在的那份 —— 与「先填回、再去改设置」得到的结果一致。
   @override
-  bool applyLastUsed() {
-    final last = lastUsedOptions;
-    if (last == null) return false;
-    options = last.copyWith(
-      asrModel: _declared(
-        last.asrModel,
-        ProviderCatalog.asrInfo(last.asrProviderId),
-      ),
-      translationModel: _declared(
-        last.translationModel,
-        ProviderCatalog.translationInfo(last.translationProviderId),
-      ),
-    );
-    notifyIfAlive();
-    return true;
-  }
+  TaskOptions refreshLastUsed(TaskOptions last) => last.copyWith(
+    asrModel: _declared(
+      last.asrModel,
+      ProviderCatalog.asrInfo(last.asrProviderId),
+    ),
+    translationModel: _declared(
+      last.translationModel,
+      ProviderCatalog.translationInfo(last.translationProviderId),
+    ),
+  );
 
   /// 交给队列的那份参数：按勾选的词表把条目展开进去。
   ///

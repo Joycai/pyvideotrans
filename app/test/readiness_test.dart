@@ -133,6 +133,40 @@ void main() {
       );
     });
 
+    // 推荐的得是下拉里选得到的。用户配过模型列表之后，预置不在候选里。
+    test('说话人分离：推荐用户自己列表里能分离的；没有就说去设置里加', () async {
+      final s = await freshSettings()
+        ..setConfig('dashscope_qwen_asr', const ProviderConfig(apiKey: 'k'));
+      const sync = AsrModelSpec(
+        name: 'qwen3-asr-flash',
+        transport: AsrTransport.dashscopeSync,
+        dialect: DashScopeDialect.qwen3Asr,
+      );
+      const mine = AsrModelSpec(
+        name: 'my-diarizer',
+        transport: AsrTransport.dashscopeFileTrans,
+        dialect: DashScopeDialect.funAsr,
+      );
+      Readiness check() => ProviderReadiness.asr(
+        'dashscope_qwen_asr',
+        s,
+        model: sync,
+        diarize: true,
+      );
+
+      s.setModels('dashscope_qwen_asr', [sync, mine]);
+      expect(check().hint, '换 my-diarizer（异步整文件）。');
+
+      s.setModels('dashscope_qwen_asr', [sync]);
+      expect(check().level, ReadinessLevel.advisory);
+      expect(check().message, 'qwen3-asr-flash 不支持说话人分离');
+      expect(
+        check().hint,
+        '去设置里把 qwen-audio-3.0-asr-flash-filetrans（异步整文件）'
+        '加进模型列表，再换过去。',
+      );
+    });
+
     test('说话人分离：看声明的接入方式与报文族，不看模型名', () async {
       final s = await freshSettings()
         ..setConfig('dashscope_qwen_asr', const ProviderConfig(apiKey: 'k'));

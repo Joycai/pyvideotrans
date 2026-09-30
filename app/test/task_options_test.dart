@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -554,6 +555,21 @@ void _jsonTests() {
           TaskOptions.isLegacyJson({...fallback.toJson(), 'asrModel': null}),
           isTrue,
         );
+        // 是对象但读不出声明的也算：同样每次都要重新补。
+        expect(
+          TaskOptions.isLegacyJson({
+            ...fallback.toJson(),
+            'asrModel': {'kind': 'asr', 'name': 'x', 'transport': '不认识'},
+          }),
+          isTrue,
+        );
+        expect(
+          TaskOptions.isLegacyJson({
+            ...fallback.toJson(),
+            'translationModel': fallback.asrModel.toJson(),
+          }),
+          isTrue,
+        );
       });
 
       test('种类不对或读不出来的对象按没写处理，不抛', () {
@@ -657,6 +673,30 @@ void _jsonTests() {
       expect(last.glossaryIds, ['a']);
       expect(last.glossary, isEmpty);
       expect(last.asrModel, submitted.asrModel);
+    });
+
+    // 有词表之前存的那份没有勾选这一项。当成「没勾」的话，填回时会把
+    // 用户后来建的、默认启用的词表关掉。
+    test('加词表之前存的「上次参数」：词表按默认勾选来', () async {
+      final old = testOptions(asr: 'openai', mt: 'deepseek').toJson()
+        ..remove('glossaryIds')
+        ..remove('glossary');
+      SharedPreferences.setMockInitialValues({
+        'lastTranscribeOptions': jsonEncode(old),
+      });
+      final s = await AppSettings.load();
+      s
+        ..setGlossary(const Glossary(id: 'a', name: '访谈'))
+        ..setGlossary(
+          const Glossary(id: 'b', name: '技术', enabledByDefault: false),
+        );
+      expect(s.lastTranscribeOptions!.glossaryIds, ['a']);
+
+      // 新存的照实记：一份都没勾就是没勾。
+      s.lastTranscribeOptions = s.defaultTaskOptions().copyWith(
+        glossaryIds: const [],
+      );
+      expect(s.lastTranscribeOptions!.glossaryIds, isEmpty);
     });
 
     test('设置里的「上次参数」坏了就当没有', () async {

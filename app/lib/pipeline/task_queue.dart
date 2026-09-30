@@ -199,7 +199,6 @@ class TaskQueue extends ChangeNotifier {
       id: const Uuid().v4(),
       sourcePath: options.segments.first.videoPath,
       kind: TaskKind.merge,
-      // 同转码：字幕参数对合并任务无意义，只是占位。
       options: _placeholderOptions,
       media: MergeJob(options: options),
     ),

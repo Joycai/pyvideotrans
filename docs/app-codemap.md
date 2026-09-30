@@ -117,7 +117,8 @@ core/       domain/ ←──── services/
 | `recognition_checkpoint.dart` | 段级识别检查点，支持失败、取消和重启后的续跑 |
 | `task_kind.dart` | `TaskStage` 与 `TaskKind`（`isMedia`、各种任务走的阶段）；独立放置以避免 `TaskOptions ↔ SubtitleTask` 循环 |
 | `task_filter.dart` | `TaskFilter` 状态分组（排队算进行中、取消算失败）；任务页筛选 chip、顶栏副标题与状态栏计数共用 |
-| `task_options.dart` | 入队时冻结的全部参数、产物目录规则、JSON；各项取值范围 `*Range`；换服务的规则 `withAsrProvider` / `withTranslationProvider` |
+| `task_options.dart` | 入队时冻结的全部参数（含整份模型声明与词表条目）、产物目录规则、JSON；各项取值范围 `*Range`；换服务的规则 `withAsrProvider` / `withTranslationProvider`；读旧存档时把模型名补成声明（`isLegacyJson`、`DefaultModels`） |
+| `glossary.dart` | 词表 `Glossary` / `GlossaryEntry`；`GlossaryText`：粘贴的多行文本 → 条目、条目 → 识别提示词、条目 → 翻译系统提示的「术语表」段 |
 | `task.dart` | `SubtitleTask`、阶段记录、日志、错误、产物和 JSON；媒体任务状态 `media`；续跑点 `resumeStage` 与「续跑会不会盖掉编辑」`resumeOverwritesEdits`；export `task_kind.dart` |
 | `media_job.dart` | sealed `MediaJob` 及其子类 `TranscodeJob`、`MergeJob`（sealed 要求同库，所以都在这个文件）：产物、命令、倍速等通用接口，存档键 `'transcode'` / `'merge'` |
 | `media_kinds.dart` | 按扩展名判断媒体 / 音频 / 字幕 |
@@ -125,6 +126,19 @@ core/       domain/ ←──── services/
 | `file_stamp.dart` | 文件大小 + 修改时间，判断字幕文件是否在外部被改过；`FileChange` |
 | `task_control.dart` | 跨层共用的 `CancellationToken`、`TaskCancelled`、`ActionableException`（带建议的失败）、`ProgressSink`；provider、ffmpeg、转码、字幕写出、编辑器都用 |
 | `enum_by_name.dart` | `values.tryByName(x)`：认不出的枚举名返回 null，读存档与偏好时用 `??` 写明回落值 |
+
+### `domain/providers/`
+
+服务与模型的只读描述。实例怎么建在 `services/registry.dart`。
+
+| 文件 | 内容 |
+|---|---|
+| `provider_info.dart` | sealed `ProviderInfo` → `AsrProviderInfo`（支持哪些接入方式）/ `ChatProviderInfo`；预置模型 `presets`；按名字补声明 `guess`（只给旧存档与手填用） |
+| `provider_catalog.dart` | 登记表 `ProviderCatalog`：全部识别 / 翻译服务及其预置模型；按 id 查；旧存档的模型名 → 声明（`legacyAsrSpec` / `legacyChatSpec`）；什么都没配时的默认模型 |
+| `model_spec.dart` | sealed `ModelSpec` → `AsrModelSpec`（接入方式、报文族、语种限制、参数取值）/ `ChatModelSpec`；JSON；`guessFromName` |
+| `asr_transport.dart` | 接入方式 `AsrTransport`、百炼报文族 `DashScopeDialect`、能力表 `AsrCapabilities.of(transport, dialect)` |
+| `model_params.dart` | 模型参数目录 `ModelParams`（识别温度、逆文本规范化、翻译温度）与取值 `ModelOptions`（没动过 = 默认，存 null = 不发送） |
+| `model_name.dart` | 模型名校验与规整 `ModelName` |
 
 ### `domain/transcode/`
 
@@ -153,13 +167,15 @@ core/       domain/ ←──── services/
 
 ### Provider
 
-- `provider_api.dart`：`ProviderInfo`、`Endpoint`、ASR / 翻译接口；re-export `domain/task_control.dart`。
-- `registry.dart`：可选服务登记表和 provider 工厂。
+- `provider_api.dart`：`Endpoint`、ASR / 翻译接口；re-export `domain/task_control.dart` 与
+  `domain/providers/provider_info.dart`。
+- `registry.dart`：provider 工厂。按模型声明的接入方式选实现类，模型参数与词表在这里接进实例；
+  登记表本身在 `domain/providers/provider_catalog.dart`。
 - `openai_compatible.dart`：OpenAI 兼容 ASR 与翻译实现；在线服务、Ollama、LM Studio、
   将来的本地 Python 后端共用。
 - `translation_protocol.dart`：给每行加 `§N§`，返回后校验条数和行号。
-- `dashscope_asr.dart`：百炼 Qwen3-ASR，静音切分后逐段识别。
-- `dashscope_filetrans.dart`：百炼异步整文件转写，上传、提交、轮询、读取句级时间戳。
+- `dashscope_asr.dart`：百炼同步接口，静音切分后逐段识别；报文形状由声明里的报文族决定。
+- `dashscope_filetrans.dart`：百炼异步整文件转写，上传、提交、轮询、读取句级时间戳；同样按报文族拼参数。
 - `audio_splitter.dart`：切音频接口与 ffmpeg 实现，测试可注入假实现。
 - `readiness.dart`：未配置、语言不支持、未实施等状态统一成可行动提示。
 
@@ -168,7 +184,9 @@ core/       domain/ ←──── services/
 - `ffmpeg.dart`：`Ffmpeg` 定位 ffmpeg / ffprobe、探测文件、抽音、静音检测、切音频、取消时杀进程树。
   不叫 `Media`：会和 media_kit 的 `Media` 撞名。
 - `transcoder.dart`：编码器检测、试编码、ffprobe、执行 ffmpeg（转码与合并共用）和错误解释。
-- `settings.dart`：shared_preferences 设置和 provider 连接配置；不依赖 Registry，由调用方传 provider id。
+- `settings.dart`：shared_preferences 设置和 provider 连接配置；各服务的模型声明列表
+  （`asrModelsFor` / `chatModelsFor` / `setModels`，旧版本的逗号串在读取时补成声明）；
+  词表的存取与展开（`glossaries`、`glossaryEntries`）。
 - `task_store.dart`：一个任务一份 JSON，进度更新时只重写变化的任务。
 - `editor_store.dart`：本地会话的附加状态与编辑进度草稿、媒体关联和最近打开。
 - `file_io.dart`：界面层用到的文件系统小操作（存在、读文本、读字幕文本 `readSubtitleText`（UTF-8 / 带 BOM 的 UTF-16）、列目录 `listFiles`、大小、建目录、`findSiblingMedia` 找同名音视频）；读文件时间戳；原子写（先写临时文件再改名），多份文件成组写，要么全成要么都不留。
@@ -363,8 +381,10 @@ core/       domain/ ←──── services/
 
 | 要改什么 | 从这里开始 |
 |---|---|
-| 加 OpenAI 兼容服务 | `services/registry.dart` 增一条 `ProviderInfo` |
-| 加非兼容 provider | `services/provider_api.dart` + 新适配器，参照 `dashscope_*.dart` |
+| 加 OpenAI 兼容服务 | `domain/providers/provider_catalog.dart` 增一条 `AsrProviderInfo` / `ChatProviderInfo` |
+| 加非兼容 provider | `AsrTransport` 加一种接入方式 + 新适配器（参照 `dashscope_*.dart`），在 `services/registry.dart` 的 `switch` 里接上 |
+| 加一个模型参数 | `domain/providers/model_params.dart` 的目录 + 对应实现类里读 `options` |
+| 词表怎么进提示词 | `domain/glossary.dart`（`GlossaryText`）；识别在 `services/registry.dart` 拼进提示，翻译在 `services/translation_protocol.dart` |
 | 服务未配置 / 语言不支持提示 | `services/readiness.dart` + `features/shared/provider_fields.dart` |
 | 任务类型与阶段顺序 | `domain/task_kind.dart` |
 | 任务筛选分组、后台任务计数 | `domain/task_filter.dart` |
@@ -420,6 +440,10 @@ flutter test --tags golden --run-skipped
   `test/app_shortcut_test.dart` 钉死三个平台的修饰键与文案，`shortcut_action_test.dart` 钉死组字时不启用，`editor_shortcuts_test.dart` 覆盖单键只在列表有焦点时生效、⌘ 组合在输入框里生效、Esc 分层、长按不连发，`submit_shortcuts_test.dart` 与 `anchored_popover_test.dart` 覆盖建任务入口与浮层的键盘行为；
   `test/cue_selection_test.dart` 用随机操作序列检查选区不变量，`editor_test.dart` 与 `editor_ui_test.dart` 的「多选」组覆盖点选、筛选下扩选、批量指派与撤销，并用随机操作序列检查「批量只改看得见的选中行」；
   `preview_playback_test.dart` 的「播放与选区的联动」组覆盖多选时的脱钩。
+- 服务与模型：`test/model_spec_test.dart`、`model_params_test.dart`、`provider_catalog_test.dart` 钉死声明、参数与登记表
+  （预置的接法必须与按名字推断的一致）；`glossary_test.dart` 覆盖词表解析与两种提示词；
+  `openai_asr_provider_test.dart`、`dashscope_asr_test.dart`、`dashscope_filetrans_test.dart`、`provider_test.dart`
+  钉死请求形状 —— 不改设置时发出去的请求一个字段都不变；`readiness_test.dart` 覆盖就绪检查。
 - `test/status_snapshot_test.dart` 钉死状态栏快照的服务文案（未选择 / 未配置 / 已配置）与任务计数。
 - `test/task_filter_test.dart` 钉死状态分组；`test/tasks_controller_test.dart` 覆盖筛选、选中、拖入分流，
   以及拆掉任务页再装回来后选中与筛选仍在。

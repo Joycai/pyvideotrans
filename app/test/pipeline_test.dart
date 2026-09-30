@@ -11,6 +11,7 @@ import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
+import 'package:subtitle_studio/domain/transcode/options.dart';
 import 'package:subtitle_studio/pipeline/subtitle_output_writer.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
@@ -567,6 +568,32 @@ void main() {
       // 词表的原文进了识别提示词。
       expect(asr.prompt, '百炼');
 
+      runner.release.complete();
+      for (var i = 0; i < 100 && queue.running != null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+    });
+
+    // 字幕参数对媒体任务只是占位。词表是里面唯一会变大的一项，不该抄进
+    // 每个转码任务的存档。
+    test('转码任务的占位参数不带词表', () async {
+      settings.setGlossary(
+        const Glossary(
+          id: 'g',
+          name: '访谈',
+          entries: [GlossaryEntry(term: '百炼')],
+        ),
+      );
+      expect(settings.defaultTaskOptions().glossary, isNotEmpty);
+      final runner = _BlockingRunner(settings: settings, workDir: work.path);
+      final queue = TaskQueue(runner: runner, settings: settings);
+      final task = queue
+          .enqueueTranscode(['/v/a.mp4'], options: const TranscodeOptions())
+          .single;
+      expect(task.options.glossaryIds, isEmpty);
+      expect(task.options.glossary, isEmpty);
+
+      await runner.started.future;
       runner.release.complete();
       for (var i = 0; i < 100 && queue.running != null; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 1));

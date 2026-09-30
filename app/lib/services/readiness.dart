@@ -80,22 +80,32 @@ abstract final class ProviderReadiness {
       );
     }
     if (diarize && !chosen.capabilities.diarization) {
-      // 能不能分离看模型声明的能力表，不看名字。这家服务的预置里有能
-      // 分离的，就推荐那一个；一个都没有，说明这家服务整个做不了。
-      final capable = info.presets
-          .where((p) => p.capabilities.diarization)
-          .firstOrNull;
-      if (capable == null) {
+      // 能不能分离看模型声明的能力表，不看名字。推荐的得是用户在下拉里
+      // 选得到的：先看这家服务现在的候选，没有再看登记表预置里有没有
+      // （有就说去设置里加上）；预置里也没有，说明这家服务整个做不了。
+      bool capable(AsrModelSpec m) => m.capabilities.diarization;
+      final offered = settings.asrModelsFor(info).where(capable).firstOrNull;
+      if (offered != null) {
         return Readiness(
           ReadinessLevel.advisory,
-          message: '${info.name}不支持说话人分离',
-          hint: '这一项会被忽略；需要分离请改用${_diarizingService ?? '支持分离的服务'}。',
+          message: '${chosen.name} 不支持说话人分离',
+          hint: '换 ${offered.name}（${offered.transport.label}）。',
+        );
+      }
+      final preset = info.presets.where(capable).firstOrNull;
+      if (preset != null) {
+        return Readiness(
+          ReadinessLevel.advisory,
+          message: '${chosen.name} 不支持说话人分离',
+          hint:
+              '去设置里把 ${preset.name}（${preset.transport.label}）'
+              '加进模型列表，再换过去。',
         );
       }
       return Readiness(
         ReadinessLevel.advisory,
-        message: '${chosen.name} 不支持说话人分离',
-        hint: '换 ${capable.name}（${capable.transport.label}）。',
+        message: '${info.name}不支持说话人分离',
+        hint: '这一项会被忽略；需要分离请改用${_diarizingService ?? '支持分离的服务'}。',
       );
     }
     return Readiness.ok;

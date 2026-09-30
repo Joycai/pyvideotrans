@@ -339,11 +339,17 @@ class AppSettings extends ChangeNotifier {
     final raw = _prefs.getString(key);
     if (raw == null) return null;
     try {
-      return TaskOptions.fromJson(
-        jsonDecode(raw) as Map<String, Object?>,
+      final json = jsonDecode(raw) as Map<String, Object?>;
+      final options = TaskOptions.fromJson(
+        json,
         fallback: defaultTaskOptions(),
         defaultModels: defaultModels,
       );
+      // 有词表之前存的「上次参数」没有勾选这一项，意思是「那时还没有词表」，
+      // 不是「不用词表」：按默认勾选来，否则填回时会把默认启用的词表关掉。
+      return json.containsKey('glossaryIds')
+          ? options
+          : options.copyWith(glossaryIds: defaultGlossaryIds);
     } catch (_) {
       return null;
     }
@@ -400,10 +406,15 @@ class AppSettings extends ChangeNotifier {
   /// 同一个原文在两份词表里都有时留排在前面那份的译法；已经删掉的 id 跳过。
   List<GlossaryEntry> glossaryEntries(Iterable<String> ids) {
     final wanted = ids.toSet();
-    return GlossaryText.clean([
+    // 存进来的词表都已经收拾过（[setGlossary]、读偏好时），这里只去掉跨表
+    // 重复的原文，不再逐条规整：取默认参数时每次都会走到这里。
+    final seen = <String>{};
+    return [
       for (final glossary in _glossaries)
-        if (wanted.contains(glossary.id)) ...glossary.entries,
-    ]);
+        if (wanted.contains(glossary.id))
+          for (final entry in glossary.entries)
+            if (seen.add(entry.term)) entry,
+    ];
   }
 
   void _writeGlossaries(List<Glossary> glossaries) {

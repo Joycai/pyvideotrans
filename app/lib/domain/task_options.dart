@@ -215,12 +215,14 @@ class TaskOptions {
     'outputDir': outputDir,
   };
 
-  /// 这份存档是不是旧版本写的：模型存的还是名字或 null，不是声明。
+  /// 这份存档里的模型是不是读不出声明：旧版本写的名字或 null，或者
+  /// 认不出来的对象。
   ///
-  /// 旧存档每读一次都要重新补一遍声明，补出来的东西取决于当时的设置。
+  /// 这样的存档每读一次都要重新补一遍声明，补出来的东西取决于当时的设置。
   /// 调用方据此把读回来的结果写回去，让它从此定下来。
   static bool isLegacyJson(Map<String, Object?> json) =>
-      json['asrModel'] is! Map || json['translationModel'] is! Map;
+      ModelSpec.fromJson(json['asrModel']) is! AsrModelSpec ||
+      ModelSpec.fromJson(json['translationModel']) is! ChatModelSpec;
 
   /// 缺字段或类型不对的项回落到 [fallback] 里的值，绝不因为一份旧存档抛异常。
   ///
