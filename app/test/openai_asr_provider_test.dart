@@ -120,7 +120,10 @@ void main() {
       await run(_client(seen));
 
       expect(seen.method, 'POST');
-      expect(seen.url.toString(), 'https://example.invalid/v1/audio/transcriptions');
+      expect(
+        seen.url.toString(),
+        'https://example.invalid/v1/audio/transcriptions',
+      );
       // 头只有两个：鉴权，和 http 包给 multipart 写的 content-type。
       expect(seen.headers.keys.map((k) => k.toLowerCase()).toSet(), {
         'authorization',

@@ -53,14 +53,15 @@ void main() {
       expect(ModelName.validate('a\nb'), '模型名不能含空格或逗号');
       expect(ModelName.validate('a,b'), '模型名不能含空格或逗号');
       expect(ModelName.validate('a，b'), '模型名不能含空格或逗号');
-      expect(ModelName.validate('a${String.fromCharCode(0x3000)}b'), '模型名不能含空格或逗号');
-      expect(ModelName.validate('a${String.fromCharCode(0)}b'), '模型名里有不可见字符');
-      expect(ModelName.validate('a${String.fromCharCode(0x200B)}b'), '模型名里有不可见字符');
-      expect(ModelName.validate('a${String.fromCharCode(0x7F)}b'), '模型名里有不可见字符');
+      String around(int code) => 'a${String.fromCharCode(code)}b';
+      expect(ModelName.validate(around(0x3000)), '模型名不能含空格或逗号');
+      expect(ModelName.validate(around(0)), '模型名里有不可见字符');
+      expect(ModelName.validate(around(0x200B)), '模型名里有不可见字符');
+      expect(ModelName.validate(around(0x7F)), '模型名里有不可见字符');
       // 软连字符、双向控制符：网页与聊天软件复制时常带。
       for (final code in [0x00AD, 0x202A, 0x202E, 0x2066, 0x2069, 0x2061]) {
         expect(
-          ModelName.validate('a${String.fromCharCode(code)}b'),
+          ModelName.validate(around(code)),
           '模型名里有不可见字符',
           reason: code.toRadixString(16),
         );
@@ -384,16 +385,18 @@ void main() {
       for (final MapEntry(key: name, value: (transport, dialect))
           in expected.entries) {
         final spec = _guess(name);
-        expect((spec.transport, spec.dialect), (transport, dialect), reason: name);
+        expect(
+          (spec.transport, spec.dialect),
+          (transport, dialect),
+          reason: name,
+        );
       }
     });
 
     test('名字先去首尾空白', () {
-      expect(_guess(' qwen3-asr-flash-filetrans \n').name, 'qwen3-asr-flash-filetrans');
-      expect(
-        _guess(' qwen3-asr-flash-filetrans \n').transport,
-        AsrTransport.dashscopeFileTrans,
-      );
+      final spec = _guess(' qwen3-asr-flash-filetrans \n');
+      expect(spec.name, 'qwen3-asr-flash-filetrans');
+      expect(spec.transport, AsrTransport.dashscopeFileTrans);
     });
 
     test('预置里有同名的直接用预置，连语种限制一起带上', () {
@@ -435,7 +438,10 @@ void main() {
       final back = ModelSpec.fromJson(jsonDecode(jsonEncode(spec.toJson())));
       expect(back, spec);
       expect(back!.options.number(ModelParams.chatTemperature), isNull);
-      expect(const ChatModelSpec(name: 'm').toJson(), {'kind': 'chat', 'name': 'm'});
+      expect(const ChatModelSpec(name: 'm').toJson(), {
+        'kind': 'chat',
+        'name': 'm',
+      });
     });
 
     test('读存档时按目录清理参数', () {

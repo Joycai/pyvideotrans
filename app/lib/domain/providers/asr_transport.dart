@@ -91,15 +91,14 @@ final class AsrCapabilities {
   /// 查表。百炼的两种接入方式缺报文族时抛 [StateError] —— 那是一份
   /// 不完整的声明，不该悄悄当成某一族用。
   static AsrCapabilities of(AsrTransport transport, DashScopeDialect? dialect) {
-    if (transport == AsrTransport.openaiTranscription) return _openai;
-    if (dialect == null) {
+    if (transport.needsDialect && dialect == null) {
       throw StateError('${transport.name} 的模型必须声明报文族');
     }
     final qwen3 = dialect == DashScopeDialect.qwen3Asr;
     return switch (transport) {
+      AsrTransport.openaiTranscription => _openai,
       AsrTransport.dashscopeSync => qwen3 ? _syncQwen3 : _syncOther,
       AsrTransport.dashscopeFileTrans => qwen3 ? _fileQwen3 : _fileOther,
-      AsrTransport.openaiTranscription => _openai,
     };
   }
 }

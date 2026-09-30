@@ -93,7 +93,11 @@ void main() {
               info.id: [for (final p in info.presets) p.name],
         },
         {
-          'openai': ['whisper-1', 'gpt-4o-transcribe', 'gpt-4o-mini-transcribe'],
+          'openai': [
+            'whisper-1',
+            'gpt-4o-transcribe',
+            'gpt-4o-mini-transcribe',
+          ],
           'groq': ['whisper-large-v3', 'whisper-large-v3-turbo'],
           'siliconflow': ['FunAudioLLM/SenseVoiceSmall'],
           'local_backend': ['whisper-large-v3'],
@@ -118,7 +122,8 @@ void main() {
         [
           for (final info in ProviderCatalog.asr)
             for (final preset in info.presets)
-              if (preset.capabilities.diarization) '${info.id} · ${preset.name}',
+              if (preset.capabilities.diarization)
+                '${info.id} · ${preset.name}',
         ],
         ['dashscope_qwen_asr · qwen-audio-3.0-asr-flash-filetrans'],
       );

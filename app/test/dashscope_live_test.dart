@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/providers/asr_transport.dart';
 import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/services/audio_splitter.dart';
 import 'package:subtitle_studio/services/dashscope_asr.dart';
@@ -47,13 +48,18 @@ void main() {
         token: CancellationToken(),
       );
 
-      // 登记表里列出的每个模型都真跑一遍：两族报文形态都要能通。
-      for (final model in models.isEmpty
-          ? ProviderCatalog.asrInfo('dashscope_qwen_asr')!.models
-          : models) {
+      // 同步逐段的每个模型都真跑一遍：两族报文形态都要能通。录音文件转写
+      // 的模型不在这里跑 —— 发到同步接口只会被拒，它们走下面那条用例。
+      final info = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+      final candidates = models.isEmpty
+          ? [for (final preset in info.presets) preset.name]
+          : models;
+      for (final model in candidates.where(
+        (m) => info.guess(m).transport == AsrTransport.dashscopeSync,
+      )) {
         final notes = <String>[];
         final provider = DashScopeAsrProvider(
-          info: ProviderCatalog.asrInfo('dashscope_qwen_asr')!,
+          info: info,
           endpoint: Endpoint(baseUrl: baseUrl, model: model, apiKey: key),
           splitter: FfmpegAudioSplitter(media),
         );

@@ -102,6 +102,14 @@ final class ChatProviderInfo extends ProviderInfo {
   @override
   final List<ChatModelSpec> presets;
 
+  // 过渡：重构前，只登记了一个默认模型的翻译服务（硅基流动、OpenRouter、
+  // Ollama）没有候选列表，建任务页给的是输入框 —— 这几家的模型本来就是
+  // 用户自己挑的。预置里现在有那个默认模型，照 [presets] 派生会把输入框
+  // 变成只有一项的下拉，手填不了。建任务页有了「其他模型…」之后随上面
+  // 三个过渡字段一起删。
+  @override
+  List<String> get models => presets.length > 1 ? super.models : const [];
+
   /// 只有名字时补出一份声明：预置里有同名的用预置。
   ChatModelSpec guess(String name) {
     final trimmed = name.trim();

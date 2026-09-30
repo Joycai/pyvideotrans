@@ -580,7 +580,10 @@ void main() {
       expect(settings.asrProviderId, 'openai');
       expect(settings.asrPrompt, '');
       expect(settings.configFor('openai').apiKey, isNull);
-      expect(settings.endpointFor(ProviderCatalog.asrInfo('openai')!).model, 'whisper-1');
+      expect(
+        settings.endpointFor(ProviderCatalog.asrInfo('openai')!).model,
+        'whisper-1',
+      );
 
       expect(settings.translationProviderId, 'ollama');
       expect(settings.translationGuidance, '口语化');
@@ -590,7 +593,9 @@ void main() {
       final reloaded = await AppSettings.load();
       expect(reloaded.configFor('openai').apiKey, isNull);
       expect(
-        reloaded.endpointFor(ProviderCatalog.translationInfo('deepseek')!).model,
+        reloaded
+            .endpointFor(ProviderCatalog.translationInfo('deepseek')!)
+            .model,
         'deepseek-reasoner',
       );
     });

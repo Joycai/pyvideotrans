@@ -844,7 +844,10 @@ void main() {
         Registry.buildAsr('dashscope_qwen_asr', settings),
         isA<DashScopeAsrProvider>(),
       );
-      expect(ProviderCatalog.asrInfo('dashscope_qwen_asr')!.implemented, isTrue);
+      expect(
+        ProviderCatalog.asrInfo('dashscope_qwen_asr')!.implemented,
+        isTrue,
+      );
     });
   });
 }

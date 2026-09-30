@@ -187,7 +187,8 @@ final class ModelOptions {
       return false;
     }
     for (final e in _values.entries) {
-      if (!other._values.containsKey(e.key) || other._values[e.key] != e.value) {
+      if (!other._values.containsKey(e.key) ||
+          other._values[e.key] != e.value) {
         return false;
       }
     }

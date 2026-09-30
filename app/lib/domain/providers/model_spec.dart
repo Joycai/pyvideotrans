@@ -145,7 +145,9 @@ final class AsrModelSpec extends ModelSpec {
     return AsrModelSpec(
       name: trimmed,
       transport: transport,
-      dialect: transport.needsDialect ? _guessDialect(trimmed, transport) : null,
+      dialect: transport.needsDialect
+          ? _guessDialect(trimmed, transport)
+          : null,
     );
   }
 

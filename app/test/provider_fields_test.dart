@@ -107,6 +107,28 @@ void main() {
     expect(entries(tester).first, 'legacy-model');
   });
 
+  testWidgets('只登记了一个默认模型的翻译服务：没填时给输入框，可以手填', (tester) async {
+    // Ollama、OpenRouter 的模型是用户自己挑的，登记表里那一个只是例子。
+    for (final id in ['siliconflow_chat', 'openrouter', 'ollama']) {
+      final info = ProviderCatalog.translationInfo(id)!;
+      await pump(
+        tester,
+        modelField(
+          info: info,
+          model: null,
+          settings: settings,
+          onChanged: (_) {},
+        ),
+      );
+      expect(find.byType(AppDropdown<String>), findsNothing, reason: id);
+      final field = tester.widget<SingleLineField>(
+        find.byType(SingleLineField),
+      );
+      // 框里先放着默认模型：不改就用它。
+      expect(field.value, info.defaultModel, reason: id);
+    }
+  });
+
   testWidgets('自定义接口：设置里填了就按填的列，没填才给输入框', (tester) async {
     final info = ProviderCatalog.asrInfo('asr_custom')!;
     await pump(

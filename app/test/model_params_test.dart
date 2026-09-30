@@ -90,7 +90,9 @@ void main() {
 
     test('读值时顺手收拾：越界的夹住，坏类型回落', () {
       expect(
-        const ModelOptions({'temperature': 7}).number(ModelParams.chatTemperature),
+        const ModelOptions({
+          'temperature': 7,
+        }).number(ModelParams.chatTemperature),
         2.0,
       );
       expect(
@@ -139,7 +141,9 @@ void main() {
     });
 
     test('JSON 来回一致，null 不丢', () {
-      final o = ModelOptions.none.set('temperature', null).set('enable_itn', false);
+      final o = ModelOptions.none
+          .set('temperature', null)
+          .set('enable_itn', false);
       final back = ModelOptions.fromJson(jsonDecode(jsonEncode(o.toJson())));
       expect(back, o);
       expect(back.has('temperature'), isTrue);
@@ -177,7 +181,11 @@ void main() {
           final keys = [
             for (final p in ModelParams.asr(transport, dialect)) p.key,
           ];
-          expect(keys.toSet().length, keys.length, reason: '$transport $dialect');
+          expect(
+            keys.toSet().length,
+            keys.length,
+            reason: '$transport $dialect',
+          );
         }
       }
     });
@@ -191,7 +199,10 @@ void main() {
         [ModelParams.enableItn],
       );
       expect(
-        ModelParams.asr(AsrTransport.dashscopeSync, DashScopeDialect.qwenAudio3),
+        ModelParams.asr(
+          AsrTransport.dashscopeSync,
+          DashScopeDialect.qwenAudio3,
+        ),
         isEmpty,
       );
       expect(
