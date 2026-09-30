@@ -12,6 +12,15 @@ const _dashscope = {
 };
 const _openai = {AsrTransport.openaiTranscription};
 
+// 顶层常量：登记表里的预置模型就是这样写的。编译器对顶层常量与函数体里的
+// 常量求值时机不同 —— 构造函数里的断言写成 identical(枚举, 枚举) 时，
+// 函数体里的能过，顶层的会在编译期失败，整个应用编不过。
+const _topLevelOpenAi = AsrModelSpec(
+  name: 'whisper-1',
+  transport: AsrTransport.openaiTranscription,
+);
+const _topLevelUnset = AsrModelSpec.unset(AsrTransport.dashscopeFileTrans);
+
 AsrModelSpec _guess(String name, [Set<AsrTransport> transports = _dashscope]) =>
     AsrModelSpec.guessFromName(name, transports: transports);
 
@@ -171,6 +180,11 @@ void main() {
         ),
         throwsA(isA<AssertionError>()),
       );
+    });
+
+    test('可以写成顶层常量', () {
+      expect(_topLevelOpenAi.dialect, isNull);
+      expect(_topLevelUnset.dialect, DashScopeDialect.qwen3Asr);
     });
 
     test('占位声明：空名，百炼的带一个报文族所以查能力不会抛', () {

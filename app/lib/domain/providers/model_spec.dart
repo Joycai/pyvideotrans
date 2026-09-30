@@ -45,8 +45,7 @@ final class AsrModelSpec extends ModelSpec {
     this.languages,
     super.options,
   }) : assert(
-         identical(transport, AsrTransport.openaiTranscription) ==
-             identical(dialect, null),
+         (transport == AsrTransport.openaiTranscription) == (dialect == null),
          '百炼的接入方式必须带报文族，OpenAI 转写接口不带',
        );
 
@@ -55,7 +54,7 @@ final class AsrModelSpec extends ModelSpec {
     : this(
         name: '',
         transport: transport,
-        dialect: identical(transport, AsrTransport.openaiTranscription)
+        dialect: transport == AsrTransport.openaiTranscription
             ? null
             : DashScopeDialect.qwen3Asr,
       );
