@@ -12,9 +12,9 @@ const _dashscope = {
 };
 const _openai = {AsrTransport.openaiTranscription};
 
-// 顶层常量：登记表里的预置模型就是这样写的。编译器对顶层常量与函数体里的
-// 常量求值时机不同 —— 构造函数里的断言写成 identical(枚举, 枚举) 时，
-// 函数体里的能过，顶层的会在编译期失败，整个应用编不过。
+// 登记表里的预置模型就是这样写成常量的。const 构造的断言里写
+// identical(枚举, 枚举) 时，编译器前端按求值上下文会得到 false（经常量别名、
+// 放进 const 列表时必现），整个应用编不过，而 analyzer 查不出；所以用 ==。
 const _topLevelOpenAi = AsrModelSpec(
   name: 'whisper-1',
   transport: AsrTransport.openaiTranscription,

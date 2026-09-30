@@ -83,6 +83,47 @@ void main() {
       );
     });
 
+    // 下拉里的候选与顺序、识别页的说话人分离开关，读的都是预置列表。
+    // 这张表钉的是列表本身：重排、漏抄、接法写错导致能力变了都会挂。
+    test('每家服务的预置模型（有序）', () {
+      expect(
+        {
+          for (final info in all)
+            if (info.presets.isNotEmpty)
+              info.id: [for (final p in info.presets) p.name],
+        },
+        {
+          'openai': ['whisper-1', 'gpt-4o-transcribe', 'gpt-4o-mini-transcribe'],
+          'groq': ['whisper-large-v3', 'whisper-large-v3-turbo'],
+          'siliconflow': ['FunAudioLLM/SenseVoiceSmall'],
+          'local_backend': ['whisper-large-v3'],
+          'dashscope_qwen_asr': [
+            'qwen3-asr-flash',
+            'qwen-audio-3.0-asr-flash',
+            'fun-asr-flash-2026-06-15',
+            'qwen-audio-3.0-asr-flash-filetrans',
+            'qwen3-asr-flash-filetrans',
+          ],
+          'deepseek': ['deepseek-chat', 'deepseek-reasoner'],
+          'openai_chat': ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
+          'siliconflow_chat': ['Qwen/Qwen2.5-14B-Instruct'],
+          'openrouter': ['google/gemini-2.0-flash-001'],
+          'ollama': ['qwen2.5:14b'],
+        },
+      );
+    });
+
+    test('预置里能分离说话人的只有百炼的 qwen-audio-3.0 录音文件转写', () {
+      expect(
+        [
+          for (final info in ProviderCatalog.asr)
+            for (final preset in info.presets)
+              if (preset.capabilities.diarization) '${info.id} · ${preset.name}',
+        ],
+        ['dashscope_qwen_asr · qwen-audio-3.0-asr-flash-filetrans'],
+      );
+    });
+
     test('不认识的服务：默认模型是空名的占位，不抛', () {
       expect(ProviderCatalog.defaultAsrSpec('不存在').isUnset, isTrue);
       expect(ProviderCatalog.defaultChatSpec('不存在').isUnset, isTrue);
@@ -141,12 +182,19 @@ void main() {
     test('预置模型：得到的就是预置声明', () {
       for (final info in ProviderCatalog.asr) {
         for (final preset in info.presets) {
-          expect(ProviderCatalog.legacyAsrSpec(info.id, preset.name), preset);
+          // 用 same：翻译预置没有别的字段，按值比的话不查预置也相等。
+          expect(
+            ProviderCatalog.legacyAsrSpec(info.id, preset.name),
+            same(preset),
+          );
         }
       }
       for (final info in ProviderCatalog.translation) {
         for (final preset in info.presets) {
-          expect(ProviderCatalog.legacyChatSpec(info.id, preset.name), preset);
+          expect(
+            ProviderCatalog.legacyChatSpec(info.id, preset.name),
+            same(preset),
+          );
         }
       }
       // 语种限制跟着预置一起带上。
