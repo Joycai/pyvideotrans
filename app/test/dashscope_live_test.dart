@@ -5,12 +5,12 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/services/audio_splitter.dart';
 import 'package:subtitle_studio/services/dashscope_asr.dart';
 import 'package:subtitle_studio/services/dashscope_filetrans.dart';
 import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
-import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 /// 对真实的百炼服务跑一遍：macOS `say` 合成两句中文，中间留 1.2s 停顿，
@@ -49,11 +49,11 @@ void main() {
 
       // 登记表里列出的每个模型都真跑一遍：两族报文形态都要能通。
       for (final model in models.isEmpty
-          ? Registry.asrInfo('dashscope_qwen_asr')!.models
+          ? ProviderCatalog.asrInfo('dashscope_qwen_asr')!.models
           : models) {
         final notes = <String>[];
         final provider = DashScopeAsrProvider(
-          info: Registry.asrInfo('dashscope_qwen_asr')!,
+          info: ProviderCatalog.asrInfo('dashscope_qwen_asr')!,
           endpoint: Endpoint(baseUrl: baseUrl, model: model, apiKey: key),
           splitter: FfmpegAudioSplitter(media),
         );
@@ -117,7 +117,7 @@ void main() {
       final List<Cue> cues;
       try {
         cues = await DashScopeFileTransProvider(
-          info: Registry.asrInfo('dashscope_qwen_asr')!,
+          info: ProviderCatalog.asrInfo('dashscope_qwen_asr')!,
           endpoint: Endpoint(baseUrl: baseUrl, model: model, apiKey: key),
           media: media,
           diarize: true,

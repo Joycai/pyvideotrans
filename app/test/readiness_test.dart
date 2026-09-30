@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/language.dart';
+import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/services/readiness.dart';
-import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 Future<AppSettings> freshSettings() async {
@@ -174,7 +174,10 @@ void main() {
 
     test('登记表里每个已实施的服务都有默认地址', () async {
       final s = await freshSettings();
-      for (final info in [...Registry.asr, ...Registry.translation]) {
+      for (final info in [
+        ...ProviderCatalog.asr,
+        ...ProviderCatalog.translation,
+      ]) {
         if (!info.implemented || info.id.contains('custom')) continue;
         expect(
           s.endpointFor(info).baseUrl,

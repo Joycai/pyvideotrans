@@ -1,6 +1,6 @@
+import '../../domain/providers/provider_catalog.dart';
 import '../openai_compatible.dart';
 import '../provider_api.dart';
-import '../registry.dart';
 import '../settings.dart';
 
 /// 本地模型后端的客户端。**第一期不实施**，这里只把位置留好。
@@ -12,7 +12,7 @@ import '../settings.dart';
 ///
 /// 这个类只负责 OpenAI 协议之外的事：进程发现、健康检查、模型下载进度。
 /// 启用时要做的事仅仅是：
-///   1. 把 `Registry` 里 `local_backend` / `local_backend_chat` 的
+///   1. 把 `ProviderCatalog` 里 `local_backend` / `local_backend_chat` 的
 ///      `implemented` 改成 true；
 ///   2. 实现下面这几个方法。
 /// 流水线、进度、断点续跑、取消、日志、错误处理全部不动。
@@ -26,13 +26,13 @@ class LocalBackend {
 
   /// 后端的服务地址。与在线服务走同一套配置存储。
   Endpoint get endpoint {
-    final info = Registry.asrInfo(asrProviderId)!;
+    final info = ProviderCatalog.asrInfo(asrProviderId)!;
     return settings.endpointFor(info);
   }
 
   /// 第一期恒为 false。
   bool get implemented =>
-      Registry.asrInfo(asrProviderId)?.implemented ?? false;
+      ProviderCatalog.asrInfo(asrProviderId)?.implemented ?? false;
 
   /// GET {baseUrl}/local/health
   Future<LocalBackendHealth> checkHealth() async =>

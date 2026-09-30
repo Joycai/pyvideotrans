@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
 import 'package:subtitle_studio/domain/srt.dart';
 import 'package:subtitle_studio/services/audio_splitter.dart';
@@ -14,12 +15,11 @@ import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
-const _info = ProviderInfo(
+const _info = AsrProviderInfo(
   id: 'dashscope_qwen_asr',
   name: '阿里百炼 · Qwen3-ASR',
   vendor: '阿里百炼',
   defaultBaseUrl: 'https://dashscope.aliyuncs.com/api/v1',
-  defaultModel: 'qwen3-asr-flash',
 );
 
 Endpoint _endpoint([String model = 'qwen3-asr-flash']) => Endpoint(
@@ -844,7 +844,7 @@ void main() {
         Registry.buildAsr('dashscope_qwen_asr', settings),
         isA<DashScopeAsrProvider>(),
       );
-      expect(Registry.asrInfo('dashscope_qwen_asr')!.implemented, isTrue);
+      expect(ProviderCatalog.asrInfo('dashscope_qwen_asr')!.implemented, isTrue);
     });
   });
 }

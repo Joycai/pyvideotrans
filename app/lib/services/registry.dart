@@ -1,3 +1,4 @@
+import '../domain/providers/provider_catalog.dart';
 import '../domain/speech_segments.dart';
 import 'audio_splitter.dart';
 import 'dashscope_asr.dart';
@@ -7,153 +8,12 @@ import 'openai_compatible.dart';
 import 'provider_api.dart';
 import 'settings.dart';
 
-/// 所有可选服务的登记表。
+/// 服务实例的工厂：按服务 id 建出识别 / 翻译的实现。
 ///
-/// 关键设计：**「本地」不是一条单独的代码路径**。Ollama、LM Studio 和第二期的
-/// 本地 Python 后端都说 OpenAI 兼容协议，因此它们与在线服务共用同一个实现类，
-/// 区别只在 baseUrl、是否需要密钥，以及界面上的一个图标。
+/// 「有哪些服务、各自有哪些模型」是只读数据，在 `ProviderCatalog`
+/// （domain/providers）。这里只管把一条登记项变成能发请求的实例 ——
+/// 所以只有这个文件需要同时认识设置与各个实现类。
 abstract final class Registry {
-  static const asr = <ProviderInfo>[
-    ProviderInfo(
-      id: 'openai',
-      name: 'OpenAI',
-      vendor: 'OpenAI',
-      defaultBaseUrl: 'https://api.openai.com/v1',
-      defaultModel: 'whisper-1',
-      models: ['whisper-1', 'gpt-4o-transcribe', 'gpt-4o-mini-transcribe'],
-    ),
-    ProviderInfo(
-      id: 'groq',
-      name: 'Groq',
-      vendor: 'Groq',
-      defaultBaseUrl: 'https://api.groq.com/openai/v1',
-      defaultModel: 'whisper-large-v3',
-      models: ['whisper-large-v3', 'whisper-large-v3-turbo'],
-    ),
-    ProviderInfo(
-      id: 'siliconflow',
-      name: '硅基流动',
-      vendor: '硅基流动',
-      defaultBaseUrl: 'https://api.siliconflow.cn/v1',
-      defaultModel: 'FunAudioLLM/SenseVoiceSmall',
-      models: ['FunAudioLLM/SenseVoiceSmall'],
-    ),
-    ProviderInfo(
-      id: 'asr_custom',
-      name: '自定义（OpenAI 兼容）',
-      vendor: '自定义服务',
-      defaultBaseUrl: '',
-      defaultModel: '',
-    ),
-    // 第二期：本地 Python 后端。协议与上面完全一致，只是跑在 localhost。
-    ProviderInfo(
-      id: 'local_backend',
-      name: '本地模型服务',
-      vendor: '本地服务',
-      runsLocally: true,
-      implemented: false,
-      needsApiKey: false,
-      defaultBaseUrl: 'http://127.0.0.1:8765/v1',
-      defaultModel: 'whisper-large-v3',
-    ),
-    // 阿里百炼的识别接口不是 OpenAI 兼容形态，走单独的实现类。同步模型
-    // （多模态 generation + base64 音频）不返回时间戳，只能先按静音切句再
-    // 逐段识别；「-filetrans」模型是异步整文件转写，自带时间戳，不切片。
-    ProviderInfo(
-      id: 'dashscope_qwen_asr',
-      name: '阿里百炼 · Qwen3-ASR',
-      vendor: '阿里百炼',
-      defaultBaseUrl: 'https://dashscope.aliyuncs.com/api/v1',
-      defaultModel: 'qwen3-asr-flash',
-      models: [
-        'qwen3-asr-flash',
-        'qwen-audio-3.0-asr-flash',
-        'fun-asr-flash-2026-06-15',
-        // 「-filetrans」结尾的是异步整文件转写：先把音频上传到百炼的临时
-        // 存储，再提交任务轮询结果；不切片，一次拿回带时间戳（和说话人）
-        // 的整份结果。见 DashScopeFileTransProvider。
-        'qwen-audio-3.0-asr-flash-filetrans',
-        'qwen3-asr-flash-filetrans',
-      ],
-      // 文档：说话人分离只有 Qwen-Audio-3.0-ASR 与 Fun-ASR 两族支持。
-      supportsDiarization: true,
-    ),
-  ];
-
-  static const translation = <ProviderInfo>[
-    ProviderInfo(
-      id: 'deepseek',
-      name: 'DeepSeek',
-      vendor: 'DeepSeek',
-      defaultBaseUrl: 'https://api.deepseek.com/v1',
-      defaultModel: 'deepseek-chat',
-      models: ['deepseek-chat', 'deepseek-reasoner'],
-    ),
-    ProviderInfo(
-      id: 'openai_chat',
-      name: 'OpenAI',
-      vendor: 'OpenAI',
-      defaultBaseUrl: 'https://api.openai.com/v1',
-      defaultModel: 'gpt-4o-mini',
-      models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
-    ),
-    ProviderInfo(
-      id: 'siliconflow_chat',
-      name: '硅基流动',
-      vendor: '硅基流动',
-      defaultBaseUrl: 'https://api.siliconflow.cn/v1',
-      defaultModel: 'Qwen/Qwen2.5-14B-Instruct',
-    ),
-    ProviderInfo(
-      id: 'openrouter',
-      name: 'OpenRouter',
-      vendor: 'OpenRouter',
-      defaultBaseUrl: 'https://openrouter.ai/api/v1',
-      defaultModel: 'google/gemini-2.0-flash-001',
-    ),
-    ProviderInfo(
-      id: 'ollama',
-      name: 'Ollama',
-      vendor: 'Ollama',
-      runsLocally: true,
-      needsApiKey: false,
-      defaultBaseUrl: 'http://localhost:11434/v1',
-      defaultModel: 'qwen2.5:14b',
-    ),
-    ProviderInfo(
-      id: 'lmstudio',
-      name: 'LM Studio',
-      vendor: 'LM Studio',
-      runsLocally: true,
-      needsApiKey: false,
-      defaultBaseUrl: 'http://localhost:1234/v1',
-      defaultModel: '',
-    ),
-    ProviderInfo(
-      id: 'mt_custom',
-      name: '自定义（OpenAI 兼容）',
-      vendor: '自定义服务',
-      defaultBaseUrl: '',
-      defaultModel: '',
-    ),
-    ProviderInfo(
-      id: 'local_backend_chat',
-      name: '本地模型服务',
-      vendor: '本地服务',
-      runsLocally: true,
-      implemented: false,
-      needsApiKey: false,
-      defaultBaseUrl: 'http://127.0.0.1:8765/v1',
-      defaultModel: '',
-    ),
-  ];
-
-  static ProviderInfo? asrInfo(String id) =>
-      asr.where((p) => p.id == id).firstOrNull;
-
-  static ProviderInfo? translationInfo(String id) =>
-      translation.where((p) => p.id == id).firstOrNull;
-
   /// 建一个识别服务实例。
   ///
   /// [model] 与 [prompt] 是**任务级覆盖**：任务入队时把参数定死了，
@@ -171,7 +31,7 @@ abstract final class Registry {
     Ffmpeg? media,
     bool diarize = false,
   }) {
-    final info = asrInfo(id);
+    final info = ProviderCatalog.asrInfo(id);
     if (info == null) {
       throw ActionableException('未知的识别服务：$id', hint: '在设置里重新选择识别服务。');
     }
@@ -220,7 +80,7 @@ abstract final class Registry {
     String? model,
     String? guidance,
   }) {
-    final info = translationInfo(id);
+    final info = ProviderCatalog.translationInfo(id);
     if (info == null) {
       throw ActionableException('未知的翻译服务：$id', hint: '在设置里重新选择翻译服务。');
     }

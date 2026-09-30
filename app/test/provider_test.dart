@@ -4,18 +4,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/services/openai_compatible.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';
 import 'package:subtitle_studio/services/translation_protocol.dart';
 
-const _info = ProviderInfo(
+const _info = ChatProviderInfo(
   id: 'test',
   name: '测试',
   vendor: '测试服务',
   defaultBaseUrl: 'https://example.invalid/v1',
-  defaultModel: 'm',
 );
 
 const _endpoint = Endpoint(
@@ -299,7 +299,7 @@ void main() {
   group('设置', () {
     test('用户填的值优先于默认值', () async {
       final settings = await _settings();
-      final info = Registry.translationInfo('deepseek')!;
+      final info = ProviderCatalog.translationInfo('deepseek')!;
 
       expect(settings.endpointFor(info).model, 'deepseek-chat');
 
@@ -315,7 +315,7 @@ void main() {
 
     test('模型框用逗号写多个：第一个是默认，其余进候选', () async {
       final settings = await _settings();
-      final info = Registry.asrInfo('dashscope_qwen_asr')!;
+      final info = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
 
       // 没填时候选来自登记表。
       expect(settings.modelsFor(info), info.models);
@@ -359,7 +359,7 @@ void main() {
       });
       final settings = await AppSettings.load();
 
-      final dashscope = Registry.asrInfo('dashscope_qwen_asr')!;
+      final dashscope = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
       expect(settings.modelsFor(dashscope), [
         'qwen-audio-3.0-asr-flash-filetrans',
         'fun-asr-flash',
@@ -371,7 +371,7 @@ void main() {
       expect(asr.apiKey, 'sk-asr');
       expect(settings.isConfigured(dashscope), isTrue);
 
-      final deepseek = Registry.translationInfo('deepseek')!;
+      final deepseek = ProviderCatalog.translationInfo('deepseek')!;
       expect(settings.modelsFor(deepseek), [
         'deepseek-reasoner',
         'deepseek-chat',
@@ -382,7 +382,7 @@ void main() {
       expect(mt.apiKey, '');
       expect(settings.isConfigured(deepseek), isFalse);
 
-      final openai = Registry.asrInfo('openai')!;
+      final openai = ProviderCatalog.asrInfo('openai')!;
       expect(settings.modelsFor(openai), openai.models);
       expect(settings.endpointFor(openai).model, 'whisper-1');
       expect(settings.isConfigured(openai), isTrue);
@@ -395,7 +395,7 @@ void main() {
         }),
       });
       final settings = await AppSettings.load();
-      final groq = Registry.asrInfo('groq')!;
+      final groq = ProviderCatalog.asrInfo('groq')!;
 
       expect(settings.modelsFor(groq), groq.models);
       expect(settings.endpointFor(groq).model, 'whisper-large-v3');
@@ -416,7 +416,7 @@ void main() {
 
         expect(settings.configFor('groq').apiKey, isNull, reason: broken);
         expect(
-          settings.endpointFor(Registry.asrInfo('openai')!).model,
+          settings.endpointFor(ProviderCatalog.asrInfo('openai')!).model,
           'whisper-1',
           reason: broken,
         );
@@ -438,13 +438,13 @@ void main() {
 
       settings.reset(
         SettingsGroup.asr,
-        providerIds: Registry.asr.map((p) => p.id),
+        providerIds: ProviderCatalog.asr.map((p) => p.id),
       );
 
       expect(settings.asrProviderId, 'openai');
       expect(settings.asrPrompt, '');
       expect(settings.configFor('openai').apiKey, isNull);
-      expect(settings.endpointFor(Registry.asrInfo('openai')!).model, 'whisper-1');
+      expect(settings.endpointFor(ProviderCatalog.asrInfo('openai')!).model, 'whisper-1');
 
       expect(settings.translationProviderId, 'ollama');
       expect(settings.translationGuidance, '口语化');
@@ -454,7 +454,7 @@ void main() {
       final reloaded = await AppSettings.load();
       expect(reloaded.configFor('openai').apiKey, isNull);
       expect(
-        reloaded.endpointFor(Registry.translationInfo('deepseek')!).model,
+        reloaded.endpointFor(ProviderCatalog.translationInfo('deepseek')!).model,
         'deepseek-reasoner',
       );
     });
@@ -462,11 +462,11 @@ void main() {
     test('缺密钥时算未配置，本地服务不需要密钥', () async {
       final settings = await _settings();
       expect(
-        settings.isConfigured(Registry.translationInfo('deepseek')!),
+        settings.isConfigured(ProviderCatalog.translationInfo('deepseek')!),
         isFalse,
       );
       expect(
-        settings.isConfigured(Registry.translationInfo('ollama')!),
+        settings.isConfigured(ProviderCatalog.translationInfo('ollama')!),
         isTrue,
       );
     });

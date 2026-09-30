@@ -5,11 +5,11 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/glass_panel.dart';
 import '../../core/widgets/indicators.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../domain/task_filter.dart';
 import '../../pipeline/task_queue.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/provider_api.dart';
-import '../../services/registry.dart';
 import '../../services/settings.dart';
 
 /// 状态栏要显示的一次快照。状态栏控件只画它，不自己去查服务。
@@ -44,9 +44,9 @@ class StatusSnapshot {
     final eta = queue.running?.eta;
     return StatusSnapshot(
       ffmpeg: media.available ? 'ffmpeg · 就绪' : 'ffmpeg · 未找到',
-      asr: service(Registry.asrInfo(settings.asrProviderId), '识别'),
+      asr: service(ProviderCatalog.asrInfo(settings.asrProviderId), '识别'),
       translation: service(
-        Registry.translationInfo(settings.translationProviderId),
+        ProviderCatalog.translationInfo(settings.translationProviderId),
         '翻译',
       ),
       runningTasks: queue.countWhere(TaskFilter.running.matches),

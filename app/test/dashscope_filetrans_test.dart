@@ -12,12 +12,11 @@ import 'package:subtitle_studio/services/provider_api.dart';
 import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
-const _info = ProviderInfo(
+const _info = AsrProviderInfo(
   id: 'dashscope_qwen_asr',
   name: '阿里百炼 · Qwen3-ASR',
   vendor: '阿里百炼',
   defaultBaseUrl: 'https://dashscope.aliyuncs.com/api/v1',
-  defaultModel: 'qwen3-asr-flash',
 );
 
 Endpoint _endpoint([String model = 'qwen-audio-3.0-asr-flash-filetrans']) =>

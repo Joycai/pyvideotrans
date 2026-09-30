@@ -74,7 +74,7 @@ class _GatedTranslator implements TranslationProvider {
 
   @override
   ProviderInfo get info =>
-      const ProviderInfo(id: 'fake_mt', name: '假翻译', vendor: '测试');
+      const ChatProviderInfo(id: 'fake_mt', name: '假翻译', vendor: '测试');
 
   @override
   Future<List<String>> translateBatch({

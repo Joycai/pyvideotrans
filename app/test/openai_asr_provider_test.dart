@@ -11,12 +11,11 @@ import 'package:subtitle_studio/services/provider_api.dart';
 // OpenAI 兼容识别的请求形状。这条链路之前没有任何测试：重构服务与模型的
 // 配置方式时，靠这里保证「不改设置，发出去的请求一个字段都不变」。
 
-const _info = ProviderInfo(
+const _info = AsrProviderInfo(
   id: 'test_asr',
   name: '测试',
   vendor: '测试服务',
   defaultBaseUrl: 'https://example.invalid/v1',
-  defaultModel: 'whisper-1',
 );
 
 const _endpoint = Endpoint(

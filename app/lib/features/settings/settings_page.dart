@@ -6,8 +6,8 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/glass_panel.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../services/ffmpeg.dart';
-import '../../services/registry.dart';
 import '../../services/settings.dart';
 import '../shared/page_chrome.dart';
 import 'appearance_section.dart';
@@ -220,16 +220,16 @@ class SettingsPageState extends State<SettingsPage> {
         }
       case ResetChoice.all:
         s.resetAll(
-          asrProviderIds: Registry.asr.map((p) => p.id),
-          translationProviderIds: Registry.translation.map((p) => p.id),
+          asrProviderIds: ProviderCatalog.asr.map((p) => p.id),
+          translationProviderIds: ProviderCatalog.translation.map((p) => p.id),
         );
     }
     showSaved(_active);
   }
 
   static Iterable<String> _providerIds(SettingsGroup group) => switch (group) {
-    SettingsGroup.asr => Registry.asr.map((p) => p.id),
-    SettingsGroup.translation => Registry.translation.map((p) => p.id),
+    SettingsGroup.asr => ProviderCatalog.asr.map((p) => p.id),
+    SettingsGroup.translation => ProviderCatalog.translation.map((p) => p.id),
     _ => const [],
   };
 
@@ -248,8 +248,8 @@ class SettingsPageState extends State<SettingsPage> {
   // ── 布局 ──────────────────────────────────────────────────────────────
 
   Set<SettingsSectionKey> get _warnKeys {
-    final asr = Registry.asrInfo(s.asrProviderId);
-    final mt = Registry.translationInfo(s.translationProviderId);
+    final asr = ProviderCatalog.asrInfo(s.asrProviderId);
+    final mt = ProviderCatalog.translationInfo(s.translationProviderId);
     return {
       if (asr != null && asr.implemented && !s.isConfigured(asr))
         SettingsSectionKey.asr,

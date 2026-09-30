@@ -3,10 +3,10 @@ import 'package:file_selector/file_selector.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../domain/task_options.dart';
 import '../../services/ffmpeg.dart';
 import '../../services/readiness.dart';
-import '../../services/registry.dart';
 import '../shared/enqueue_request.dart';
 import '../shared/footer_message.dart';
 import '../shared/new_task_form.dart';
@@ -64,7 +64,8 @@ class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
   void selectAsrProvider(String id) => update(
     (o) => o.withAsrProvider(
       id,
-      supportsDiarization: Registry.asrInfo(id)?.supportsDiarization ?? false,
+      supportsDiarization:
+          ProviderCatalog.asrInfo(id)?.supportsDiarization ?? false,
     ),
   );
 

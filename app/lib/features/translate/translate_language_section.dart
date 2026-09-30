@@ -5,9 +5,9 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/language.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../domain/task_options.dart';
 import '../../services/readiness.dart';
-import '../../services/registry.dart';
 import '../shared/provider_fields.dart';
 import 'translate_form.dart';
 
@@ -32,7 +32,7 @@ class TranslateLanguageSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = context.colors;
     final o = form.options;
-    final info = Registry.translationInfo(o.translationProviderId);
+    final info = ProviderCatalog.translationInfo(o.translationProviderId);
     final readiness = form.readiness;
     final gap = flat ? AppSpacing.s3 : AppSpacing.s4;
 
@@ -89,7 +89,7 @@ class TranslateLanguageSection extends StatelessWidget {
         value: o.translationProviderId,
         error: readiness.isBlocked,
         groups: providerGroups(
-          Registry.translation,
+          ProviderCatalog.translation,
           (id) => ProviderReadiness.translation(
             id,
             form.settings,

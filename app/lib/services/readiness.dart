@@ -1,6 +1,6 @@
 import '../domain/language.dart';
+import '../domain/providers/provider_catalog.dart';
 import 'provider_api.dart';
-import 'registry.dart';
 import 'settings.dart';
 
 /// 一项检查的严重程度。
@@ -47,7 +47,7 @@ abstract final class ProviderReadiness {
     String? model,
     bool diarize = false,
   }) {
-    final info = Registry.asrInfo(id);
+    final info = ProviderCatalog.asrInfo(id);
     if (info == null) {
       return Readiness(
         ReadinessLevel.blocked,
@@ -94,7 +94,7 @@ abstract final class ProviderReadiness {
     AppSettings settings, {
     String? model,
   }) {
-    final info = Registry.translationInfo(id);
+    final info = ProviderCatalog.translationInfo(id);
     if (info == null) {
       return Readiness(
         ReadinessLevel.blocked,

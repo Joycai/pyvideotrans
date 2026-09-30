@@ -6,9 +6,9 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/indicators.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../services/provider_api.dart';
 import '../../services/readiness.dart';
-import '../../services/registry.dart';
 import '../../services/settings.dart';
 import '../shared/provider_fields.dart';
 import 'section_outline.dart';
@@ -47,7 +47,8 @@ class ProviderSection extends StatelessWidget {
 
   bool get _isMt => kind == ProviderKind.mt;
 
-  List<ProviderInfo> get _infos => _isMt ? Registry.translation : Registry.asr;
+  List<ProviderInfo> get _infos =>
+      _isMt ? ProviderCatalog.translation : ProviderCatalog.asr;
 
   String get _selectedId =>
       _isMt ? settings.translationProviderId : settings.asrProviderId;

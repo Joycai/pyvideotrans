@@ -18,8 +18,8 @@ import 'package:subtitle_studio/services/settings.dart';
 
 import 'helpers.dart';
 
-const _asrInfo = ProviderInfo(id: 'fake_asr', name: '假识别', vendor: '测试');
-const _mtInfo = ProviderInfo(id: 'fake_mt', name: '假翻译', vendor: '测试');
+const _asrInfo = AsrProviderInfo(id: 'fake_asr', name: '假识别', vendor: '测试');
+const _mtInfo = ChatProviderInfo(id: 'fake_mt', name: '假翻译', vendor: '测试');
 
 /// 记录调用次数的假识别服务，用来验证续跑时不会重做已完成阶段。
 /// 不碰 ffmpeg 的假实现 —— 转写链路的前两阶段只关心「有没有产出音频」。

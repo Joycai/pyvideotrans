@@ -7,9 +7,9 @@ import '../../core/widgets/buttons.dart';
 import '../../core/widgets/indicators.dart';
 import '../../domain/media_job.dart';
 import '../../domain/media_kinds.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../domain/srt.dart';
 import '../../domain/task.dart';
-import '../../services/registry.dart';
 import '../../services/reveal.dart';
 import 'stage_bar.dart';
 
@@ -306,8 +306,8 @@ class _ServiceCell extends StatelessWidget {
         );
       case null:
     }
-    final asr = Registry.asrInfo(task.asrProviderId);
-    final mt = Registry.translationInfo(task.translationProviderId);
+    final asr = ProviderCatalog.asrInfo(task.asrProviderId);
+    final mt = ProviderCatalog.translationInfo(task.translationProviderId);
 
     final primary = task.kind.needsRecognition ? asr : mt;
     final secondary = task.kind == TaskKind.transcribeAndTranslate

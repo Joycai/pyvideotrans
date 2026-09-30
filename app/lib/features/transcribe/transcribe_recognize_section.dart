@@ -4,8 +4,8 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/fields.dart';
 import '../../domain/language.dart';
+import '../../domain/providers/provider_catalog.dart';
 import '../../services/readiness.dart';
-import '../../services/registry.dart';
 import '../shared/provider_fields.dart';
 import 'transcribe_form.dart';
 
@@ -30,7 +30,7 @@ class TranscribeRecognizeSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final o = form.options;
-    final info = Registry.asrInfo(o.asrProviderId);
+    final info = ProviderCatalog.asrInfo(o.asrProviderId);
     final readiness = form.asrReadiness;
     final gap = flat ? AppSpacing.s3 : AppSpacing.s4;
 
@@ -58,7 +58,7 @@ class TranscribeRecognizeSection extends StatelessWidget {
         error: readiness.isBlocked,
         display: serviceLabel(info, o.asrModel, form.settings),
         groups: providerGroups(
-          Registry.asr,
+          ProviderCatalog.asr,
           (id) => ProviderReadiness.asr(id, form.settings),
         ),
         onChanged: form.selectAsrProvider,
