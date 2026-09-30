@@ -750,6 +750,52 @@ void main() {
       expect(providerOf(TaskSession(task)).endpoint.model, 'later');
     });
 
+    // 现取的是整套翻译服务。只现取模型的话，入队时那一家没配好、之后
+    // 换了一家配好的，补翻仍然往没配好的那家发。
+    test('只转写的任务会话：设置里换了翻译服务，补翻跟着换，翻译要求也取现在的', () {
+      final task = SubtitleTask(
+        id: 't',
+        sourcePath: '/v/demo.mp4',
+        kind: TaskKind.transcribe,
+        status: TaskStatus.done,
+        options: testOptions(
+          mt: 'deepseek',
+          translationModel: '',
+        ).copyWith(translationGuidance: '入队时的要求'),
+      );
+      settings
+        ..translationProviderId = 'openai_chat'
+        ..translationGuidance = '现在的要求'
+        ..setConfig('openai_chat', const ProviderConfig(apiKey: 'sk-openai'));
+
+      final provider = providerOf(TaskSession(task));
+      expect(provider.info.id, 'openai_chat');
+      expect(provider.endpoint.model, 'gpt-4o-mini');
+      expect(provider.endpoint.apiKey, 'sk-openai');
+      expect(provider.extraGuidance, '现在的要求');
+    });
+
+    test('带翻译的任务会话：设置里换了翻译服务也不跟着换', () {
+      final task = SubtitleTask(
+        id: 't',
+        sourcePath: '/v/demo.mp4',
+        kind: TaskKind.transcribeAndTranslate,
+        status: TaskStatus.done,
+        options: testOptions(
+          mt: 'deepseek',
+          translationModel: 'then',
+        ).copyWith(translationGuidance: '入队时的要求'),
+      );
+      settings
+        ..translationProviderId = 'openai_chat'
+        ..translationGuidance = '现在的要求';
+
+      final provider = providerOf(TaskSession(task));
+      expect(provider.info.id, 'deepseek');
+      expect(provider.endpoint.model, 'then');
+      expect(provider.extraGuidance, '入队时的要求');
+    });
+
     // 本地文件没有入队这一步。用户发现模型没选、去设置里填好再回来，
     // 不该还要把文件关掉重开。
     test('本地文件会话：每次现取设置里的模型与默认启用的词表', () {
@@ -767,6 +813,27 @@ void main() {
       final again = providerOf(session);
       expect(again.endpoint.model, 'later');
       expect(again.glossary, isEmpty);
+    });
+
+    // 打开文件时默认服务没配密钥，去设置里换了一家再回来：不该还往
+    // 原来那家发。
+    test('本地文件会话：设置里换了翻译服务，下一次翻译就用新的那家', () {
+      final session = FileSession.open(
+        source: localZhFile(),
+        defaults: testOptions(
+          mt: 'deepseek',
+          translationModel: 'at-open',
+        ).copyWith(translationGuidance: '打开时的要求'),
+      );
+      expect(providerOf(session).info.id, 'deepseek');
+
+      settings
+        ..translationProviderId = 'openai_chat'
+        ..translationGuidance = '现在的要求';
+      final provider = providerOf(session);
+      expect(provider.info.id, 'openai_chat');
+      expect(provider.endpoint.model, 'gpt-4o-mini');
+      expect(provider.extraGuidance, '现在的要求');
     });
   });
 }

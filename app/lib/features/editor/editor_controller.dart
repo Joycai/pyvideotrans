@@ -1035,28 +1035,37 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     return buildTranslationProvider();
   }
 
-  /// 任务会话用任务里冻结的模型与词表。本地文件会话没有「入队」这一步，
-  /// 冻结没有意义：模型与词表每次翻译时现取设置里的 —— 否则用户发现没选
-  /// 模型、去设置里填好再回来，还得把文件关掉重开才生效。
+  /// 任务会话用任务里冻结的翻译服务、模型与词表。本地文件会话没有「入队」
+  /// 这一步，冻结没有意义：每次翻译时现取设置里的 —— 否则用户发现没配好、
+  /// 去设置里改完再回来，还得把文件关掉重开才生效。
+  ///
+  /// 现取的是整套翻译服务（哪一家、哪个模型、翻译要求），不只是模型：
+  /// 只现取模型的话，用户在设置里换了一家翻译服务，这里还在往打开文件时
+  /// 的那一家发，报的仍是那一家「未配置密钥」。
   ///
   /// 只转写的任务介于两者之间：词表是用户建任务时勾的，用冻结的；翻译
-  /// 模型却是入队时顺手从设置里抄下来的，建任务页上翻译那一段是收起的，
-  /// 用户没看到也没选过它，就绪检查也没查过它。那时要是还没配模型，抄下
-  /// 来的就是空的，之后在设置里配好了这个任务也用不上 —— 所以现取。
+  /// 服务却是入队时顺手从设置里抄下来的，建任务页上翻译那一段是收起的，
+  /// 用户没看到也没选过它，就绪检查也没查过它。那时要是还没配好，抄下
+  /// 来的就用不了，之后在设置里配好了这个任务也用不上 —— 所以现取。
   @visibleForTesting
   TranslationProvider buildTranslationProvider() {
     final options = session.options;
-    final (liveModel, liveGlossary) = switch (session) {
+    final (liveService, liveGlossary) = switch (session) {
       FileSession() => (true, true),
       TaskSession(:final task) => (task.kind == TaskKind.transcribe, false),
     };
+    final providerId = liveService
+        ? settings.translationProviderId
+        : options.translationProviderId;
     return Registry.buildTranslation(
-      options.translationProviderId,
+      providerId,
       settings,
-      model: liveModel
-          ? settings.defaultChatModelOf(options.translationProviderId)
+      model: liveService
+          ? settings.defaultChatModelOf(providerId)
           : options.translationModel,
-      guidance: options.translationGuidance,
+      guidance: liveService
+          ? settings.translationGuidance
+          : options.translationGuidance,
       glossary: liveGlossary
           ? settings.glossaryEntries(settings.defaultGlossaryIds)
           : options.glossary,

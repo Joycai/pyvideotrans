@@ -301,15 +301,12 @@ class _ModelFieldState<T extends ModelSpec> extends State<ModelField<T>> {
   Widget _typed(BuildContext context, {required bool canGoBack}) {
     final cs = context.colors;
     final error = _error;
-    final example = widget.info!.presets.firstOrNull?.name ?? '';
     final field = TextField(
       controller: _name,
       focusNode: _focus,
       style: AppTextStyles.timecode.copyWith(color: cs.onSurface),
-      decoration: bareInputDecoration(
-        context,
-        hint: canGoBack || example.isEmpty ? '填写模型名' : '填写模型名，例 $example',
-      ),
+      // 不举例子：走到输入框说明这家服务没有预置模型可举。
+      decoration: bareInputDecoration(context, hint: '填写模型名'),
       onChanged: _onTyped,
     );
     return LabeledField(
