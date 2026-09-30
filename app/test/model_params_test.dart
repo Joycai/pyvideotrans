@@ -47,6 +47,20 @@ void main() {
       expect(required.sanitize(null), 5.0);
     });
 
+    test('数字：四舍五入后仍在范围内，不出现 -0.0', () {
+      const p = NumberModelParam(
+        key: 'k',
+        label: 'k',
+        min: -1,
+        max: 0.25,
+        defaultNumber: 0,
+      );
+      expect(p.sanitize(0.25), 0.25);
+      expect(jsonEncode(p.sanitize(-0.04)), '0.0');
+      expect(p.sanitize(double.infinity), 0.25);
+      expect(p.sanitize(double.negativeInfinity), -1.0);
+    });
+
     test('选项：不在列表里的回落默认', () {
       expect(_choice.sanitize('text'), 'text');
       expect(_choice.sanitize('xml'), 'json');
@@ -92,6 +106,36 @@ void main() {
       }).sanitize(ModelParams.chat);
       expect(cleaned.toJson(), {'temperature': 2.0});
       expect(ModelOptions.none.sanitize(ModelParams.chat).isEmpty, isTrue);
+    });
+
+    test('按目录清理：类型对不上的值整个丢掉，回到「没动过」', () {
+      // 收拾成默认值留着的话，它会被当成用户亲手设的，以后目录改默认值也跟不上。
+      final chat = const ModelOptions({
+        'temperature': 'x',
+      }).sanitize(ModelParams.chat);
+      expect(chat.has('temperature'), isFalse);
+      expect(chat.number(ModelParams.chatTemperature), 0.3);
+
+      final itn = const ModelOptions({
+        'enable_itn': null,
+      }).sanitize([ModelParams.enableItn]);
+      expect(itn.isEmpty, isTrue);
+
+      // 「不发送」是合法的取值，留着。
+      final off = const ModelOptions({
+        'temperature': null,
+      }).sanitize(ModelParams.chat);
+      expect(off.has('temperature'), isTrue);
+    });
+
+    test('清理过的值一定写得成 JSON', () {
+      for (final bad in [double.nan, double.infinity, -double.infinity]) {
+        final cleaned = ModelOptions.none
+            .set('temperature', bad)
+            .sanitize(ModelParams.chat);
+        expect(() => jsonEncode(cleaned.toJson()), returnsNormally);
+        expect(cleaned, cleaned);
+      }
     });
 
     test('JSON 来回一致，null 不丢', () {

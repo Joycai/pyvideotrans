@@ -20,6 +20,8 @@ sealed class ModelSpec {
   /// 这个模型有哪些可调参数。
   List<ModelParam> get params;
 
+  /// 换一组参数取值。按 [params] 收拾过再存：界面传来的值不管多离谱，
+  /// 声明里留下的都能写盘，且与读回来的那份相等。
   ModelSpec withOptions(ModelOptions options);
 
   Map<String, Object?> toJson();
@@ -83,7 +85,7 @@ final class AsrModelSpec extends ModelSpec {
     transport: transport,
     dialect: dialect,
     languages: languages,
-    options: options,
+    options: options.sanitize(params),
   );
 
   @override
@@ -97,21 +99,26 @@ final class AsrModelSpec extends ModelSpec {
   };
 
   static AsrModelSpec? fromJson(Map<Object?, Object?> json) {
-    final name = json['name'];
+    final rawName = json['name'];
     final transport = AsrTransport.values.tryByName(json['transport']);
     // 接入方式认不出来（更新的版本写的）就没法分派，整条不要。
-    if (name is! String || transport == null) return null;
+    if (rawName is! String || transport == null) return null;
+    final name = rawName.trim();
     final dialect = transport.needsDialect
         // 报文族缺了或认不出来时按名字补，别让一条残缺的存档把界面弄崩。
         ? DashScopeDialect.values.tryByName(json['dialect']) ??
               _guessDialect(name, transport)
         : null;
-    final languages = json['languages'];
+    final rawLanguages = json['languages'];
+    final languages = rawLanguages is List
+        ? rawLanguages.whereType<String>().toSet()
+        : const <String>{};
     return AsrModelSpec(
-      name: name.trim(),
+      name: name,
       transport: transport,
       dialect: dialect,
-      languages: languages is List ? languages.whereType<String>().toSet() : null,
+      // 空集合按字面是「什么语种都不支持」，没有这种模型；当成不限。
+      languages: languages.isEmpty ? null : languages,
       options: ModelOptions.fromJson(
         json['options'],
       ).sanitize(ModelParams.asr(transport, dialect)),
@@ -212,7 +219,7 @@ final class ChatModelSpec extends ModelSpec {
 
   @override
   ChatModelSpec withOptions(ModelOptions options) =>
-      ChatModelSpec(name: name, options: options);
+      ChatModelSpec(name: name, options: options.sanitize(params));
 
   @override
   Map<String, Object?> toJson() => {

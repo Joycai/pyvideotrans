@@ -57,6 +57,14 @@ void main() {
       expect(ModelName.validate('a${String.fromCharCode(0)}b'), '模型名里有不可见字符');
       expect(ModelName.validate('a${String.fromCharCode(0x200B)}b'), '模型名里有不可见字符');
       expect(ModelName.validate('a${String.fromCharCode(0x7F)}b'), '模型名里有不可见字符');
+      // 软连字符、双向控制符：网页与聊天软件复制时常带。
+      for (final code in [0x00AD, 0x202A, 0x202E, 0x2066, 0x2069, 0x2061]) {
+        expect(
+          ModelName.validate('a${String.fromCharCode(code)}b'),
+          '模型名里有不可见字符',
+          reason: code.toRadixString(16),
+        );
+      }
       expect(ModelName.validate('a' * 128), isNull);
       expect(ModelName.validate('a' * 129), '模型名不能超过 128 个字符');
     });
@@ -252,8 +260,8 @@ void main() {
         ),
       );
       expect(
-        filetrans,
-        isNot(filetrans.withOptions(const ModelOptions({'x': 1}))),
+        sense,
+        isNot(sense.withOptions(const ModelOptions({'temperature': 0.5}))),
       );
     });
 
@@ -292,6 +300,50 @@ void main() {
       })! as AsrModelSpec;
       expect(patched.dialect, DashScopeDialect.funAsr);
       expect(patched.languages, isNull);
+
+      // 补报文族用的是去掉空白之后的名字，与按名字推断同一个口径。
+      final padded = ModelSpec.fromJson({
+        'kind': 'asr',
+        'name': ' qwen3-asr-flash-filetrans',
+        'transport': 'dashscopeFileTrans',
+      })! as AsrModelSpec;
+      expect(padded.name, 'qwen3-asr-flash-filetrans');
+      expect(padded.dialect, DashScopeDialect.qwen3Asr);
+    });
+
+    test('语种列表为空或全是坏值：当成不限，不是「什么都不支持」', () {
+      for (final languages in [<Object>[], <Object>[1, 2]]) {
+        final spec = ModelSpec.fromJson({
+          'kind': 'asr',
+          'name': 'x',
+          'transport': 'openaiTranscription',
+          'languages': languages,
+        })! as AsrModelSpec;
+        expect(spec.languages, isNull);
+        expect(spec.toJson().containsKey('languages'), isFalse);
+      }
+    });
+
+    test('换参数时按目录收拾：离谱的值进不了声明，写盘读回相等', () {
+      const base = AsrModelSpec(
+        name: 'whisper-1',
+        transport: AsrTransport.openaiTranscription,
+      );
+      for (final bad in <Object?>[double.nan, double.infinity, 5, 'x']) {
+        final spec = base.withOptions(
+          ModelOptions.none.set('temperature', bad).set('enable_itn', false),
+        );
+        final json = jsonDecode(jsonEncode(spec.toJson()));
+        expect(ModelSpec.fromJson(json), spec, reason: '$bad');
+        expect(spec.options.has('enable_itn'), isFalse);
+      }
+      expect(
+        const ChatModelSpec(name: 'm')
+            .withOptions(const ModelOptions({'temperature': 9}))
+            .options
+            .toJson(),
+        {'temperature': 2.0},
+      );
     });
   });
 

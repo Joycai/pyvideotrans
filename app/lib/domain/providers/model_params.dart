@@ -18,6 +18,10 @@ sealed class ModelParam {
 
   /// 把存档或界面里来的值收拾成合法值；类型不对的回落到默认。
   Object? sanitize(Object? raw);
+
+  /// [raw] 的类型对不对得上这一项。对不上的存值应当整个丢掉（回到「没动过」），
+  /// 而不是收拾成默认值留着 —— 那样它会被当成用户亲手设的。
+  bool accepts(Object? raw);
 }
 
 final class BoolModelParam extends ModelParam {
@@ -35,6 +39,9 @@ final class BoolModelParam extends ModelParam {
 
   @override
   Object sanitize(Object? raw) => raw is bool ? raw : defaultBool;
+
+  @override
+  bool accepts(Object? raw) => raw is bool;
 }
 
 final class NumberModelParam extends ModelParam {
@@ -69,14 +76,21 @@ final class NumberModelParam extends ModelParam {
 
   @override
   Object? sanitize(Object? raw) {
-    if (raw == null && optional) return null;
-    if (raw is! num || raw.isNaN) return defaultNumber;
+    if (!accepts(raw)) return defaultNumber;
+    if (raw == null) return null;
     // 经一次定点格式化：0.1 的整数倍在二进制里不精确，3 × 0.1 会变成
     // 0.30000000000000004 并原样写进请求体。
-    return double.parse(
-      raw.toDouble().clamp(min, max).toStringAsFixed(fractionDigits),
+    final rounded = double.parse(
+      (raw as num).toDouble().clamp(min, max).toStringAsFixed(fractionDigits),
     );
+    // 四舍五入可能越过不在步长上的边界，再夹一次；-0.0 写进 JSON 是「-0.0」。
+    final clamped = rounded.clamp(min, max);
+    return clamped == 0 ? 0.0 : clamped;
   }
+
+  @override
+  bool accepts(Object? raw) =>
+      raw == null ? optional : raw is num && !raw.isNaN;
 }
 
 final class ChoiceModelParam extends ModelParam {
@@ -96,8 +110,10 @@ final class ChoiceModelParam extends ModelParam {
   Object get defaultValue => defaultOption;
 
   @override
-  Object sanitize(Object? raw) =>
-      options.any((o) => o.$1 == raw) ? raw! : defaultOption;
+  Object sanitize(Object? raw) => accepts(raw) ? raw! : defaultOption;
+
+  @override
+  bool accepts(Object? raw) => options.any((o) => o.$1 == raw);
 }
 
 /// 一个模型的参数取值。
@@ -139,11 +155,14 @@ final class ModelOptions {
       if (e.key != key) e.key: e.value,
   });
 
-  /// 丢掉目录里没有的键，其余收拾成合法值。模型的接入方式改了之后，
-  /// 上一种接入方式的参数不该跟着留下。
+  /// 丢掉目录里没有的键和类型对不上的值，其余收拾成合法值。
+  ///
+  /// 模型的接入方式改了之后，上一种接入方式的参数不该跟着留下。收拾过的
+  /// 值一定能写成 JSON（没有 NaN、无穷），并且与写盘再读回的那份相等。
   ModelOptions sanitize(List<ModelParam> catalog) => ModelOptions({
     for (final p in catalog)
-      if (_values.containsKey(p.key)) p.key: p.sanitize(_values[p.key]),
+      if (_values.containsKey(p.key) && p.accepts(_values[p.key]))
+        p.key: p.sanitize(_values[p.key]),
   });
 
   Map<String, Object?> toJson() => Map.of(_values);

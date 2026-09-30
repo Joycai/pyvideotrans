@@ -12,9 +12,11 @@ abstract final class ModelName {
 
   static final _blankOrComma = RegExp(r'[\s,，]');
 
-  /// C0 / C1 控制字符与零宽字符：从聊天软件、网页复制时混进来的，眼睛看不见。
+  /// 控制字符与格式字符（零宽、双向控制、软连字符……）：从聊天软件、网页复制时
+  /// 混进来的，眼睛看不见。按 Unicode 类别判，不逐个列码位 —— 列举总会漏。
   static final _invisible = RegExp(
-    r'[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2060\uFEFF]',
+    r'[\p{Cc}\p{Cf}]',
+    unicode: true,
   );
 
   /// 合法返回 null，否则返回一句可以直接显示的原因。
