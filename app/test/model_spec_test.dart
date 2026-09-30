@@ -348,6 +348,63 @@ void main() {
     });
   });
 
+  group('改一项参数', () {
+    const chat = ChatModelSpec(name: 'deepseek-chat');
+    const qwen3 = AsrModelSpec(
+      name: 'qwen3-asr-flash',
+      transport: AsrTransport.dashscopeSync,
+      dialect: DashScopeDialect.qwen3Asr,
+    );
+
+    test('改成别的值就存下来；null 是「不发送」，也存得住', () {
+      expect(chat.withOption('temperature', 0.7).options.toJson(), {
+        'temperature': 0.7,
+      });
+      final silent = chat.withOption('temperature', null);
+      expect(silent.options.toJson(), {'temperature': null});
+      expect(silent.options.number(ModelParams.chatTemperature), isNull);
+      expect(
+        qwen3
+            .withOption('enable_itn', false)
+            .options
+            .flag(ModelParams.enableItn),
+        isFalse,
+      );
+    });
+
+    test('改回目录默认值等于没动过：与没调过参数的那份声明相等', () {
+      expect(
+        chat.withOption('temperature', 0.7).withOption('temperature', 0.3),
+        chat,
+      );
+      expect(
+        qwen3.withOption('enable_itn', false).withOption('enable_itn', true),
+        qwen3,
+      );
+      // 默认就是不发送的那种：选「不发送」不留痕迹。
+      const whisper = AsrModelSpec(
+        name: 'whisper-1',
+        transport: AsrTransport.openaiTranscription,
+      );
+      expect(whisper.withOption('temperature', null), whisper);
+      expect(
+        whisper.withOption('temperature', 0.2).withOption('temperature', null),
+        whisper,
+      );
+    });
+
+    test('越界的夹住，类型不对的回到默认，目录里没有的键不理', () {
+      expect(chat.withOption('temperature', 9).options.toJson(), {
+        'temperature': 2.0,
+      });
+      expect(chat.withOption('temperature', 'x'), chat);
+      expect(chat.withOption('enable_itn', false), chat);
+      // 保留别的参数。
+      final tuned = chat.withOption('temperature', 1.0);
+      expect(tuned.withOption('不存在', 1), tuned);
+    });
+  });
+
   group('按名字推断（只用于读旧存档与预填）', () {
     test('只有一种接入方式的服务：不看名字', () {
       for (final name in ['whisper-1', 'x-filetrans', 'qwen3-asr-flash']) {

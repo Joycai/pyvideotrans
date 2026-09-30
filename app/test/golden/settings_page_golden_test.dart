@@ -8,6 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
+import 'package:subtitle_studio/domain/providers/model_params.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
+import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/features/settings/section_outline.dart';
 import 'package:subtitle_studio/features/settings/settings_page.dart';
 import 'package:subtitle_studio/features/shell/app_shell.dart';
@@ -48,7 +51,9 @@ ThemeData _readable(ThemeData theme) => theme.copyWith(
 void main() {
   setUpAll(_loadCjkFont);
 
-  /// 设计稿的两种状态：A 全部已配置；B 识别选 Groq 没填密钥、翻译选 Ollama。
+  /// 设计稿的两种状态：A 全部已配置，模型列表里有几个模型（百炼带接入方式
+  /// 与模型族标签）；B 识别选 Groq 没填密钥也没添加模型、翻译选 Ollama，
+  /// 模型是旧版本存的一串名字。[expand] 展开识别服务第一个模型的参数。
   Future<void> shoot(
     WidgetTester tester, {
     required String file,
@@ -56,6 +61,7 @@ void main() {
     required String variant,
     double width = 1440,
     SettingsSectionKey? saved,
+    bool expand = false,
   }) async {
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
@@ -75,11 +81,31 @@ void main() {
         ..outputDir = '/Users/mia/Movies/Subs/2026'
         ..setConfig(
           'dashscope_qwen_asr',
-          const ProviderConfig(apiKey: 'sk-a93f4c210e7b48d5b6c1f7e2'),
+          ProviderConfig(
+            apiKey: 'sk-a93f4c210e7b48d5b6c1f7e2',
+            models: [
+              for (final name in const [
+                'qwen3-asr-flash',
+                'qwen-audio-3.0-asr-flash-filetrans',
+                'fun-asr-flash-2026-06-15',
+              ])
+                ProviderCatalog.legacyAsrSpec('dashscope_qwen_asr', name),
+            ],
+          ),
         )
         ..setConfig(
           'deepseek',
-          const ProviderConfig(apiKey: 'sk-7c1d9b04f2ae4831'),
+          const ProviderConfig(
+            apiKey: 'sk-7c1d9b04f2ae4831',
+            models: [
+              ChatModelSpec(name: 'deepseek-chat'),
+              // 推理模型不接受 temperature：勾了「不发送」。
+              ChatModelSpec(
+                name: 'deepseek-reasoner',
+                options: ModelOptions({'temperature': null}),
+              ),
+            ],
+          ),
         );
     }
     settings
@@ -124,6 +150,10 @@ void main() {
       state.jumpTo(SettingsSectionKey.asr);
       await tester.pump(const Duration(milliseconds: 400));
     }
+    if (expand) {
+      await tester.tap(find.byTooltip('展开参数').first);
+      await tester.pump(const Duration(milliseconds: 400));
+    }
     if (saved != null) {
       state.showSaved(saved);
       await tester.pump(const Duration(milliseconds: 400));
@@ -152,6 +182,7 @@ void main() {
       brightness: Brightness.dark,
       variant: 'A',
       saved: SettingsSectionKey.mt,
+      expand: true,
     );
   });
 

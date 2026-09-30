@@ -803,6 +803,41 @@ void main() {
       expect(settings.isConfigured(lmstudio), isFalse);
     });
 
+    test('用户自己配的模型：没配过是空的，预置不算；旧的那串名字算', () async {
+      SharedPreferences.setMockInitialValues({
+        'providerConfigs': jsonEncode({
+          'deepseek': {'model': 'my-chat，deepseek-chat'},
+          'groq': {'apiKey': 'sk-x'},
+          'openai': {
+            'models': [_whisper.toJson()],
+          },
+        }),
+      });
+      final settings = await AppSettings.load();
+      final groq = ProviderCatalog.asrInfo('groq')!;
+
+      // 设置页的模型列表编辑的是这一份：把预置当成用户的列出来，
+      // 删光之后它们又会自己长回来。
+      expect(settings.ownModels(groq), isEmpty);
+      expect(settings.asrModelsFor(groq), same(groq.presets));
+      expect(settings.ownModels(ProviderCatalog.asrInfo('openai')!), [
+        _whisper,
+      ]);
+      expect(
+        settings.ownModels(ProviderCatalog.translationInfo('deepseek')!),
+        const [
+          ChatModelSpec(name: 'my-chat'),
+          ChatModelSpec(name: 'deepseek-chat'),
+        ],
+      );
+
+      // 删光：回到「没配过」，候选重新来自预置。
+      settings.setModels('openai', const []);
+      final openai = ProviderCatalog.asrInfo('openai')!;
+      expect(settings.ownModels(openai), isEmpty);
+      expect(settings.asrModelsFor(openai), same(openai.presets));
+    });
+
     test('改别的字段不丢旧存档里的模型名', () async {
       SharedPreferences.setMockInitialValues({
         'providerConfigs': jsonEncode({

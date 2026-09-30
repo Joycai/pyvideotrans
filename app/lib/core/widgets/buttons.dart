@@ -203,6 +203,7 @@ class IconActionButton extends StatelessWidget {
     this.iconSize = 20,
     this.selected = false,
     this.fill = false,
+    this.color,
   });
 
   final IconData icon;
@@ -210,6 +211,10 @@ class IconActionButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final double size;
   final double iconSize;
+
+  /// 图标颜色，缺省 onSurfaceVariant。表示「这一项正开着」又不想要
+  /// [selected] 那块底色时传 primary。禁用与选中时不生效。
+  final Color? color;
 
   /// 选中态用 secondaryContainer 做底，与 Rail 的选中指示一致。
   final bool selected;
@@ -223,7 +228,7 @@ class IconActionButton extends StatelessWidget {
         ? cs.onSurface.withValues(alpha: AppStateLayer.disabledContent)
         : selected
         ? cs.onSecondaryContainer
-        : cs.onSurfaceVariant;
+        : color ?? cs.onSurfaceVariant;
 
     return Tooltip(
       message: tooltip,

@@ -24,6 +24,21 @@ sealed class ModelSpec {
   /// 声明里留下的都能写盘，且与读回来的那份相等。
   ModelSpec withOptions(ModelOptions options);
 
+  /// 改一项参数；[value] 传 null 表示「不发送」。目录里没有这一项时原样返回。
+  ///
+  /// 改回目录默认值等于没动过：不留着这个键，声明就与没调过参数的那份
+  /// 相等，将来目录换了默认值它也跟着走。
+  ModelSpec withOption(String key, Object? value) {
+    final param = params.where((p) => p.key == key).firstOrNull;
+    if (param == null) return this;
+    final cleaned = param.sanitize(value);
+    return withOptions(
+      cleaned == param.defaultValue
+          ? options.reset(key)
+          : options.set(key, cleaned),
+    );
+  }
+
   Map<String, Object?> toJson();
 
   /// 读存档。认不出来（不是对象、kind 未知、缺必填项）返回 null，

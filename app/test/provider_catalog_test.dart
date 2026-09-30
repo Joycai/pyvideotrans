@@ -230,6 +230,73 @@ void main() {
       );
     });
 
+    test('用户添加模型时的声明：选的接入方式盖过按名字猜的', () {
+      final dashscope = ProviderCatalog.asrInfo('dashscope_qwen_asr')!;
+      // 名字不合任何命名规律也能接对：怎么接用户说了算。
+      expect(
+        dashscope.declare(
+          ' my-model ',
+          transport: AsrTransport.dashscopeFileTrans,
+          dialect: DashScopeDialect.funAsr,
+        ),
+        const AsrModelSpec(
+          name: 'my-model',
+          transport: AsrTransport.dashscopeFileTrans,
+          dialect: DashScopeDialect.funAsr,
+        ),
+      );
+      // 名字像异步的，用户偏选同步：照用户的。
+      final forced = dashscope.declare(
+        'qwen3-asr-flash-filetrans',
+        transport: AsrTransport.dashscopeSync,
+        dialect: DashScopeDialect.qwen3Asr,
+      );
+      expect(forced.transport, AsrTransport.dashscopeSync);
+      // 与预置一致时就是预置那一份。
+      expect(
+        dashscope.declare(
+          'qwen-audio-3.0-asr-flash-filetrans',
+          transport: AsrTransport.dashscopeFileTrans,
+          dialect: DashScopeDialect.qwenAudio3,
+        ),
+        same(dashscope.presets[3]),
+      );
+      // 没给报文族：用按名字补的。
+      expect(
+        dashscope
+            .declare('fun-asr-flash-x', transport: AsrTransport.dashscopeSync)
+            .dialect,
+        DashScopeDialect.funAsr,
+      );
+    });
+
+    test('只有一种接入方式的服务：添加模型不用声明什么', () {
+      final silicon = ProviderCatalog.asrInfo('siliconflow')!;
+      // 预置同名的带着语种限制。
+      expect(
+        silicon.declare('FunAudioLLM/SenseVoiceSmall'),
+        same(silicon.presets.single),
+      );
+      expect(
+        silicon.declare('my-whisper'),
+        const AsrModelSpec(
+          name: 'my-whisper',
+          transport: AsrTransport.openaiTranscription,
+        ),
+      );
+      // 这家服务没有的接入方式不认，免得把请求打到另一种接口的地址上。
+      expect(
+        silicon
+            .declare(
+              'x',
+              transport: AsrTransport.dashscopeSync,
+              dialect: DashScopeDialect.qwen3Asr,
+            )
+            .transport,
+        AsrTransport.openaiTranscription,
+      );
+    });
+
     test('服务也认不出来：不抛，当成 OpenAI 转写接口', () {
       final spec = ProviderCatalog.legacyAsrSpec('不存在', 'x-filetrans');
       expect(spec.name, 'x-filetrans');

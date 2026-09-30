@@ -508,22 +508,29 @@ class AppSettings extends ChangeNotifier {
   /// （逐个按名字补成声明）→ 登记表的预置。旧存档是**读的时候**补，不写盘：
   /// 升级后什么都不碰的用户，发出去的请求与升级前一样。
   List<AsrModelSpec> asrModelsFor(AsrProviderInfo info) {
-    final config = configFor(info.id);
-    final own = config.models.whereType<AsrModelSpec>().toList();
-    if (own.isNotEmpty) return own;
-    final legacy = config.legacyModelNames;
-    if (legacy.isNotEmpty) return [for (final name in legacy) info.guess(name)];
-    return info.presets;
+    final own = _own<AsrModelSpec>(info);
+    return own.isNotEmpty ? own : info.presets;
   }
 
   /// 这家翻译服务可选的模型声明，规则同 [asrModelsFor]。
   List<ChatModelSpec> chatModelsFor(ChatProviderInfo info) {
+    final own = _own<ChatModelSpec>(info);
+    return own.isNotEmpty ? own : info.presets;
+  }
+
+  /// 用户自己配的模型：声明，或旧版本那串模型名补成的声明。没配过是空的，
+  /// 这时候选来自登记表的预置。设置页的模型列表编辑的是这一份 —— 把预置
+  /// 也当成用户的列出来，删光之后它们又会自己长回来。
+  List<ModelSpec> ownModels(ProviderInfo info) => switch (info) {
+    AsrProviderInfo() => _own<AsrModelSpec>(info),
+    ChatProviderInfo() => _own<ChatModelSpec>(info),
+  };
+
+  List<T> _own<T extends ModelSpec>(ProviderInfo info) {
     final config = configFor(info.id);
-    final own = config.models.whereType<ChatModelSpec>().toList();
-    if (own.isNotEmpty) return own;
-    final legacy = config.legacyModelNames;
-    if (legacy.isNotEmpty) return [for (final name in legacy) info.guess(name)];
-    return info.presets;
+    final declared = config.models.whereType<T>().toList();
+    if (declared.isNotEmpty) return declared;
+    return [for (final name in config.legacyModelNames) info.guess(name) as T];
   }
 
   /// 默认模型：列表里的第一个。一个都没有时是空名的占位。
