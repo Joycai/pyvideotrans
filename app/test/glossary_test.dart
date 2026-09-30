@@ -52,6 +52,14 @@ void main() {
       expect(_pairs(GlossaryText.parse('a\tb\tc')), [('a', 'b c')]);
     });
 
+    test('行首尾的制表符不算分隔：带缩进复制来的行不会整条丢掉', () {
+      expect(_pairs(GlossaryText.parse('\t百炼=Bailian')), [('百炼', 'Bailian')]);
+      expect(_pairs(GlossaryText.parse('百炼=Bailian\t')), [('百炼', 'Bailian')]);
+      expect(_pairs(GlossaryText.parse('\t百炼\tBailian\t')), [
+        ('百炼', 'Bailian'),
+      ]);
+    });
+
     test('空行、没有原文的行丢掉；重复的原文只留第一条', () {
       const text = '百炼=Bailian\r\n\r\n   \n=没有原文\nOllama\r百炼=Model Studio\n';
       expect(_pairs(GlossaryText.parse(text)), [
@@ -77,7 +85,17 @@ void main() {
       );
     });
 
-    test('中日韩为主用顿号，否则用逗号加空格', () {
+    test('韩文用逗号：顿号只有中文、日文在用', () {
+      expect(
+        GlossaryText.asrPrompt(const [
+          GlossaryEntry(term: '삼성'),
+          GlossaryEntry(term: '서울'),
+        ], ''),
+        '삼성, 서울',
+      );
+    });
+
+    test('中文、日文为主用顿号，否则用逗号加空格', () {
       expect(
         GlossaryText.asrPrompt(const [
           _bailian,
@@ -201,6 +219,7 @@ void main() {
         ],
       })!;
       expect(partial.name, '');
+      expect(Glossary.fromJson({'id': 'g3', 'name': ' 访谈 '})!.name, '访谈');
       expect(partial.enabledByDefault, isTrue);
       expect(_pairs(partial.entries), [('百炼', ''), ('Ollama', '')]);
 
@@ -346,6 +365,8 @@ void main() {
         ]),
       });
       expect([for (final g in settings.glossaries) g.name], ['访谈', '技术']);
+      // 冷启动读出来的那份同样改不了。
+      expect(() => settings.glossaries.clear(), throwsUnsupportedError);
     });
   });
 }

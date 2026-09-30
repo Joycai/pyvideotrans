@@ -145,7 +145,10 @@ abstract final class GlossaryText {
     for (final line in text.split(RegExp(r'\r\n|\n|\r'))) _parseLine(line),
   ]);
 
-  static GlossaryEntry _parseLine(String line) {
+  static GlossaryEntry _parseLine(String raw) {
+    // 先去掉行首尾的空白再找制表符：带缩进复制来的行以制表符开头，不先去掉
+    // 就会拆出一个空的原文，整条被悄悄丢掉。
+    final line = raw.trim();
     final tab = line.indexOf('\t');
     if (tab >= 0) {
       return GlossaryEntry(
@@ -164,13 +167,16 @@ abstract final class GlossaryText {
   /// 识别用的上下文提示：词表里的原文在前，自由文本在后。
   ///
   /// 词表为空时原样返回 [freeText] —— 没建词表的用户，发出去的提示一个字都
-  /// 不变。词之间中日韩为主用「、」，否则用「, 」：提示词要像一段目标语言
-  /// 的文字，模型才会照着里面的写法出字。
+  /// 不变。词之间中文、日文为主用「、」，否则用「, 」（韩文也用逗号）：
+  /// 提示词要像一段那种语言的文字，模型才会照着里面的写法出字。
   static String asrPrompt(List<GlossaryEntry> entries, String freeText) {
     final terms = [for (final entry in clean(entries)) entry.term];
     if (terms.isEmpty) return freeText;
-    final cjk = Languages.guessFromText(terms.join(' '))?.cjk ?? false;
-    final list = terms.join(cjk ? '、' : ', ');
+    final separator = switch (Languages.guessFromText(terms.join(' '))?.code) {
+      'zh' || 'ja' => '、',
+      _ => ', ',
+    };
+    final list = terms.join(separator);
     final free = freeText.trim();
     return free.isEmpty ? list : '$list\n$free';
   }
