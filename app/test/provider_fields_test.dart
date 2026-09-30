@@ -625,6 +625,26 @@ void _diarizeToggleTests() {
     expect(find.text('说话人分离'), findsNothing);
   });
 
+  testWidgets('手填框里写坏的名字：重置之后不留在框里', (tester) async {
+    settings.asrProviderId = 'asr_custom';
+    final form = await pump(tester);
+    final field = find.byWidgetPredicate(
+      (w) => w is TextField && w.decoration?.hintText == '填写模型名',
+    );
+    await tester.enterText(field, 'my whisper');
+    await tester.pump();
+    expect(find.text('模型名不能含空格或逗号'), findsOneWidget);
+    tester.widget<TextField>(field).focusNode!.unfocus();
+    await tester.pump();
+
+    // 自定义接口的默认模型本来就是「未选择」，与写坏时交出去的那份
+    // 相等：光比模型看不出参数已经整份换过了。
+    form.reset();
+    await tester.pump();
+    expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+    expect(find.text('模型名不能含空格或逗号'), findsNothing);
+  });
+
   testWidgets('初始参数里开着分离而模型不支持：建表单时就关掉', (tester) async {
     // 「上次参数」、旧存档都可能带来这样一份：界面上没有开关，不能让它
     // 悄悄开着进任务。

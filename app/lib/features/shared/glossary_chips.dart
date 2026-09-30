@@ -26,7 +26,7 @@ class GlossaryChips extends StatelessWidget {
   final Set<String> selectedIds;
   final ValueChanged<String> onToggle;
 
-  /// 筹码下面的一句说明（当前模型不接受提示）。筹码不因此禁用 ——
+  /// 这一行下面的一句说明（当前模型不接受提示）。筹码不因此禁用 ——
   /// 接着的翻译仍然会用。
   final String? note;
 
@@ -72,7 +72,8 @@ class GlossaryChips extends StatelessWidget {
                   ),
               ],
             ),
-          if (note case final note? when glossaries.isNotEmpty) ...[
+          // 没有词表时也照常显示：这句同时在说识别提示不会发送。
+          if (note case final note?) ...[
             const SizedBox(height: AppSpacing.s1 + 2),
             InlineNote(text: note),
           ],

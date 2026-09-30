@@ -70,6 +70,7 @@ class TranscribeRecognizeSection extends StatelessWidget {
       ),
     );
     final model = ModelField(
+      key: ValueKey('asr-model-${form.revision}'),
       info: info,
       model: o.asrModel,
       settings: form.settings,

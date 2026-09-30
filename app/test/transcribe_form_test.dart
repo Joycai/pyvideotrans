@@ -148,6 +148,48 @@ void main() {
       expect(again.options.cjkLineLength, 15);
     });
 
+    test('手填的、设置里没有的模型：记进上次参数，填回时原样回来', () async {
+      final settings = await _settings();
+      final media = GatedFfmpeg();
+      final form = TranscribeFormController(settings: settings, media: media);
+      final done = form.add(['/v/a.mp4']);
+      media.finish('/v/a.mp4');
+      await done;
+      const typed = AsrModelSpec(
+        name: 'my-whisper',
+        transport: AsrTransport.openaiTranscription,
+      );
+      form.update((o) => o.copyWith(asrModel: typed));
+      expect(form.submit()!.options.asrModel, typed);
+
+      final again = TranscribeFormController(settings: settings, media: media);
+      expect(again.options.asrModel.name, 'whisper-1');
+      again.applyLastUsed();
+      expect(again.options.asrModel, typed);
+      // 设置里别的改动不会把它换掉。
+      settings.setModels('openai', const [
+        AsrModelSpec(
+          name: 'gpt-4o-transcribe',
+          transport: AsrTransport.openaiTranscription,
+        ),
+      ]);
+      expect(again.options.asrModel, typed);
+    });
+
+    test('整份换掉参数（重置、上次参数）时代次加一，逐项改不加', () async {
+      final settings = await _settings();
+      final form = TranscribeFormController(settings: settings);
+      settings.lastTranscribeOptions = form.options;
+      final start = form.revision;
+
+      form.update((o) => o.copyWith(cjkLineLength: 20));
+      expect(form.revision, start);
+      form.reset();
+      expect(form.revision, start + 1);
+      form.applyLastUsed();
+      expect(form.revision, start + 2);
+    });
+
     test('不能开始时提交不记参数', () async {
       final settings = await _settings(withKey: false);
       final form = TranscribeFormController(

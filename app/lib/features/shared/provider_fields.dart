@@ -101,6 +101,12 @@ class _ModelFieldState<T extends ModelSpec> extends State<ModelField<T>> {
   @override
   void initState() {
     super.initState();
+    // 识别服务配识别模型、翻译服务配翻译模型。配错了要到用户点「其他
+    // 模型…」才在强转上抛，这里先拦住。
+    assert(
+      widget.info == null || widget.info!.presets is List<T>,
+      '${widget.info?.id} 的模型不是 $T',
+    );
     _focus.addListener(_onFocusChanged);
     if (_candidates.isEmpty) _name.text = widget.model.name;
   }
@@ -175,6 +181,13 @@ class _ModelFieldState<T extends ModelSpec> extends State<ModelField<T>> {
       _name.clear();
     });
     _emit(_unset);
+    // 显式把焦点请过来，不靠 autofocus：建任务页与对话框的根节点一直
+    // 占着焦点（SubmitShortcuts），同一作用域里后挂上的 autofocus 不生效。
+    // 拿不到焦点的话，用户得再点一下才能打字，这时按 Esc 关掉的是整个
+    // 对话框。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _typing) _focus.requestFocus();
+    });
   }
 
   /// 回到列表，选回这家服务的默认模型。
@@ -292,7 +305,6 @@ class _ModelFieldState<T extends ModelSpec> extends State<ModelField<T>> {
     final field = TextField(
       controller: _name,
       focusNode: _focus,
-      autofocus: canGoBack,
       style: AppTextStyles.timecode.copyWith(color: cs.onSurface),
       decoration: bareInputDecoration(
         context,

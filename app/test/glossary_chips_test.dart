@@ -85,13 +85,13 @@ void main() {
           selectedIds: const {},
           onToggle: (_) {},
           onOpenSettings: () => opened++,
-          // 没有词表时这句说明没有意义，不显示。
           note: _ignoredNote,
         ),
       );
       expect(find.byType(FilterChipButton), findsNothing);
       expect(find.text('还没有词表 · '), findsOneWidget);
-      expect(find.text(_ignoredNote), findsNothing);
+      // 没有词表时说明也在：它同时在说识别提示不会发送。
+      expect(find.text(_ignoredNote), findsOneWidget);
       await tester.tap(find.text('去设置里建一个'));
       expect(opened, 1);
 

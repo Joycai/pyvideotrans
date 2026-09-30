@@ -221,14 +221,17 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     if (mounted) setState(() => _section = section);
   }
 
-  /// 去设置页的「词表」分区（建任务页里「还没有词表，去设置里建一个」）。
-  void _openGlossary() {
+  /// 去设置页的某个分区。建任务页里的「去设置」都是冲着某一处去的
+  /// （缺密钥、要添加模型、还没有词表），落在页面顶部还得让用户自己找。
+  void _openSettingsAt(SettingsSectionKey section) {
     _go(AppSection.settings);
     // 设置页这一帧才建出来，量得到各分区的位置之后再跳。
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _settingsKey.currentState?.jumpTo(SettingsSectionKey.glossary),
+      (_) => _settingsKey.currentState?.jumpTo(section),
     );
   }
+
+  void _openGlossary() => _openSettingsAt(SettingsSectionKey.glossary);
 
   /// 顶栏与状态栏的数据源。编辑器打开时把它也并进来，标题里的条数
   /// 与待校对徽标才会跟着文档变。
@@ -327,7 +330,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
           context,
           settings: widget.settings,
           initialPaths: paths,
-          onOpenSettings: () => _go(AppSection.settings),
+          onOpenSettings: () => _openSettingsAt(SettingsSectionKey.asr),
           onOpenGlossary: _openGlossary,
         ),
         showNewTranslate: (context, paths, onSwitchToTranscribe) =>
@@ -335,7 +338,7 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
               context,
               settings: widget.settings,
               initialPaths: paths,
-              onOpenSettings: () => _go(AppSection.settings),
+              onOpenSettings: () => _openSettingsAt(SettingsSectionKey.mt),
               onOpenGlossary: _openGlossary,
               onSwitchToTranscribe: onSwitchToTranscribe,
             ),
@@ -344,14 +347,14 @@ class _SubtitleStudioAppState extends State<SubtitleStudioApp> {
     AppSection.newTranscribe => NewTranscribePage(
       form: _transcribeForm,
       queue: widget.queue,
-      onOpenSettings: () => _go(AppSection.settings),
+      onOpenSettings: () => _openSettingsAt(SettingsSectionKey.asr),
       onOpenGlossary: _openGlossary,
       onOpenTasks: () => _go(AppSection.tasks),
     ),
     AppSection.newTranslate => NewTranslatePage(
       form: _translateForm,
       queue: widget.queue,
-      onOpenSettings: () => _go(AppSection.settings),
+      onOpenSettings: () => _openSettingsAt(SettingsSectionKey.mt),
       onOpenGlossary: _openGlossary,
       onOpenTasks: () => _go(AppSection.tasks),
       // 拖错了门的音视频原样带去「新建转写」页，不让用户再拖一次。

@@ -89,10 +89,12 @@ core/       domain/ ←──── services/
 - `dropdown.dart`：`AppDropdown`、分组 / 条目模型、菜单定位与条目渲染；分组可带分隔线（`divided`），
   菜单末尾可带一段说明（`footer`）。
 - `form_fields.dart`：标签、输入表面、单行 / 数字 / 多行输入、开关、表单分区。
-  `SingleLineField` 是所有单行输入（设置页、密钥、模型名、转码后缀 / 额外参数）的唯一实现，
-  外部值变化且无焦点时同步进框。
+  `SingleLineField` 是「值由外面拿着」的单行输入（设置页的地址、密钥、转码后缀 / 额外参数）的实现，
+  外部值变化且无焦点时同步进框。要自己拿着焦点与控制器的几处（模型列表的添加行与数字框、词表的改名框与
+  条目格、建任务页手填模型名）直接用 `ControlSurface` + `TextField`，外观是同一身皮。
 - `form_layout.dart`：整行可点、链接文字、一段说明 `InlineNote`、单选行、两列与平铺段。
-- `text_focus.dart`：`isEditingText`，焦点在不在输入框里。只剩两处用：`SubmitShortcuts`（打字时 Esc 先失焦、多行框里让回车），以及编辑器的 ⌘Z 在打字时让给输入框。同文件的 `isComposingText` 判断输入法是否在组字，只由 `ShortcutAction` 调用。编辑器的单键靠焦点范围隔开，不用它们。
+- `text_focus.dart`：`appInBackground`，应用是不是退到了后台 —— 「失焦就提交 / 放弃」的输入框先问它，切去别的应用
+  丢掉的焦点不算离开。`isEditingText`，焦点在不在输入框里。只剩两处用：`SubmitShortcuts`（打字时 Esc 先失焦、多行框里让回车），以及编辑器的 ⌘Z 在打字时让给输入框。同文件的 `isComposingText` 判断输入法是否在组字，只由 `ShortcutAction` 调用。编辑器的单键靠焦点范围隔开，不用它们。
 - `glass_panel.dart`：玻璃卡片与内容面板。
 - `indicators.dart`：状态标签、状态胶囊（`StateChip`，文件表状态列与编码器卡片）、时间码、渐变进度条、状态点。
 - `note_bar.dart`：36px 中性提示条（拖放拒收、忽略了音视频），右侧可带动作或关闭。

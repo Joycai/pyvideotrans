@@ -106,6 +106,7 @@ class TranslateLanguageSection extends StatelessWidget {
       ),
     );
     final model = ModelField(
+      key: ValueKey('mt-model-${form.revision}'),
       info: info,
       model: o.translationModel,
       settings: form.settings,

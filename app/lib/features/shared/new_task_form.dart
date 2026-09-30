@@ -118,6 +118,14 @@ abstract class NewTaskFormBase<TOptions, TFile extends StagedPath>
 
   // —— 参数 ————————————————————————————————————————————————
 
+  /// 参数被整份换掉的次数（重置、「上次参数」）。
+  ///
+  /// 自己带着编辑状态的字段（手填模型名的输入框）拿它当 key 的一部分：
+  /// 整份换掉之后重建，框里写到一半的、写坏了的内容不该留着 —— 那时参数
+  /// 已经是另一份了。
+  int get revision => _revision;
+  int _revision = 0;
+
   /// 改一项参数。多行输入框每个字符都会调，传 `notify: false` 省掉重建。
   void update(TOptions Function(TOptions) change, {bool notify = true}) {
     options = change(_options);
@@ -127,6 +135,7 @@ abstract class NewTaskFormBase<TOptions, TFile extends StagedPath>
   /// 恢复为默认值，不动文件列表。
   void reset() {
     options = defaultOptions;
+    _revision++;
     notifyIfAlive();
   }
 
@@ -135,6 +144,7 @@ abstract class NewTaskFormBase<TOptions, TFile extends StagedPath>
     final last = lastUsedOptions;
     if (last == null) return false;
     options = refreshLastUsed(last);
+    _revision++;
     notifyIfAlive();
     return true;
   }
