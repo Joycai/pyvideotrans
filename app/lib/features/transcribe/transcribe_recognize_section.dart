@@ -77,11 +77,14 @@ class TranscribeRecognizeSection extends StatelessWidget {
     );
     // 这家服务有模型能分离说话人才有这个开关；没有的连灰掉的都不给，
     // 免得用户去找原因。选中的模型不支持时由就绪状态行提示。
+    // 开关开着的时候总是给：用户在设置里把能分离的模型删掉之后，「上次
+    // 参数」或表单里可能还留着开着的开关，不给的话就没地方关了。
     final diarize =
-        info != null &&
-            form.settings
-                .asrModelsFor(info)
-                .any((m) => m.capabilities.diarization)
+        o.diarize ||
+            info != null &&
+                form.settings
+                    .asrModelsFor(info)
+                    .any((m) => m.capabilities.diarization)
         ? _DiarizeToggle(form: form)
         : null;
 

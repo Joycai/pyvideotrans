@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/glossary.dart';
+import 'package:subtitle_studio/domain/providers/asr_transport.dart';
 import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
 import 'package:subtitle_studio/domain/srt.dart';
@@ -17,7 +18,6 @@ import 'package:subtitle_studio/services/ffmpeg.dart';
 import 'package:subtitle_studio/services/file_io.dart';
 import 'package:subtitle_studio/services/openai_compatible.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
-import 'package:subtitle_studio/services/registry.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 import 'helpers.dart';
@@ -502,7 +502,12 @@ void main() {
     // 模型与词表必须是入队那一刻的，不能是跑的时候再去设置里读的。
     test('入队时冻结模型声明与词表内容，之后改设置不影响排着队的任务', () async {
       const bailian = GlossaryEntry(term: '百炼', translation: 'Bailian');
+      AsrModelSpec whisper(String name) => AsrModelSpec(
+        name: name,
+        transport: AsrTransport.openaiTranscription,
+      );
       settings
+        ..setModels('openai', [whisper('asr-before')])
         ..setModels('deepseek', [const ChatModelSpec(name: 'before')])
         ..setGlossary(
           const Glossary(id: 'g', name: '访谈', entries: [bailian]),
@@ -515,6 +520,7 @@ void main() {
       final queued = queue.enqueue(sourcePath: '/v/second.srt');
 
       settings
+        ..setModels('openai', [whisper('asr-after')])
         ..setModels('deepseek', [const ChatModelSpec(name: 'after')])
         ..setGlossary(
           const Glossary(
@@ -537,17 +543,29 @@ void main() {
       expect(reloaded.options.translationModel.name, 'before');
       expect(reloaded.options.glossary, [bailian]);
 
-      // 建实例时从设置里拿的只有地址与密钥。
-      final provider =
-          Registry.buildTranslation(
+      // 任务跑起来时，执行器建服务实例用的也是任务里那一份：从设置里拿的
+      // 只有地址与密钥。用默认的工厂建，不是测试注入的。
+      final real = TaskRunner(settings: settings, workDir: work.path);
+      final translation =
+          real.translationFactory(
                 queued.options.translationProviderId,
                 settings,
-                model: queued.options.translationModel,
-                glossary: queued.options.glossary,
+                queued.options,
               )
               as OpenAiCompatibleTranslationProvider;
-      expect(provider.endpoint.model, 'before');
-      expect(provider.glossary, [bailian]);
+      expect(translation.endpoint.model, 'before');
+      expect(translation.glossary, [bailian]);
+
+      final asr =
+          real.asrFactory(
+                queued.options.asrProviderId,
+                settings,
+                queued.options,
+              )
+              as OpenAiCompatibleAsrProvider;
+      expect(asr.endpoint.model, 'asr-before');
+      // 词表的原文进了识别提示词。
+      expect(asr.prompt, '百炼');
 
       runner.release.complete();
       for (var i = 0; i < 100 && queue.running != null; i++) {

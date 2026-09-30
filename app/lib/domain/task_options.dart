@@ -65,6 +65,13 @@ enum OutputLocation {
   final String label;
 }
 
+/// 按服务 id 查「这家服务的默认模型」。读旧存档时由上层递进来 ——
+/// 默认模型是用户在设置里配的，这一层够不着设置。
+typedef DefaultModels = ({
+  AsrModelSpec Function(String providerId) asr,
+  ChatModelSpec Function(String providerId) chat,
+});
+
 /// 建一个任务需要的全部参数。
 ///
 /// 为什么不直接读全局设置：任务是排队串行跑的，用户很可能在排队期间改设置
@@ -208,10 +215,20 @@ class TaskOptions {
     'outputDir': outputDir,
   };
 
+  /// 这份存档是不是旧版本写的：模型存的还是名字或 null，不是声明。
+  ///
+  /// 旧存档每读一次都要重新补一遍声明，补出来的东西取决于当时的设置。
+  /// 调用方据此把读回来的结果写回去，让它从此定下来。
+  static bool isLegacyJson(Map<String, Object?> json) =>
+      json['asrModel'] is! Map || json['translationModel'] is! Map;
+
   /// 缺字段或类型不对的项回落到 [fallback] 里的值，绝不因为一份旧存档抛异常。
+  ///
+  /// [defaultModels] 只在读旧存档时用得上，见 [_readAsrModel]。
   factory TaskOptions.fromJson(
     Map<String, Object?> json, {
     required TaskOptions fallback,
+    DefaultModels? defaultModels,
   }) {
     T pick<T>(String key, T orElse) {
       final v = json[key];
@@ -234,7 +251,12 @@ class TaskOptions {
         pick('sourceLanguage', fallback.sourceLanguage.code),
       ),
       asrProviderId: asrProviderId,
-      asrModel: _readAsrModel(json['asrModel'], asrProviderId, fallback),
+      asrModel: _readAsrModel(
+        json['asrModel'],
+        asrProviderId,
+        fallback,
+        defaultModels,
+      ),
       asrPrompt: pick('asrPrompt', fallback.asrPrompt),
       diarize: pick('diarize', fallback.diarize),
       translate: pick('translate', fallback.translate),
@@ -246,6 +268,7 @@ class TaskOptions {
         json['translationModel'],
         translationProviderId,
         fallback,
+        defaultModels,
       ),
       translationBatchSize: batchSizeRange.clamp(
         pick('translationBatchSize', fallback.translationBatchSize),
@@ -293,21 +316,24 @@ class TaskOptions {
   /// - 名字与 [fallback] 里同一家服务的模型同名 → 用 [fallback] 的那份，
   ///   用户在设置里给它调过的参数还在；
   /// - 别的名字 → 登记表预置里有同名的用预置，否则按名字推断接法；
-  /// - null → 服务与 [fallback] 相同就用它的模型，否则用那家服务的第一个
-  ///   预置。后一种（旧任务的服务不是现在的默认服务、又没写模型名）极少，
-  ///   设置不在这一层，够不着用户给那家服务配的默认模型，接受这个近似。
+  /// - null → 服务与 [fallback] 相同就用它的模型；不同就问 [defaults]
+  ///   要那家服务的默认模型。在建任务页换服务并不改设置里的默认服务，
+  ///   所以「服务不是默认服务、模型又没写」的旧任务并不少见，它们以前
+  ///   跑的就是设置里给那家配的模型。没给 [defaults] 才用登记表的第一个
+  ///   预置 —— 设置不在这一层，只能由调用方递进来。
   static AsrModelSpec _readAsrModel(
     Object? raw,
     String providerId,
     TaskOptions fallback,
+    DefaultModels? defaults,
   ) {
     if (ModelSpec.fromJson(raw) case final AsrModelSpec spec) return spec;
     final sameProvider = providerId == fallback.asrProviderId;
     final name = raw is String ? raw.trim() : '';
     if (name.isEmpty) {
-      return sameProvider
-          ? fallback.asrModel
-          : ProviderCatalog.defaultAsrSpec(providerId);
+      if (sameProvider) return fallback.asrModel;
+      return defaults?.asr(providerId) ??
+          ProviderCatalog.defaultAsrSpec(providerId);
     }
     return sameProvider && name == fallback.asrModel.name
         ? fallback.asrModel
@@ -318,14 +344,15 @@ class TaskOptions {
     Object? raw,
     String providerId,
     TaskOptions fallback,
+    DefaultModels? defaults,
   ) {
     if (ModelSpec.fromJson(raw) case final ChatModelSpec spec) return spec;
     final sameProvider = providerId == fallback.translationProviderId;
     final name = raw is String ? raw.trim() : '';
     if (name.isEmpty) {
-      return sameProvider
-          ? fallback.translationModel
-          : ProviderCatalog.defaultChatSpec(providerId);
+      if (sameProvider) return fallback.translationModel;
+      return defaults?.chat(providerId) ??
+          ProviderCatalog.defaultChatSpec(providerId);
     }
     return sameProvider && name == fallback.translationModel.name
         ? fallback.translationModel

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:subtitle_studio/domain/glossary.dart';
 import 'package:subtitle_studio/domain/language.dart';
 import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/features/shared/footer_message.dart';
@@ -287,6 +288,31 @@ void main() {
       again.reset();
       expect(again.options.translationBatchSize, 20);
       expect(again.options.translationGuidance, '');
+    });
+
+    // 翻译任务的术语段就靠这一步：表单里只记勾选了哪几份词表。
+    test('提交时按勾选把词表条目展开进任务参数；「上次参数」只记勾选', () async {
+      final settings = await _settings();
+      const entry = GlossaryEntry(term: '百炼', translation: 'Bailian');
+      final media = GatedFfmpeg();
+      final form = TranslateFormController(settings: settings, media: media);
+      final done = form.add(['/s/a.srt']);
+      media.finish('/s/a.srt');
+      await done;
+      // 表单开着的时候建的词表：勾选跟着默认走，条目要到提交才取。
+      settings.setGlossary(
+        const Glossary(id: 'g', name: '访谈', entries: [entry]),
+      );
+      expect(form.options.glossaryIds, ['g']);
+      expect(form.options.glossary, isEmpty);
+
+      final request = form.submit()!;
+      expect(request.options.glossary, [entry]);
+      expect(request.options.translationModel, form.options.translationModel);
+
+      final last = settings.lastTranslateOptions!;
+      expect(last.glossaryIds, ['g']);
+      expect(last.glossary, isEmpty);
     });
   });
 }

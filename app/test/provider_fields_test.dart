@@ -320,6 +320,25 @@ void _diarizeToggleTests() {
     expect(find.text('说话人分离'), findsOneWidget);
   });
 
+  // 「上次参数」里开着分离，而设置里能分离的模型已经删了：开关得留着，
+  // 不然参数里一直是开的，界面上没地方关。
+  testWidgets('开关开着时总是显示，关掉之后才收起', (tester) async {
+    settings.setModels('dashscope_qwen_asr', [
+      const AsrModelSpec(
+        name: 'qwen3-asr-flash',
+        transport: AsrTransport.dashscopeSync,
+        dialect: DashScopeDialect.qwen3Asr,
+      ),
+    ]);
+    final form = await pump(tester, asr: 'dashscope_qwen_asr', diarize: true);
+    expect(find.text('说话人分离'), findsOneWidget);
+
+    await tester.tap(find.text('说话人分离'));
+    await tester.pump();
+    expect(form.options.diarize, isFalse);
+    expect(find.text('说话人分离'), findsNothing);
+  });
+
   testWidgets('点开关切换参数；换到不支持的服务时参数随之关掉', (tester) async {
     final form = await pump(tester, asr: 'dashscope_qwen_asr');
     await tester.tap(find.text('说话人分离'));

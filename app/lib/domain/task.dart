@@ -242,6 +242,7 @@ class SubtitleTask {
   factory SubtitleTask.fromJson(
     Map<String, Object?> json, {
     required TaskOptions fallbackOptions,
+    DefaultModels? defaultModels,
   }) {
     final id = json['id'];
     final sourcePath = json['sourcePath'];
@@ -260,6 +261,7 @@ class SubtitleTask {
       options: TaskOptions.fromJson(
         map(json['options']) ?? const {},
         fallback: fallbackOptions,
+        defaultModels: defaultModels,
       ),
       status: TaskStatus.values.tryByName(json['status']) ?? TaskStatus.paused,
       stage: TaskStage.values.tryByName(json['stage']) ?? TaskStage.queued,

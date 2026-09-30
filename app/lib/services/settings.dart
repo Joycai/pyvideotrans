@@ -342,6 +342,7 @@ class AppSettings extends ChangeNotifier {
       return TaskOptions.fromJson(
         jsonDecode(raw) as Map<String, Object?>,
         fallback: defaultTaskOptions(),
+        defaultModels: defaultModels,
       );
     } catch (_) {
       return null;
@@ -547,6 +548,10 @@ class AppSettings extends ChangeNotifier {
         ? ProviderCatalog.defaultChatSpec(providerId)
         : defaultChatModel(info);
   }
+
+  /// 读旧存档时用：没写模型的旧任务，跑的是设置里给那家服务配的模型。
+  DefaultModels get defaultModels =>
+      (asr: defaultAsrModelOf, chat: defaultChatModelOf);
 
   /// 这家服务有没有用户自己配的模型（声明，或旧版本那串模型名）。
   /// 没有时候选来自登记表的预置。

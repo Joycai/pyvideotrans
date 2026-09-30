@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/task.dart';
+import 'package:subtitle_studio/domain/task_options.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
 import 'package:subtitle_studio/pipeline/task_runner.dart';
 import 'package:subtitle_studio/services/settings.dart';
@@ -107,6 +110,50 @@ void main() {
       await q.flush();
       final again = await store.loadAll(fallbackOptions: testOptions());
       expect(again.first.status, TaskStatus.paused);
+    });
+
+    // 旧版本的存档里模型只有名字或没写。不写回的话每次启动都按当时的
+    // 设置重新补一遍，两次启动之间改过默认模型，没续跑的旧任务就换了模型。
+    test('旧格式的存档：按此刻的设置补成声明并写回，之后不再跟着设置变', () async {
+      settings.setModels('mt_custom', [const ChatModelSpec(name: 'first')]);
+      final old = task('old', DateTime(2026), status: TaskStatus.failed);
+      final json = old.toJson();
+      json['options'] = {
+        ...json['options']! as Map<String, Object?>,
+        'translationProviderId': 'mt_custom',
+        'translationModel': null,
+        'asrModel': 'whisper-1',
+      };
+      Map<String, Object?> read(String id) =>
+          jsonDecode(File('${store.dir}/$id.json').readAsStringSync())
+              as Map<String, Object?>;
+      await store.save(task('new', DateTime(2025)));
+      File('${store.dir}/old.json').writeAsStringSync(jsonEncode(json));
+      // 新格式的存档里放一个重写就会丢的键，用来看它有没有被重写。
+      File(
+        '${store.dir}/new.json',
+      ).writeAsStringSync(jsonEncode({...read('new'), 'marker': 1}));
+
+      final q = queue();
+      await q.restore();
+      // 已失败的任务不改状态，但模型补成了设置里给那家服务配的。
+      expect(q.byId('old')!.status, TaskStatus.failed);
+      expect(q.byId('old')!.options.translationModel.name, 'first');
+      await q.flush();
+
+      expect(
+        TaskOptions.isLegacyJson(
+          read('old')['options']! as Map<String, Object?>,
+        ),
+        isFalse,
+      );
+      // 新格式的存档不重写。
+      expect(read('new')['marker'], 1);
+
+      settings.setModels('mt_custom', [const ChatModelSpec(name: 'second')]);
+      final again = queue();
+      await again.restore();
+      expect(again.byId('old')!.options.translationModel.name, 'first');
     });
 
     test('入队写盘，删除任务删存档', () async {

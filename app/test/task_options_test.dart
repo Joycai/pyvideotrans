@@ -396,7 +396,8 @@ void _jsonTests() {
       expect(o.format, SubtitleFormat.ass);
       expect(o.outputLocation, OutputLocation.besideSource);
       expect(o.outputDir, isNull);
-      // 没写模型的旧存档：读回来就是这一刻设置里的默认模型，此后不再变。
+      // 没写模型的旧存档：读回来是这一刻设置里的默认模型。队列恢复任务时
+      // 会把它写回去，从那以后才不再变。
       expect(o.asrModel, fallback.asrModel);
       expect(o.translationModel, fallback.translationModel);
       expect(o.asrModel.name, 'whisper-1');
@@ -501,6 +502,58 @@ void _jsonTests() {
         });
         expect(unknown.asrModel.isUnset, isTrue);
         expect(unknown.translationModel.isUnset, isTrue);
+      });
+
+      // 在建任务页换服务不改设置里的默认服务，所以这种旧任务并不少见；
+      // 它们以前跑的就是设置里给那家服务配的模型。
+      test('null、服务不是默认服务：用调用方给的那家服务的默认模型', () {
+        s
+          ..setModels('dashscope_qwen_asr', [
+            const AsrModelSpec(
+              name: 'my-filetrans',
+              transport: AsrTransport.dashscopeFileTrans,
+              dialect: DashScopeDialect.qwenAudio3,
+            ),
+          ])
+          ..setModels('mt_custom', [const ChatModelSpec(name: 'my-local')]);
+        final o = TaskOptions.fromJson(
+          {
+            'asrProviderId': 'dashscope_qwen_asr',
+            'translationProviderId': 'mt_custom',
+          },
+          fallback: fallback,
+          defaultModels: s.defaultModels,
+        );
+        expect(o.asrModel.name, 'my-filetrans');
+        expect(o.asrModel.transport, AsrTransport.dashscopeFileTrans);
+        expect(o.translationModel.name, 'my-local');
+
+        // 写了名字的不问调用方：名字就是用户当时选的。
+        final named = TaskOptions.fromJson(
+          {
+            'translationProviderId': 'mt_custom',
+            'translationModel': 'picked',
+          },
+          fallback: fallback,
+          defaultModels: s.defaultModels,
+        );
+        expect(named.translationModel.name, 'picked');
+      });
+
+      test('认得出旧格式：两个模型里有一个不是声明就算', () {
+        expect(TaskOptions.isLegacyJson(fallback.toJson()), isFalse);
+        expect(TaskOptions.isLegacyJson(const {}), isTrue);
+        expect(
+          TaskOptions.isLegacyJson({
+            ...fallback.toJson(),
+            'translationModel': 'deepseek-chat',
+          }),
+          isTrue,
+        );
+        expect(
+          TaskOptions.isLegacyJson({...fallback.toJson(), 'asrModel': null}),
+          isTrue,
+        );
       });
 
       test('种类不对或读不出来的对象按没写处理，不抛', () {

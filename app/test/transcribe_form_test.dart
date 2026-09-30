@@ -351,10 +351,38 @@ void main() {
       expect(form.options.glossaryIds, isEmpty);
     });
 
+    // 看参数有没有变，不看通知次数：销毁之后表单本来就不再通知，监听
+    // 还挂着也数不出来。
     test('表单销毁后不再听设置', () {
       form.dispose();
       settings.setModels('openai', [custom]);
+      expect(form.options.asrModel.name, 'whisper-1');
       expect(notified, 0);
+    });
+
+    // 下拉里只看得到名字。上次提交之后在设置里改过这个模型的参数，填回来
+    // 的必须是改过的那份，否则任务悄悄用了旧参数。
+    test('「上次参数」里的模型按名字换成设置里现在的声明', () {
+      final tuned = custom.withOptions(
+        ModelOptions.none.set(ModelParams.asrTemperature.key, 0.2),
+      );
+      settings
+        ..setModels('openai', [
+          const AsrModelSpec(
+            name: 'whisper-1',
+            transport: AsrTransport.openaiTranscription,
+          ),
+          tuned,
+        ])
+        ..lastTranscribeOptions = form.options.copyWith(
+          asrModel: custom,
+          translationModel: const ChatModelSpec(name: '设置里已经删掉的'),
+        );
+
+      expect(form.applyLastUsed(), isTrue);
+      expect(form.options.asrModel, tuned);
+      // 设置里找不到同名的：照上次的原样填回。
+      expect(form.options.translationModel.name, '设置里已经删掉的');
     });
   });
 

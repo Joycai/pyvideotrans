@@ -284,7 +284,7 @@ abstract class TaskOptionsFormBase<TFile extends StagedPath>
 
   /// 表单里的模型还是原来的默认 → 换成现在的默认。不是默认、但设置里有
   /// 同名的 → 换成设置里那份（参数、接入方式以设置为准）。都不是（手填的、
-  /// 「上次参数」带来的）→ 不动。
+  /// 设置里已经删掉的）→ 不动。
   T _follow<T extends ModelSpec>(
     T current,
     ProviderInfo? info,
@@ -292,12 +292,39 @@ abstract class TaskOptionsFormBase<TFile extends StagedPath>
   ) {
     if (info == null) return current;
     if (current == before[info.id]) return _defaults.models[info.id]! as T;
+    return _declared(current, info);
+  }
+
+  /// 设置里与 [current] 同名的那份声明；没有就还是 [current]。
+  T _declared<T extends ModelSpec>(T current, ProviderInfo? info) {
+    if (info == null) return current;
     return settings
             .modelChoices(info)
             .whereType<T>()
             .where((m) => m.name == current.name)
             .firstOrNull ??
         current;
+  }
+
+  /// 「上次参数」里的模型是上次提交时的那份声明。之后用户可能在设置里改过
+  /// 它的参数或接入方式；下拉里名字一样，看不出是旧的，所以填回时按名字
+  /// 换成设置里现在的那份 —— 与「先填回、再去改设置」得到的结果一致。
+  @override
+  bool applyLastUsed() {
+    final last = lastUsedOptions;
+    if (last == null) return false;
+    options = last.copyWith(
+      asrModel: _declared(
+        last.asrModel,
+        ProviderCatalog.asrInfo(last.asrProviderId),
+      ),
+      translationModel: _declared(
+        last.translationModel,
+        ProviderCatalog.translationInfo(last.translationProviderId),
+      ),
+    );
+    notifyIfAlive();
+    return true;
   }
 
   /// 交给队列的那份参数：按勾选的词表把条目展开进去。

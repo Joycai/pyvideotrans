@@ -1031,13 +1031,26 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
 
   TranslationProvider _translationProvider() {
     if (translator case final build?) return build();
+    return buildTranslationProvider();
+  }
+
+  /// 任务会话用任务里冻结的模型与词表。本地文件会话没有「入队」这一步，
+  /// 冻结没有意义：模型与词表每次翻译时现取设置里的 —— 否则用户发现没选
+  /// 模型、去设置里填好再回来，还得把文件关掉重开才生效。
+  @visibleForTesting
+  TranslationProvider buildTranslationProvider() {
     final options = session.options;
+    final live = session is FileSession;
     return Registry.buildTranslation(
       options.translationProviderId,
       settings,
-      model: options.translationModel,
+      model: live
+          ? settings.defaultChatModelOf(options.translationProviderId)
+          : options.translationModel,
       guidance: options.translationGuidance,
-      glossary: options.glossary,
+      glossary: live
+          ? settings.glossaryEntries(settings.defaultGlossaryIds)
+          : options.glossary,
     );
   }
 

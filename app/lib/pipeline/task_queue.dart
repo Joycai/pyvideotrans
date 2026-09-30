@@ -57,7 +57,14 @@ class TaskQueue extends ChangeNotifier {
   Future<void> restore() async {
     final s = store;
     if (s == null) return;
-    final loaded = await s.loadAll(fallbackOptions: settings.defaultTaskOptions());
+    // 旧版本的存档里模型只有名字或者没写，读的时候按此刻的设置补成声明。
+    // 补完就写回去：任务的模型从这次启动起定下来，不再跟着设置变。
+    final migrated = <SubtitleTask>[];
+    final loaded = await s.loadAll(
+      fallbackOptions: settings.defaultTaskOptions(),
+      defaultModels: settings.defaultModels,
+      onMigrated: migrated.add,
+    );
     for (final task in loaded) {
       if (task.status != TaskStatus.running &&
           task.status != TaskStatus.queued) {
@@ -76,6 +83,8 @@ class TaskQueue extends ChangeNotifier {
     _tasks
       ..clear()
       ..addAll(loaded);
+    // 要等任务进了列表再标：写盘时按 id 到列表里找任务。
+    migrated.forEach(persist);
     super.notifyListeners();
   }
 
@@ -159,6 +168,13 @@ class TaskQueue extends ChangeNotifier {
     );
   }
 
+  /// 字幕参数对转码、合并任务无意义，只是占位，免得存档读回时缺字段。
+  /// 词表条目不带：它是唯一会变大的一项，没必要抄进每个媒体任务的存档。
+  TaskOptions get _placeholderOptions => settings.defaultTaskOptions().copyWith(
+    glossaryIds: const [],
+    glossary: const [],
+  );
+
   /// 把一批视频按同一份转码参数入队。返回顺序与 [paths] 一致。
   List<SubtitleTask> enqueueTranscode(
     List<String> paths, {
@@ -170,8 +186,7 @@ class TaskQueue extends ChangeNotifier {
           id: const Uuid().v4(),
           sourcePath: path,
           kind: TaskKind.transcode,
-          // 字幕参数对转码任务无意义，只是占位，免得存档读回时缺字段。
-          options: settings.defaultTaskOptions(),
+          options: _placeholderOptions,
           media: TranscodeJob(options: options),
         ),
       ),
@@ -185,7 +200,7 @@ class TaskQueue extends ChangeNotifier {
       sourcePath: options.segments.first.videoPath,
       kind: TaskKind.merge,
       // 同转码：字幕参数对合并任务无意义，只是占位。
-      options: settings.defaultTaskOptions(),
+      options: _placeholderOptions,
       media: MergeJob(options: options),
     ),
   );
