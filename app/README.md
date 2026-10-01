@@ -51,7 +51,9 @@ VideoToolbox 用例只在 macOS 上跑。
 
 端到端测试（`test/merge_ffmpeg_test.dart`）用 lavfi 现生成短片实跑，本机没有 ffmpeg 时跳过。
 
-UI 遵循 Claude Design 项目「桌面字幕工具 · 设计系统」。
+UI 由 Codex 按 [仓库设计系统](../docs/design-system.md) 持续维护：复用现有 Flutter 令牌与组件，
+保留浅色 / 深色主题与桌面交互标准。历史设计 prompt 保存在 [需求索引](../docs/design-prompts/README.md)，
+开发不依赖原 Claude Design 项目。
 
 ## 跑起来
 

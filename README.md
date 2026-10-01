@@ -10,7 +10,7 @@
 1. **音视频语音生成字幕**（ASR）
 2. **字幕翻译**（大模型）
 
-UI 遵循 Claude Design 项目「桌面字幕工具 · 设计系统」。第一期只对接在线 API，
+UI 由 Codex 按仓库内的 [设计系统](docs/design-system.md) 持续维护，保留既有主题与交互风格。第一期只对接在线 API，
 本地模型的接口已留好（见下）。
 
 ## 目录
@@ -23,7 +23,8 @@ UI 遵循 Claude Design 项目「桌面字幕工具 · 设计系统」。第一�
 | [`PLAN.md`](PLAN.md) | 分阶段重构计划 |
 | [`AGENTS.md`](AGENTS.md) | Codex / coding agent 开发约定与架构约束 |
 | [`docs/codex-migration.md`](docs/codex-migration.md) | Claude Code → Codex 迁移计划、映射与验证记录 |
-| [`.agents/skills/`](.agents/skills/) | 共享的版本更新与代码审查工作流 |
+| [`docs/design-system.md`](docs/design-system.md) | 从 Flutter 重建的 UI 令牌、组件、交互契约与本地截图 |
+| [`.agents/skills/`](.agents/skills/) | UI 设计、版本更新与代码审查工作流 |
 | [`archive/python/`](archive/python/) | 原 Python 实现，仅作功能参考，后续可能删除 |
 
 ## 快速开始

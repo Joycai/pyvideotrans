@@ -45,7 +45,7 @@ Migration changes are on `codex/migrate-agent-workflow`.
 | `.claude/skills/bump-versions/` | `.agents/skills/bump-versions/` | Preserve script, reference, and evaluation examples |
 | `.claude/agents/code-reviewer.md` | `.agents/skills/code-reviewer/SKILL.md` | Portable skill, normally executed in the current chat |
 | `.claude/tasks/`, local worktrees | Ignored local state | No deletion of existing local work |
-| Claude Design links and prompts | Existing `docs/design-prompts/` | Retain design provenance |
+| Claude Design links and prompts | Existing `docs/design-prompts/` | Retain design provenance; current design authority is [design-system.md](design-system.md) |
 
 There are no tracked Claude hook settings, MCP server definitions, or permission
 configuration to translate. The reviewer is not represented as a fictional Codex agent

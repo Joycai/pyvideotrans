@@ -1,3 +1,5 @@
+> 历史设计需求：当前由 Codex 按 [仓库设计系统](../design-system.md) 维护。下文的 Claude Design 项目与画板是来源记录，不是开发前提。
+
 # Claude Design prompt · 服务与模型、词表（设置页与建任务页）
 
 > 在 Claude Design 项目「桌面字幕工具 · 设计系统」（`a18fe120-0675-45f9-bda3-1eeb471bb364`）里使用。

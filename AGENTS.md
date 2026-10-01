@@ -145,8 +145,10 @@ Ollama、LM Studio 和第二期的本地 Python 后端都说 OpenAI 兼容协议
 - **注释与提交信息用中文。** 注释写"为什么"，不写"是什么"；代码里已有大量这样的注释，照着写。
 - 提交信息用 conventional commits 带作用域：`feat(app):` `fix(editor):` `test(app):` `chore(ci):`。
 - **别对已有文件整体跑 `dart format`**，会产生大量与改动无关的噪音；只保持自己新写的部分与周围一致。
-- 界面按 Claude Design 项目「桌面字幕工具 · 设计系统」实现；`docs/design-prompts/` 存的是生成各页设计稿
-  用的 prompt，里面有项目 id 与设计稿链接，改界面前从那里找到对应画板。
+- 界面由 Codex 按仓库内的 [docs/design-system.md](docs/design-system.md) 继续设计与实现。
+  UI 改善使用 [.agents/skills/subtitle-ui-design/SKILL.md](.agents/skills/subtitle-ui-design/SKILL.md)，
+  从 Flutter 令牌、共享组件与本地截图确定风格；不依赖旧 Claude Design 项目。
+  `docs/design-prompts/` 是历史需求与来源，入口见其 README；旧画板不可用不阻塞开发。
   改界面后跑 golden 核对；确实是设计变更才 `--update-goldens`，并在提交里说明。
 - 平台插件注册文件在 `.gitattributes` 里固定为 LF，别改动它们的换行。
 
