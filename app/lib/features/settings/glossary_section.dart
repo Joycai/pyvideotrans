@@ -323,7 +323,7 @@ class _EmptyState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Symbols.dictionary,
+              Symbols.menu_book,
               size: 32,
               weight: 400,
               color: cs.onSurfaceVariant,

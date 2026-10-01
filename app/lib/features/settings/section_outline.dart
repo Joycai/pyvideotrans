@@ -9,7 +9,7 @@ enum SettingsSectionKey {
   appearance('外观', '外观', Symbols.palette),
   asr('识别服务', '识别服务', Symbols.graphic_eq),
   mt('翻译服务', '翻译服务', Symbols.translate),
-  glossary('词表', '词表', Symbols.dictionary),
+  glossary('词表', '词表', Symbols.menu_book),
   lang('语言', '语言', Symbols.language),
   defaults('任务默认值', '任务默认值', Symbols.tune),
   output('输出', '输出', Symbols.folder),
