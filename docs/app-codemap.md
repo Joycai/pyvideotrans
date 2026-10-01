@@ -469,6 +469,7 @@ flutter test --tags golden --run-skipped
   界面：`model_list_editor_test.dart`（设置页模型列表）、`glossary_section_test.dart`（词表分区与条目表）、
   `provider_fields_test.dart`（建任务页的模型字段与说话人分离开关）、`glossary_chips_test.dart`（词表勾选）。
 - `test/status_snapshot_test.dart` 钉死状态栏快照的服务文案（未选择 / 未配置 / 已配置）与任务计数。
+- `test/progress_bar_test.dart` 核对渐变进度条与任务页阶段条填充块的实际尺寸（高度不为 0、宽度按进度 / 失败 40%）。
 - `test/task_filter_test.dart` 钉死状态分组；`test/tasks_controller_test.dart` 覆盖筛选、选中、拖入分流，
   以及拆掉任务页再装回来后选中与筛选仍在。
 - golden 测试共 58 张场景图；拆 UI 文件后必须保持逐像素一致。

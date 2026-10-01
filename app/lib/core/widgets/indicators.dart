@@ -154,19 +154,26 @@ class Timecode extends StatelessWidget {
   );
 }
 
-/// 蓝→紫渐变进度条。这是全应用唯一允许出现紫色的地方。
+/// 进度条，默认蓝→紫渐变填充 —— 这是全应用唯一允许出现紫色的地方。
+///
+/// 任务页阶段条的失败 / 取消段也走这里，用 [colors] 换成红色 / outline
+/// 实色，免得同一套填充布局抄两份。
 class GradientProgressBar extends StatelessWidget {
   const GradientProgressBar({
     super.key,
     required this.value,
     this.width,
     this.height = 4,
+    this.colors,
   });
 
   /// 0..1。
   final double value;
   final double? width;
   final double height;
+
+  /// 填充渐变色；默认是主题的进度渐变。
+  final List<Color>? colors;
 
   @override
   Widget build(BuildContext context) {
@@ -188,7 +195,7 @@ class GradientProgressBar extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: context.elevation.progressGradient,
+                    colors: colors ?? context.elevation.progressGradient,
                   ),
                 ),
               ),
