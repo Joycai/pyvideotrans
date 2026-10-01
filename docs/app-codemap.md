@@ -5,7 +5,7 @@
 本文路径一律相对 `app/`。
 
 - 设计决定与产品约束 → [`README.md`](../app/README.md)
-- 跨文件开发约束 → [`CLAUDE.md`](../CLAUDE.md)
+- 跨文件开发约束 → [`AGENTS.md`](../AGENTS.md)
 - 原 Python 实现的功能索引 → [`archive-codemap.md`](archive-codemap.md)
 
 这份文档回答：**要改某项能力，应从哪个目录和哪个文件开始。**

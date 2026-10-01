@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides repository guidance to Codex and other coding agents.
 
 ## 仓库形态
 
@@ -31,7 +31,7 @@ DASHSCOPE_API_KEY=sk-… flutter test --tags live --run-skipped  # 真实调百�
 VideoToolbox 用例只在 macOS 跑。
 
 打包（dmg / Inno Setup / Linux 安装脚本）与应用图标生成见 `app/packaging/README.md`。
-**改版本号用 `bump-versions` skill**，它会一次改齐 pubspec 之外所有硬编码的副本。
+**改版本号用 [.agents/skills/bump-versions/SKILL.md](.agents/skills/bump-versions/SKILL.md) 中的 `bump-versions` skill**，它会一次改齐 pubspec 之外所有硬编码的副本。
 
 ## 架构
 
@@ -149,3 +149,26 @@ Ollama、LM Studio 和第二期的本地 Python 后端都说 OpenAI 兼容协议
   用的 prompt，里面有项目 id 与设计稿链接，改界面前从那里找到对应画板。
   改界面后跑 golden 核对；确实是设计变更才 `--update-goldens`，并在提交里说明。
 - 平台插件注册文件在 `.gitattributes` 里固定为 LF，别改动它们的换行。
+
+## Codex 工作流与代码审查
+
+- 功能分支默认使用 `codex/` 前缀，从最新的 `origin/Joycai-main` 切出，PR 目标为 `Joycai-main`。
+- 多步骤功能或迁移先记录计划；本次工具迁移见 `docs/codex-migration.md`。
+  `PLAN.md` 继续作为产品重构路线图，不用工具迁移计划覆盖它。
+- 功能或修复完成后、提交或开 PR 前，按
+  [.agents/skills/code-reviewer/SKILL.md](.agents/skills/code-reviewer/SKILL.md) 做一次只读审查。
+  默认在当前会话执行；只有用户明确要求独立审查或委派时才启用子代理。
+- 修改应用代码时在 `app/` 跑 `flutter analyze` 和 `flutter test`；
+  纯文档或 agent 配置迁移检查链接、skill 结构与脚本 dry-run 即可。
+  命令失败或环境缺失时明确报告，不能把未验证说成通过。
+- PowerShell 下用 `$env:DASHSCOPE_API_KEY = '<key>'` 设置 live 测试密钥；
+  不把真实密钥写进仓库、日志或报告。
+
+## Code Review Rules
+
+- 优先检查用户数据、字幕行号对齐、断点续跑与取消子进程；只报告本次改动引入的问题。
+- 流水线运行参数来自 `TaskOptions` 快照，包括模型声明与词表；
+  编辑器补翻读取当前服务的例外遵循 `EditorController.buildTranslationProvider`。
+- 服务与预置模型在 `ProviderCatalog`，`Registry` 是工厂；运行时按 `ModelSpec`
+  选择协议，不能靠模型名字猜测。
+- 审查时不更新 golden；设计变更的截图更新应由实现任务明确说明。

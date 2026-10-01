@@ -11,7 +11,6 @@
 
 
 
-AGENTS.md
 edgetts.txt
 .agree.txt
 test.py
@@ -74,3 +73,8 @@ app/.flutter-plugins-dependencies
 /.build/
 
 .claude/tasks/
+
+# 本地 agent 状态与旧 Claude worktree；共享 skills 保持可跟踪。
+.claude/worktrees/
+.claude/settings.local.json
+/.codex/

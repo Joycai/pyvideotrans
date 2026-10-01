@@ -21,6 +21,9 @@ UI 遵循 Claude Design 项目「桌面字幕工具 · 设计系统」。第一�
 | [`docs/local-backend.md`](docs/local-backend.md) | 本地模型后端方案（第二期） |
 | [`docs/archive-codemap.md`](docs/archive-codemap.md) | 归档 Python 代码索引 —— 按功能找到原实现的位置 |
 | [`PLAN.md`](PLAN.md) | 分阶段重构计划 |
+| [`AGENTS.md`](AGENTS.md) | Codex / coding agent 开发约定与架构约束 |
+| [`docs/codex-migration.md`](docs/codex-migration.md) | Claude Code → Codex 迁移计划、映射与验证记录 |
+| [`.agents/skills/`](.agents/skills/) | 共享的版本更新与代码审查工作流 |
 | [`archive/python/`](archive/python/) | 原 Python 实现，仅作功能参考，后续可能删除 |
 
 ## 快速开始
