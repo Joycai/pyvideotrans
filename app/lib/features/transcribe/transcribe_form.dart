@@ -3,8 +3,11 @@ import 'package:file_selector/file_selector.dart';
 import '../../domain/media_kinds.dart';
 import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
+import '../../domain/providers/asr_transport.dart';
+import '../../domain/task_control.dart';
 import '../../domain/task_options.dart';
 import '../../services/ffmpeg.dart';
+import '../../services/qwen_asr_enhancement.dart';
 import '../../services/readiness.dart';
 import '../shared/enqueue_request.dart';
 import '../shared/footer_message.dart';
@@ -192,8 +195,24 @@ class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
     if (options.translate) translationReadiness,
   ];
 
+  bool get usesInstantVocabulary =>
+      options.asrModel.transport == AsrTransport.dashscopeMessage ||
+      options.asrModel.transport == AsrTransport.dashscopeFileTrans &&
+          options.asrModel.dialect == DashScopeDialect.qwenAudio3;
+
+  String? get enhancementError {
+    if (!usesInstantVocabulary) return null;
+    if (options.asrPrompt.trim().runes.length > 400) return '上下文提示超过 400 字符，请缩短后再开始';
+    try {
+      QwenAsrEnhancement.vocabulary(settings.glossaryEntries(options.glossaryIds));
+    } on ActionableException catch (e) {
+      return e.toString();
+    }
+    return null;
+  }
+
   bool get canStart =>
-      enqueueable.isNotEmpty && !_checks.any((r) => r.isBlocked);
+      enqueueable.isNotEmpty && enhancementError == null && !_checks.any((r) => r.isBlocked);
 
   String get kindLabel => options.translate ? '转写并翻译' : '转写';
 
@@ -207,6 +226,7 @@ class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
         tone: unreadableCount > 0 ? FooterTone.error : FooterTone.add,
       );
     }
+    if (enhancementError case final error?) return (text: error, tone: FooterTone.error);
     final checks = _checks;
     if (blockedFooter(checks) ?? advisoryFooter(checks) case final gate?) {
       return gate;
@@ -218,7 +238,6 @@ class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
 
   /// 高级区折叠时标题旁那行摘要。
   String get advancedSummary => [
-    if (options.asrPrompt.trim().isNotEmpty) '识别提示词已填' else '识别提示词',
     '每行 ${options.cjkLineLength} / ${options.latinLineLength}',
     '输出 ${options.format.extension.toUpperCase()}',
     options.outputLocation.label,
@@ -229,7 +248,6 @@ class TranscribeFormController extends TaskOptionsFormBase<StagedFile> {
     options.format.extension.toUpperCase(),
     options.outputLocation.label,
     '每行 ${options.cjkLineLength} / ${options.latinLineLength} 字',
-    if (options.asrPrompt.trim().isNotEmpty) '识别提示词已填',
   ].join(' · ');
 
   /// 打包交出去，并把这份参数记为「上次参数」。不能开始时返回 null。

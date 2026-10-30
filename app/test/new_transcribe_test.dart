@@ -219,6 +219,7 @@ void main() {
       expect(find.text('翻译要求（可选）'), findsOneWidget);
       expect(find.text('保持口语，不要书面化；人称用「你」'), findsOneWidget);
 
+      await tester.ensureVisible(find.text('转写完成后继续翻译'));
       await tester.tap(find.text('转写完成后继续翻译'));
       await tester.pumpAndSettle();
 
@@ -234,15 +235,15 @@ void main() {
     testWidgets('默认收起，标题旁给出摘要', (tester) async {
       await open(tester, paths: ['/v/a.mp4']);
       expect(find.textContaining('每行 15 / 40'), findsOneWidget);
-      expect(find.text('识别提示词（可选）'), findsNothing);
+      expect(find.text('上下文提示（可选）'), findsOneWidget);
 
       await tester.ensureVisible(find.text('高级'));
       await tester.tap(find.text('高级'));
       await tester.pumpAndSettle();
-      expect(find.text('识别提示词（可选）'), findsOneWidget);
+      expect(find.text('每行最大字符数 · 中日韩'), findsOneWidget);
       expect(find.text('输出格式'), findsOneWidget);
       // 提示词只管风格：专有名词指向词表。
-      expect(find.text('风格与说明；专有名词请用词表'), findsOneWidget);
+      expect(find.text('描述音频背景、主题；专有名词请放入词表'), findsOneWidget);
     });
 
     testWidgets('ASS 未实施，灰掉但仍然可读', (tester) async {
