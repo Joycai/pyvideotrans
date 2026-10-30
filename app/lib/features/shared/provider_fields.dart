@@ -32,24 +32,24 @@ List<DropdownGroup<String>> providerGroups(
     return DropdownEntry(
       value: info.id,
       label: info.name,
-      enabled: info.implemented,
+      enabled: info.available,
       badge: info.runsLocally ? '本机' : null,
       badgeIcon: info.runsLocally ? Symbols.computer : null,
-      description: info.implemented
+      description: info.available
           ? readiness.isBlocked
                 ? readiness.message
                 : (info.defaultBaseUrl ?? '').isEmpty
                 ? '自行填写地址与模型名'
                 : null
-          : readiness.hint,
+          : info.disabledReason ?? readiness.hint,
     );
   }
 
-  final available = all.where((i) => i.implemented).map(entry).toList();
-  final pending = all.where((i) => !i.implemented).map(entry).toList();
+  final available = all.where((i) => i.available).map(entry).toList();
+  final pending = all.where((i) => !i.available).map(entry).toList();
   return [
     DropdownGroup(title: pending.isEmpty ? null : '可用', entries: available),
-    if (pending.isNotEmpty) DropdownGroup(title: '第二期未实施', entries: pending),
+    if (pending.isNotEmpty) DropdownGroup(title: '暂不可用', entries: pending),
   ];
 }
 

@@ -27,6 +27,7 @@ void main() {
 
   Future<void> load([Map<String, Object> configs = const {}]) async {
     SharedPreferences.setMockInitialValues({
+      'asrProviderId': 'openai',
       if (configs.isNotEmpty) 'providerConfigs': jsonEncode(configs),
     });
     settings = await AppSettings.load();
@@ -104,7 +105,7 @@ void main() {
   List<ModelSpec> stored(String id) => settings.configFor(id).models;
 
   group('空列表', () {
-    testWidgets('有常用列表的服务：说明新建任务用常用列表，服务仍算已配置', (tester) async {
+    testWidgets('暂停的服务保留常用模型列表，状态显示暂时禁用', (tester) async {
       await load({
         'groq': {'apiKey': 'sk-x'},
       });
@@ -112,7 +113,7 @@ void main() {
       await pump(tester, ProviderKind.asr);
 
       expect(find.text('未添加模型，新建任务时使用常用列表'), findsOneWidget);
-      expect(find.text('已配置'), findsOneWidget);
+      expect(find.text('暂时禁用'), findsOneWidget);
       expect(rows(tester), isEmpty);
       // 常用里列着全部预置，一个都还没加。
       expect(inEditor(find.text('whisper-large-v3')), findsOneWidget);
@@ -438,15 +439,15 @@ void main() {
       expect(inRow(presets[0].name, find.text('Qwen3-ASR')), findsOneWidget);
       expect(inRow(presets[0].name, find.text('提示词')), findsOneWidget);
       expect(inRow(presets[0].name, find.text('说话人分离')), findsNothing);
-      // 录音文件转写的 Qwen-Audio 3.0：能分离，不接受提示。
+      // 录音文件转写的 Qwen-Audio 3.x：能分离，也接受提示。
       expect(inRow(presets[3].name, find.text('异步整文件')), findsOneWidget);
       expect(
-        inRow(presets[3].name, find.text('Qwen-Audio 3.0')),
+        inRow(presets[3].name, find.text('Qwen-Audio 3.x')),
         findsOneWidget,
       );
       expect(inRow(presets[3].name, find.text('说话人分离')), findsOneWidget);
-      expect(inRow(presets[3].name, find.text('提示词')), findsNothing);
-      // 同步的 Qwen-Audio 3.0：两样都没有。
+      expect(inRow(presets[3].name, find.text('提示词')), findsOneWidget);
+      // 同步的 Qwen-Audio 3.x：两样都没有。
       expect(inRow(presets[1].name, find.text('提示词')), findsNothing);
       expect(inRow(presets[1].name, find.text('说话人分离')), findsNothing);
     });
@@ -535,7 +536,7 @@ void main() {
       // 没配过：默认是预置第一个（同步 Qwen3-ASR），接受提示。
       expect(find.text(note), findsNothing);
 
-      settings.setModels(_bailian, [presets[3], presets[0]]);
+      settings.setModels(_bailian, [presets[4], presets[0]]);
       await tester.pump();
       expect(find.text(note), findsOneWidget);
       expect(find.byType(MultilineField), findsOneWidget);
@@ -771,7 +772,7 @@ void main() {
     for (final width in [800.0, 640.0]) {
       await pump(tester, ProviderKind.asr, width: width, stacked: true);
       expect(tester.takeException(), isNull, reason: '$width');
-      expect(rows(tester), hasLength(5));
+      expect(rows(tester), hasLength(7));
       // 名字长到要折行的那一行，标签没有被挤出去。
       expect(
         inRow('qwen-audio-3.0-asr-flash-filetrans', find.text('说话人分离')),

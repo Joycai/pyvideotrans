@@ -179,7 +179,7 @@ void main() {
       // 默认是同步的 Qwen3-ASR：接受提示。
       expect(find.text(_ignoredNote), findsNothing);
 
-      form.update((o) => o.copyWith(asrModel: bailian.presets[3]));
+      form.update((o) => o.copyWith(asrModel: bailian.presets[4]));
       await tester.pump();
       expect(find.text(_ignoredNote), findsOneWidget);
       await tester.tap(find.text('访谈'));
@@ -195,7 +195,7 @@ void main() {
         ..setGlossary(_interview);
       final form = await pumpSection(tester);
       form.update(
-        (o) => o.copyWith(asrModel: bailian.presets[3], translate: false),
+        (o) => o.copyWith(asrModel: bailian.presets[4], translate: false),
       );
       await tester.pump();
 

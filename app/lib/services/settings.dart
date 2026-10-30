@@ -171,7 +171,7 @@ class AppSettings extends ChangeNotifier {
     }
   }
 
-  String get asrProviderId => _prefs.getString(_kAsrId) ?? 'openai';
+  String get asrProviderId => _prefs.getString(_kAsrId) ?? 'dashscope_qwen_asr';
   set asrProviderId(String v) => _write(_kAsrId, v);
 
   String get translationProviderId => _prefs.getString(_kMtId) ?? 'deepseek';

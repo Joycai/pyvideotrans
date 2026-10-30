@@ -149,7 +149,7 @@ void main() {
 
   setUp(() async {
     work = await Directory.systemTemp.createTemp('subtitle_studio_test');
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'asrProviderId': 'openai'});
     settings = await AppSettings.load();
     settings.outputDir = work.path;
   });
@@ -502,13 +502,14 @@ void main() {
     // 任务是排队串行跑的：前一个还在跑，用户已经去改设置建下一个了。
     // 模型与词表必须是入队那一刻的，不能是跑的时候再去设置里读的。
     test('入队时冻结模型声明与词表内容，之后改设置不影响排着队的任务', () async {
+      settings.asrProviderId = 'asr_custom';
       const bailian = GlossaryEntry(term: '百炼', translation: 'Bailian');
       AsrModelSpec whisper(String name) => AsrModelSpec(
         name: name,
         transport: AsrTransport.openaiTranscription,
       );
       settings
-        ..setModels('openai', [whisper('asr-before')])
+        ..setModels('asr_custom', [whisper('asr-before')])
         ..setModels('deepseek', [const ChatModelSpec(name: 'before')])
         ..setGlossary(
           const Glossary(id: 'g', name: '访谈', entries: [bailian]),
@@ -521,7 +522,7 @@ void main() {
       final queued = queue.enqueue(sourcePath: '/v/second.srt');
 
       settings
-        ..setModels('openai', [whisper('asr-after')])
+        ..setModels('asr_custom', [whisper('asr-after')])
         ..setModels('deepseek', [const ChatModelSpec(name: 'after')])
         ..setGlossary(
           const Glossary(

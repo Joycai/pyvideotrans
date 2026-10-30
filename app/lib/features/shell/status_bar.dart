@@ -32,12 +32,12 @@ class StatusSnapshot {
     String? note,
   }) {
     ({bool connected, String label}) service(ProviderInfo? info, String kind) {
-      final ok = info != null && settings.isConfigured(info);
+      final ok = info != null && info.available && settings.isConfigured(info);
       return (
         connected: ok,
         label: info == null
             ? '$kind · 未选择'
-            : '${info.name} · ${ok ? '已配置' : '未配置'}',
+            : '${info.name} · ${info.disabledReason != null ? '暂时禁用' : ok ? '已配置' : '未配置'}',
       );
     }
 

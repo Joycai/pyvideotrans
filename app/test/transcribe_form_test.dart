@@ -35,11 +35,11 @@ class GatedFfmpeg extends Ffmpeg {
 }
 
 Future<AppSettings> _settings({bool withKey = true}) async {
-  SharedPreferences.setMockInitialValues({});
+  SharedPreferences.setMockInitialValues({'asrProviderId': 'asr_custom'});
   final settings = await AppSettings.load();
   if (withKey) {
     settings
-      ..setConfig('openai', const ProviderConfig(apiKey: 'sk-test'))
+      ..setConfig('asr_custom', const ProviderConfig(apiKey: 'sk-test', baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1,gpt-4o-transcribe,gpt-4o-mini-transcribe'))
       ..setConfig('deepseek', const ProviderConfig(apiKey: 'sk-test'));
   }
   return settings;
@@ -167,7 +167,7 @@ void main() {
       again.applyLastUsed();
       expect(again.options.asrModel, typed);
       // 设置里别的改动不会把它换掉。
-      settings.setModels('openai', const [
+      settings.setModels('asr_custom', const [
         AsrModelSpec(
           name: 'gpt-4o-transcribe',
           transport: AsrTransport.openaiTranscription,
@@ -278,8 +278,8 @@ void main() {
       expect(form.options.asrModel, same(dashscope.presets.first));
       form
         ..update((o) => o.copyWith(asrModel: filetrans, diarize: true))
-        ..selectAsrProvider('openai');
-      expect(form.options.asrProviderId, 'openai');
+        ..selectAsrProvider('asr_custom');
+      expect(form.options.asrProviderId, 'asr_custom');
       // 不会把上一家的模型带到下一家去。
       expect(form.options.asrModel.name, 'whisper-1');
       expect(form.options.diarize, isFalse);
@@ -327,7 +327,7 @@ void main() {
 
     test('没动过模型：设置里换了默认模型，表单跟着换', () {
       expect(form.options.asrModel.name, 'whisper-1');
-      settings.setModels('openai', [custom]);
+      settings.setModels('asr_custom', [custom]);
       expect(form.options.asrModel, custom);
       expect(notified, 1);
 
@@ -339,6 +339,7 @@ void main() {
     });
 
     test('一开始没有模型可选：在设置里填好之后回来就能开始', () {
+      settings.setConfig('asr_custom', const ProviderConfig());
       form.selectAsrProvider('asr_custom');
       expect(form.options.asrModel.isUnset, isTrue);
       settings.setConfig(
@@ -357,19 +358,19 @@ void main() {
       final openai = ProviderCatalog.asrInfo('openai')!;
       form.update((o) => o.copyWith(asrModel: openai.presets[1]));
 
-      settings.setModels('openai', [custom, ...openai.presets]);
+      settings.setModels('asr_custom', [custom, ...openai.presets]);
       expect(form.options.asrModel, same(openai.presets[1]));
 
       final tuned = openai.presets[1].withOptions(
         ModelOptions.none.set(ModelParams.asrTemperature.key, 0.2),
       );
-      settings.setModels('openai', [custom, tuned]);
+      settings.setModels('asr_custom', [custom, tuned]);
       expect(form.options.asrModel, tuned);
     });
 
     test('选的模型设置里已经没有了：留着不动（手填的、上次参数带来的）', () {
       form.update((o) => o.copyWith(asrModel: custom));
-      settings.setModels('openai', [
+      settings.setModels('asr_custom', [
         ProviderCatalog.asrInfo('openai')!.presets.first,
       ]);
       expect(form.options.asrModel, custom);
@@ -397,7 +398,7 @@ void main() {
     // 还挂着也数不出来。
     test('表单销毁后不再听设置', () {
       form.dispose();
-      settings.setModels('openai', [custom]);
+      settings.setModels('asr_custom', [custom]);
       expect(form.options.asrModel.name, 'whisper-1');
       expect(notified, 0);
     });
@@ -409,7 +410,7 @@ void main() {
         ModelOptions.none.set(ModelParams.asrTemperature.key, 0.2),
       );
       settings
-        ..setModels('openai', [
+        ..setModels('asr_custom', [
           const AsrModelSpec(
             name: 'whisper-1',
             transport: AsrTransport.openaiTranscription,

@@ -11,18 +11,31 @@ import 'package:subtitle_studio/features/shared/provider_fields.dart';
 import 'package:subtitle_studio/features/transcribe/transcribe_form.dart';
 import 'package:subtitle_studio/features/transcribe/transcribe_recognize_section.dart';
 import 'package:subtitle_studio/services/provider_api.dart';
+import 'package:subtitle_studio/services/readiness.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 const _bailian = 'dashscope_qwen_asr';
 
 /// 「新建转写」「新建翻译」的模型字段：显示的必须就是会发出去的那个模型。
 void main() {
+  test('暂停服务的选择项禁用并显示原因，百炼保持可选', () {
+    final groups = providerGroups(ProviderCatalog.asr,
+      (_) => Readiness.ok);
+    final entries = [for (final group in groups) ...group.entries];
+    for (final id in ['openai', 'groq', 'siliconflow']) {
+      final entry = entries.singleWhere((e) => e.value == id);
+      expect(entry.enabled, isFalse);
+      expect(entry.description, contains('待充分测试'));
+    }
+    expect(entries.singleWhere((e) => e.value == _bailian).enabled, isTrue);
+  });
+
   group('说话人分离开关', _diarizeToggleTests);
 
   late AppSettings settings;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'asrProviderId': 'openai'});
     settings = await AppSettings.load();
   });
 
@@ -113,7 +126,7 @@ void main() {
       // 服务下拉旁的标签也得是这个模型，而不是登记表默认值。
       expect(
         serviceLabel(info, settings.defaultAsrModel(info)),
-        '阿里百炼 · Qwen3-ASR · qwen-audio-3.0-asr-flash',
+        '阿里百炼 · Qwen ASR · qwen-audio-3.0-asr-flash',
       );
     });
 
@@ -214,8 +227,10 @@ void main() {
           ('qwen3-asr-flash', '同步逐段', '上下文提示 · 切片时间码'),
           ('qwen-audio-3.0-asr-flash', '同步逐段', '切片时间码'),
           ('fun-asr-flash-2026-06-15', '同步逐段', '切片时间码'),
-          ('qwen-audio-3.0-asr-flash-filetrans', '异步整文件', '说话人分离 · 句级时间戳'),
+          ('qwen-audio-3.0-asr-flash-filetrans', '异步整文件', '说话人分离 · 上下文提示 · 句级时间戳'),
           ('qwen3-asr-flash-filetrans', '异步整文件', '句级时间戳'),
+          ('qwen-audio-3.1-asr-flash-filetrans', '异步整文件', '说话人分离 · 上下文提示 · 句级时间戳'),
+          ('qwen-audio-3.1-asr-flash-message', '流式文件转写', '上下文提示 · 句级时间戳'),
         ],
       );
     });
@@ -525,7 +540,7 @@ void _diarizeToggleTests() {
   final capable = bailian.presets[3];
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'asrProviderId': 'openai'});
     settings = await AppSettings.load()
       ..asrProviderId = _bailian
       ..setConfig('openai', const ProviderConfig(apiKey: 'sk'))

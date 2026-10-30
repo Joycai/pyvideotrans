@@ -172,7 +172,9 @@ final class AsrModelSpec extends ModelSpec {
     Set<AsrTransport> transports,
   ) {
     if (transports.length == 1) return transports.first;
-    final wanted = name.endsWith('-filetrans')
+    final wanted = name.endsWith('-message')
+        ? AsrTransport.dashscopeMessage
+        : name.endsWith('-filetrans')
         ? AsrTransport.dashscopeFileTrans
         : AsrTransport.dashscopeSync;
     return transports.contains(wanted) ? wanted : transports.first;
@@ -187,7 +189,8 @@ final class AsrModelSpec extends ModelSpec {
       if (name.startsWith('fun-asr')) return DashScopeDialect.funAsr;
       return DashScopeDialect.qwenAudio3;
     }
-    if (name.startsWith('qwen-audio-3.0-asr-flash')) {
+    if (transport == AsrTransport.dashscopeMessage ||
+        name.startsWith('qwen-audio-3.')) {
       return DashScopeDialect.qwenAudio3;
     }
     if (name.startsWith('fun-asr-flash')) return DashScopeDialect.funAsr;

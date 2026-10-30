@@ -69,16 +69,23 @@ void main() {
     expect(s.translation.label, endsWith(' · 未配置'));
 
     settings
-      ..asrProviderId = 'openai'
+      ..asrProviderId = 'dashscope_qwen_asr'
       ..translationProviderId = 'ollama';
     s = snapshot();
     expect(s.asr.connected, isFalse);
     // 本机服务不要密钥，地址与模型有默认值，开箱即算配好。
     expect(s.translation, (connected: true, label: 'Ollama · 已配置'));
 
-    settings.setConfig('openai', const ProviderConfig(apiKey: 'sk-test'));
+    settings.setConfig('dashscope_qwen_asr', const ProviderConfig(apiKey: 'sk-test'));
     expect(snapshot().asr.connected, isTrue);
     expect(snapshot().asr.label, endsWith(' · 已配置'));
+  });
+
+  test('暂停服务即使保留了密钥也不显示为可用', () {
+    settings
+      ..asrProviderId = 'openai'
+      ..setConfig('openai', const ProviderConfig(apiKey: 'sk-test'));
+    expect(snapshot().asr, (connected: false, label: 'OpenAI · 暂时禁用'));
   });
 
   test('运行中与排队中都算进任务数；备注原样带上', () async {

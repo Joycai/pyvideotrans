@@ -147,6 +147,10 @@ abstract final class ProviderReadiness {
     AppSettings settings,
     ModelSpec model,
   ) {
+    if (info.disabledReason case final reason?) {
+      return Readiness(ReadinessLevel.blocked,
+        message: '${info.name}：$reason', hint: '请改选阿里百炼识别服务。');
+    }
     if (!info.implemented) {
       return Readiness(
         ReadinessLevel.blocked,

@@ -20,11 +20,12 @@ class FakeFfmpeg extends Ffmpeg {
 }
 
 Future<AppSettings> _settings({bool withKey = true}) async {
-  SharedPreferences.setMockInitialValues({});
+  SharedPreferences.setMockInitialValues({'asrProviderId': 'asr_custom'});
   final settings = await AppSettings.load();
+  settings.setConfig('asr_custom', const ProviderConfig(baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1'));
   if (withKey) {
     settings
-      ..setConfig('openai', const ProviderConfig(apiKey: 'sk-test'))
+      ..setConfig('asr_custom', const ProviderConfig(apiKey: 'sk-test', baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1,gpt-4o-transcribe,gpt-4o-mini-transcribe'))
       ..setConfig('deepseek', const ProviderConfig(apiKey: 'sk-test'));
   }
   return settings;

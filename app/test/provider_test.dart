@@ -437,7 +437,7 @@ void main() {
       setUp(() async {
         SharedPreferences.setMockInitialValues({
           'providerConfigs': jsonEncode({
-            'openai': {
+            'asr_custom': {
               'baseUrl': 'https://proxy.example/v1',
               'model': 'my-whisper, whisper-1',
               'apiKey': 'sk-asr',
@@ -459,7 +459,7 @@ void main() {
         List<GlossaryEntry> glossary = const [],
       }) =>
           Registry.buildAsr(
-                'openai',
+                'asr_custom',
                 settings,
                 model: model,
                 prompt: prompt,
@@ -572,7 +572,7 @@ void main() {
       });
 
       test('按服务 id 取默认模型：服务认不出来时是空名占位，不抛', () {
-        expect(settings.defaultAsrModelOf('openai').name, 'my-whisper');
+        expect(settings.defaultAsrModelOf('asr_custom').name, 'my-whisper');
         expect(
           settings.defaultChatModelOf('deepseek').name,
           'deepseek-reasoner',
@@ -583,7 +583,7 @@ void main() {
 
       test('建好的实例不跟着之后的设置改动变', () {
         final recognizer = asr(
-          model: settings.defaultAsrModelOf('openai'),
+          model: settings.defaultAsrModelOf('asr_custom'),
           prompt: '任务的提示',
         );
         final translator = mt(
@@ -594,7 +594,7 @@ void main() {
         settings
           ..asrPrompt = '后来改的提示'
           ..translationGuidance = '后来改的要求'
-          ..setConfig('openai', const ProviderConfig(legacyModelText: 'later'))
+          ..setConfig('asr_custom', const ProviderConfig(legacyModelText: 'later'))
           ..setConfig(
             'deepseek',
             const ProviderConfig(legacyModelText: 'later'),
@@ -1126,7 +1126,7 @@ void main() {
         providerIds: ProviderCatalog.asr.map((p) => p.id),
       );
 
-      expect(settings.asrProviderId, 'openai');
+      expect(settings.asrProviderId, 'dashscope_qwen_asr');
       expect(settings.asrPrompt, '');
       expect(settings.configFor('openai').apiKey, isNull);
       expect(

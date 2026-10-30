@@ -107,6 +107,8 @@ void main() {
             'fun-asr-flash-2026-06-15',
             'qwen-audio-3.0-asr-flash-filetrans',
             'qwen3-asr-flash-filetrans',
+            'qwen-audio-3.1-asr-flash-filetrans',
+            'qwen-audio-3.1-asr-flash-message',
           ],
           'deepseek': ['deepseek-chat', 'deepseek-reasoner'],
           'openai_chat': ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
@@ -117,7 +119,7 @@ void main() {
       );
     });
 
-    test('预置里能分离说话人的只有百炼的 qwen-audio-3.0 录音文件转写', () {
+    test('预置里能分离说话人的只有百炼的 Qwen-Audio 录音文件转写', () {
       expect(
         [
           for (final info in ProviderCatalog.asr)
@@ -125,7 +127,8 @@ void main() {
               if (preset.capabilities.diarization)
                 '${info.id} · ${preset.name}',
         ],
-        ['dashscope_qwen_asr · qwen-audio-3.0-asr-flash-filetrans'],
+        ['dashscope_qwen_asr · qwen-audio-3.0-asr-flash-filetrans',
+          'dashscope_qwen_asr · qwen-audio-3.1-asr-flash-filetrans'],
       );
     });
 

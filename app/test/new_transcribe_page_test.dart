@@ -36,9 +36,9 @@ void main() {
 
   setUp(() async {
     work = await Directory.systemTemp.createTemp('subtitle_studio_page');
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'asrProviderId': 'asr_custom'});
     settings = await AppSettings.load()
-      ..setConfig('openai', const ProviderConfig(apiKey: 'sk-test'))
+      ..setConfig('asr_custom', const ProviderConfig(apiKey: 'sk-test', baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1,gpt-4o-transcribe,gpt-4o-mini-transcribe'))
       ..setConfig('deepseek', const ProviderConfig(apiKey: 'sk-test'));
     final media = FakeFfmpeg();
     queue = TaskQueue(
@@ -167,7 +167,7 @@ void main() {
   });
 
   testWidgets('缺密钥时「去设置」不会把页面关掉', (tester) async {
-    settings.setConfig('openai', const ProviderConfig());
+    settings.setConfig('asr_custom', const ProviderConfig());
     await pumpPage(tester);
     state(tester).handleDrop(['/v/a.mp4']);
     await tester.pump();

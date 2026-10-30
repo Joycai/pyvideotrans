@@ -7,9 +7,11 @@ import '../domain/speech_segments.dart';
 import 'audio_splitter.dart';
 import 'dashscope_asr.dart';
 import 'dashscope_filetrans.dart';
+import 'dashscope_message.dart';
 import 'ffmpeg.dart';
 import 'openai_compatible.dart';
 import 'provider_api.dart';
+import 'qwen_asr_enhancement.dart';
 import 'settings.dart';
 
 /// 服务实例的工厂：按服务 id 与模型声明建出识别 / 翻译的实现。
@@ -42,6 +44,10 @@ abstract final class Registry {
     if (info == null) {
       throw ActionableException('未知的识别服务：$id', hint: '在设置里重新选择识别服务。');
     }
+    if (info.disabledReason case final reason?) {
+      throw ActionableException('${info.name}：$reason',
+        hint: '请改选已启用的服务。');
+    }
     if (!info.implemented) {
       throw ActionableException(
         '${info.name} 尚未实施',
@@ -59,6 +65,9 @@ abstract final class Registry {
     final endpoint = settings.endpointFor(info, model);
     final context = GlossaryText.asrPrompt(glossary, prompt);
     switch (model.transport) {
+      case AsrTransport.dashscopeMessage:
+        return DashScopeMessageProvider(info: info, endpoint: endpoint, prompt: prompt,
+          vocabulary: QwenAsrEnhancement.vocabulary(glossary));
       case AsrTransport.openaiTranscription:
         return OpenAiCompatibleAsrProvider(
           info: info,
@@ -92,6 +101,9 @@ abstract final class Registry {
           dialect: _dialectOf(model),
           diarize: diarize,
           media: media ?? Ffmpeg(),
+          prompt: prompt,
+          vocabulary: model.dialect == DashScopeDialect.qwenAudio3
+              ? QwenAsrEnhancement.vocabulary(glossary) : const {},
         );
     }
   }
@@ -106,6 +118,10 @@ abstract final class Registry {
     final info = ProviderCatalog.translationInfo(id);
     if (info == null) {
       throw ActionableException('未知的翻译服务：$id', hint: '在设置里重新选择翻译服务。');
+    }
+    if (info.disabledReason case final reason?) {
+      throw ActionableException('${info.name}：$reason',
+        hint: '请改选已启用的服务。');
     }
     if (!info.implemented) {
       throw ActionableException(

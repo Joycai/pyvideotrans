@@ -11,6 +11,7 @@ import '../domain/recognition_checkpoint.dart';
 import 'dashscope_asr.dart';
 import 'ffmpeg.dart';
 import 'provider_api.dart';
+import 'qwen_asr_enhancement.dart';
 
 /// 阿里百炼的**录音文件转写**（模型声明的接入方式是「异步整文件」）。
 ///
@@ -37,6 +38,8 @@ class DashScopeFileTransProvider implements AsrProvider {
     required this.dialect,
     required this.media,
     this.diarize = false,
+    this.prompt = '',
+    this.vocabulary = const {},
     http.Client? client,
     Future<void> Function(Duration)? delay,
   }) : _client = client ?? http.Client(),
@@ -51,6 +54,8 @@ class DashScopeFileTransProvider implements AsrProvider {
   final DashScopeDialect dialect;
   final Ffmpeg media;
   final bool diarize;
+  final String prompt;
+  final Map<String, int> vocabulary;
 
   final http.Client _client;
   final Future<void> Function(Duration) _delay;
@@ -303,9 +308,13 @@ class DashScopeFileTransProvider implements AsrProvider {
     'model': endpoint.model,
     'input': _qwen3 ? {'file_url': fileUrl} : {
       'file_urls': [fileUrl],
+      if (dialect == DashScopeDialect.qwenAudio3 && prompt.trim().isNotEmpty)
+        'context': QwenAsrEnhancement.context(prompt),
     },
     'parameters': {
       'channel_id': [0],
+      if (dialect == DashScopeDialect.qwenAudio3 && vocabulary.isNotEmpty)
+        'vocabulary': vocabulary,
       // 要词级时间戳：长句才能在换人 / 句末处再切开。
       'enable_words': true,
       if (diarize) 'diarization_enabled': true,
