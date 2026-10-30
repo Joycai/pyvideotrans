@@ -157,7 +157,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     }
     if (expand) {
-      await tester.tap(find.byTooltip('展开参数').first);
+      await tester.tap(find.text('配置').first);
       await tester.pump(const Duration(milliseconds: 400));
     }
     if (saved != null) {

@@ -48,6 +48,30 @@ Future<AppSettings> _settings({bool withKey = true}) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('Qwen 增强校验：Unicode 上下文上限、热词长度与切换模型', () async {
+    final settings = await _settings();
+    settings.setConfig('dashscope_qwen_asr', const ProviderConfig(apiKey: 'sk-test'));
+    final form = TranscribeFormController(settings: settings);
+    addTearDown(form.dispose);
+    form.selectAsrProvider('dashscope_qwen_asr');
+    form.update((o) => o.copyWith(asrModel: ProviderCatalog.asrInfo('dashscope_qwen_asr')!.presets.last,
+      asrPrompt: '😀' * 400));
+    expect(form.usesInstantVocabulary, isTrue);
+    expect(form.enhancementError, isNull);
+    form.update((o) => o.copyWith(asrPrompt: '😀' * 401));
+    expect(form.enhancementError, contains('400'));
+    expect(form.canStart, isFalse);
+    expect(form.submit(), isNull);
+    form.update((o) => o.copyWith(asrPrompt: '会议背景'));
+    settings.setGlossary(Glossary(id: 'long', name: '长词', entries: [GlossaryEntry(term: '词' * 16)]));
+    form.update((o) => o.copyWith(glossaryIds: ['long']));
+    expect(form.enhancementError, contains('热词过长'));
+    settings.setGlossary(const Glossary(id: 'long', name: '正常词', entries: [GlossaryEntry(term: '产品名称')]));
+    expect(form.enhancementError, isNull);
+    form.selectAsrProvider('asr_custom');
+    expect(form.usesInstantVocabulary, isFalse);
+  });
+
   group('文件列表', () {
     test('先以「探测中」入列，探完再就绪；探测中不阻断提交', () async {
       final media = GatedFfmpeg();

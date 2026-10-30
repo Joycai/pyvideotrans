@@ -103,6 +103,28 @@ class TranscribeRecognizeSection extends StatelessWidget {
                 '${o.translate ? '接着翻译时' : '之后在编辑器里翻译时'}仍会用词表。',
     );
 
+    final enhancement = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Text('识别增强', style: context.texts.titleSmall),
+      const SizedBox(height: AppSpacing.s2),
+      if (capabilities.contextPrompt) ...[
+        LabeledField(label: '上下文提示（可选）', child: MultilineField(
+          key: ValueKey('asr-prompt-${form.revision}'),
+          value: o.asrPrompt, minHeight: 56,
+          hint: '描述音频背景、主题；专有名词请放入词表',
+          onChanged: (v) => form.update((o) => o.copyWith(asrPrompt: v)),
+        )),
+        Text('${o.asrPrompt.trim().runes.length}${form.usesInstantVocabulary ? ' / 400' : ''} 字符',
+          style: context.texts.bodySmall),
+        const SizedBox(height: AppSpacing.s2),
+      ],
+      glossary,
+      Text('已选 ${form.settings.glossaries.where((g) => o.glossaryIds.contains(g.id)).length} 份词表 · '
+        '${form.settings.glossaryEntries(o.glossaryIds).length} 个有效词条'
+        '${form.usesInstantVocabulary ? ' · 作为即时热词发送' : ''}', style: context.texts.bodySmall),
+      if (form.enhancementError case final error?)
+        Text(error, style: context.texts.bodySmall?.copyWith(color: context.colors.error)),
+    ]);
+
     if (flat) {
       return flatSection(
         context,
@@ -123,7 +145,7 @@ class TranscribeRecognizeSection extends StatelessWidget {
           twoColumn(language, service, gap: gap),
           model,
           ?diarize,
-          glossary,
+          enhancement,
           status,
         ],
       );
@@ -156,7 +178,7 @@ class TranscribeRecognizeSection extends StatelessWidget {
           diarize,
         ],
         const SizedBox(height: AppSpacing.s3),
-        glossary,
+        enhancement,
         const SizedBox(height: AppSpacing.s2),
         status,
       ],

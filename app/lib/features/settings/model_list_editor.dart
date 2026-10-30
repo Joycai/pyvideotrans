@@ -8,10 +8,13 @@ import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
+import '../../core/widgets/glass_dialog.dart';
+import '../../core/widgets/glass_panel.dart';
 import '../../domain/providers/asr_transport.dart';
 import '../../domain/providers/model_params.dart';
 import '../../domain/providers/model_spec.dart';
 import 'settings_section.dart';
+
 
 /// 一家服务的模型列表编辑器（设计稿 C-ModelList），识别与翻译共用。
 ///
@@ -84,14 +87,74 @@ class ModelListEditor extends StatefulWidget {
 }
 
 class _ModelListEditorState extends State<ModelListEditor> {
+  String? _expanded;
+
+  @override
+  void didUpdateWidget(ModelListEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.models.any((m) => m.name == _expanded)) _expanded = null;
+  }
+
+  Future<void> _remove(ModelSpec model) async {
+    final remaining = widget.models.where((m) => m.name != model.name).toList();
+    final note = remaining.isEmpty
+        ? (widget.presets.isEmpty ? '移除后需要添加模型才能使用此服务。' : '移除最后一项后，将恢复使用内置模型列表。')
+        : widget.models.first.name == model.name
+            ? '默认模型将改为 ${remaining.first.name}。' : '已入队的任务不受影响。';
+    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => GlassDialog(
+      title: '移除模型', message: model.name, note: note,
+      actions: [
+        ControlButton(label: '取消', onPressed: () => Navigator.pop(ctx, false)),
+        ControlButton(label: '移除', onPressed: () => Navigator.pop(ctx, true)),
+      ],
+    ));
+    if (confirmed == true && mounted) widget.onRemove(model);
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('模型', style: context.texts.titleSmall),
+          Text('管理新建任务可选的模型及默认参数。', style: context.texts.bodySmall),
+        ])),
+        ControlButton(
+        label: '添加模型', icon: Symbols.add,
+        onPressed: () => showDialog<void>(context: context,
+          builder: (_) => _AddModelDialog(editor: widget)),
+      )]),
+      const SizedBox(height: AppSpacing.s2),
+      ContentPanel(child: Material(color: Colors.transparent, child: Column(mainAxisSize: MainAxisSize.min, children: [
+        if (widget.models.isEmpty) _EmptyNote(hasPresets: widget.presets.isNotEmpty),
+        for (final (i, model) in widget.models.indexed)
+          _ModelRow(
+            key: ValueKey(model.name), model: model, isDefault: i == 0,
+            showDeclaration: widget.transports.length > 1,
+            open: _expanded == model.name,
+            onToggle: () => setState(() => _expanded = _expanded == model.name ? null : model.name),
+            onSetDefault: i == 0 ? null : () => widget.onSetDefault(model),
+            onRemove: () => _remove(model),
+            onOptionChanged: (key, value) => widget.onOptionChanged(model, key, value),
+          ),
+      ]))),
+    ],
+  );
+}
+
+class _AddModelDialog extends StatefulWidget {
+  const _AddModelDialog({required this.editor});
+  final ModelListEditor editor;
+  @override
+  State<_AddModelDialog> createState() => _AddModelDialogState();
+}
+
+class _AddModelDialogState extends State<_AddModelDialog> {
   final _name = TextEditingController();
   final _nameFocus = FocusNode();
 
-  /// 展开的那一行。记名字而不是下标：「设为默认」会挪动行，展开的参数
-  /// 面板得跟着模型走。
-  String? _expanded;
-
-  late AsrTransport? _transport = widget.transports.firstOrNull;
+  late AsrTransport? _transport = widget.editor.transports.firstOrNull;
   DashScopeDialect _dialect = DashScopeDialect.qwen3Asr;
 
   /// 用户手动点过分段。点过之后不再按名字预填 —— 名字只是建议，
@@ -100,21 +163,13 @@ class _ModelListEditorState extends State<ModelListEditor> {
 
   static const _clear = AppShortcut(LogicalKeyboardKey.escape);
 
-  bool get _multi => widget.transports.length > 1;
+  bool get _multi => widget.editor.transports.length > 1;
 
   @override
   void initState() {
     super.initState();
     _nameFocus.addListener(_refresh);
     _prefill('');
-  }
-
-  @override
-  void didUpdateWidget(ModelListEditor oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 展开的那一行被删了就忘掉它：不然以后加回一个同名的，它一出现
-    // 就是展开的。
-    if (!widget.models.any((m) => m.name == _expanded)) _expanded = null;
   }
 
   @override
@@ -131,10 +186,10 @@ class _ModelListEditorState extends State<ModelListEditor> {
   String get _trimmed => _name.text.trim();
 
   /// 添加行的错误。空着不算错，只是不能添加。
-  String? get _error => _trimmed.isEmpty ? null : widget.validate(_trimmed);
+  String? get _error => _trimmed.isEmpty ? null : widget.editor.validate(_trimmed);
 
   void _prefill(String name) {
-    final suggest = widget.suggest;
+    final suggest = widget.editor.suggest;
     if (!_multi || _touched || suggest == null) return;
     final spec = suggest(name);
     _transport = spec.transport;
@@ -151,98 +206,77 @@ class _ModelListEditorState extends State<ModelListEditor> {
 
   void _submit() {
     final name = _trimmed;
-    if (name.isEmpty || widget.validate(name) != null) return;
+    if (name.isEmpty || widget.editor.validate(name) != null) return;
+    final preset = widget.editor.presets.where((m) => m.name == name).firstOrNull;
+    if (preset != null && !_touched) {
+      widget.editor.onAddPreset(preset);
+      Navigator.pop(context);
+      return;
+    }
     final transport = _multi ? _transport : null;
-    widget.onAdd(
+    widget.editor.onAdd(
       name,
       transport,
       transport != null && transport.needsDialect ? _dialect : null,
     );
-    setState(_resetAddRow);
-    // 连着添加几个是常事，焦点留在框里。
-    _nameFocus.requestFocus();
+    Navigator.pop(context);
   }
 
   String _declarationLabel(AsrTransport transport) =>
       [transport.label, if (transport.needsDialect) _dialect.label].join(' · ');
 
-  void _toggle(String name) =>
-      setState(() => _expanded = _expanded == name ? null : name);
+
+  late bool _custom = widget.editor.presets.isEmpty;
+  String _query = '';
+  ModelSpec? _selected;
 
   @override
-  Widget build(BuildContext context) {
-    final cs = context.colors;
-    final models = widget.models;
-    final listed = {for (final model in models) model.name};
-    final commons = [
-      for (final preset in widget.presets)
-        if (!listed.contains(preset.name)) preset,
-    ];
-
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => Dialog(
+    backgroundColor: Colors.transparent,
+    child: SizedBox(width: 680, child: GlassPanel(strong: true, expand: false,
+      padding: const EdgeInsets.all(AppSpacing.s4),
+      child: Material(color: Colors.transparent, child: SingleChildScrollView(child: Column(
+        mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (models.isEmpty) _EmptyNote(hasPresets: widget.presets.isNotEmpty),
-          for (final (i, model) in models.indexed)
-            _ModelRow(
-              // 按名字认行：挪到第一位时悬停、焦点这些状态跟着模型走。
-              key: ValueKey(model.name),
-              model: model,
-              isDefault: i == 0,
-              showDeclaration: _multi,
-              open: _expanded == model.name,
-              onToggle: () => _toggle(model.name),
-              onSetDefault: i == 0 ? null : () => widget.onSetDefault(model),
-              onRemove: () => widget.onRemove(model),
-              onOptionChanged: (key, value) =>
-                  widget.onOptionChanged(model, key, value),
-            ),
-          _addRow(context),
-          if (commons.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.s3,
-                0,
-                AppSpacing.s3,
-                AppSpacing.s3,
+          Text('添加模型', style: context.texts.titleLarge),
+          const SizedBox(height: AppSpacing.s3),
+          Wrap(spacing: 8, children: [
+            ChoiceChip(label: const Text('内置模型'), selected: !_custom,
+              onSelected: widget.editor.presets.isEmpty ? null : (_) => setState(() => _custom = false)),
+            ChoiceChip(label: const Text('自定义模型'), selected: _custom,
+              onSelected: (_) => setState(() => _custom = true)),
+          ]),
+          if (_custom) _addRow(context) else ...[
+            TextField(decoration: const InputDecoration(hintText: '搜索名称或模型 ID'),
+              onChanged: (v) => setState(() { _query = v.toLowerCase(); _selected = null; })),
+            const SizedBox(height: AppSpacing.s2),
+            if (!widget.editor.presets.any((m) => '${_modelTitle(m)} ${m.name}'.toLowerCase().contains(_query)))
+              const Padding(padding: EdgeInsets.all(12), child: Text('未找到内置模型，可切换到自定义模型。')),
+            for (final model in widget.editor.presets.where((m) =>
+                '${_modelTitle(m)} ${m.name}'.toLowerCase().contains(_query)))
+              ListTile(
+                isThreeLine: true,
+                title: Text(_modelTitle(model)),
+                subtitle: Text('${model.name}\n${_modelSummary(model)}'),
+                selected: _selected == model,
+                trailing: widget.editor.models.any((m) => m.name == model.name)
+                    ? const Text('已添加') : const Icon(Symbols.add),
+                onTap: widget.editor.models.any((m) => m.name == model.name)
+                    ? null : () => setState(() => _selected = model),
               ),
-              child: Wrap(
-                spacing: AppSpacing.s2,
-                runSpacing: AppSpacing.s2,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    '常用',
-                    style: context.texts.labelMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                  for (final preset in commons)
-                    Tooltip(
-                      message: '加入列表',
-                      waitDuration: const Duration(milliseconds: 400),
-                      child: ControlButton(
-                        dense: true,
-                        icon: Symbols.add,
-                        label: preset.name,
-                        onPressed: () => widget.onAddPreset(preset),
-                      ),
-                    ),
-                ],
-              ),
-            ),
+            Align(alignment: Alignment.centerRight, child: ControlButton(
+              label: '添加所选模型', onPressed: _selected == null ? null : () {
+                widget.editor.onAddPreset(_selected!);
+                Navigator.pop(context);
+              },
+            )),
+          ],
+          Align(alignment: Alignment.centerRight, child: QuietButton(
+            label: '取消', onPressed: () => Navigator.pop(context))),
         ],
-      ),
-    );
-  }
+      ))),
+    )),
+  );
 
   Widget _addRow(BuildContext context) {
     final cs = context.colors;
@@ -266,7 +300,7 @@ class _ModelListEditorState extends State<ModelListEditor> {
             controller: _name,
             focusNode: _nameFocus,
             style: AppTextStyles.timecode.copyWith(color: cs.onSurface),
-            decoration: bareInputDecoration(context, hint: widget.nameHint),
+            decoration: bareInputDecoration(context, hint: widget.editor.nameHint),
             onChanged: _onNameChanged,
             // 给了 onEditingComplete，回车就不会让输入框失焦。
             onEditingComplete: _submit,
@@ -305,54 +339,24 @@ class _ModelListEditorState extends State<ModelListEditor> {
               ],
             )
           else ...[
-            // 两组分段加按钮比控件列还宽，一行放不下：名字与接入方式一行，
-            // 模型族与按钮折到下一行。
-            Row(
+            field,
+            ExpansionTile(title: const Text('高级接入配置'), initiallyExpanded: true,
               children: [
-                Expanded(child: field),
-                const SizedBox(width: AppSpacing.s2),
-                Tooltip(
-                  message: '接入方式',
-                  waitDuration: const Duration(milliseconds: 400),
-                  child: PillSegments<AsrTransport>(
-                    value: transport,
-                    segments: [
-                      for (final t in widget.transports)
-                        (value: t, label: t.label, icon: null),
-                    ],
-                    onChanged: (v) => setState(() {
-                      _transport = v;
-                      _touched = true;
-                    }),
-                  ),
-                ),
+                LabeledField(label: '接入方式', child: AppDropdown<AsrTransport>(
+                  value: transport,
+                  groups: [DropdownGroup(entries: [for (final t in widget.editor.transports)
+                    DropdownEntry(value: t, label: t.label)])],
+                  onChanged: (v) => setState(() { _transport = v; _touched = true; }),
+                )),
+                if (transport.needsDialect) LabeledField(label: '模型族', child: AppDropdown<DashScopeDialect>(
+                  value: _dialect,
+                  groups: [DropdownGroup(entries: [for (final d in DashScopeDialect.values)
+                    DropdownEntry(value: d, label: d.label)])],
+                  onChanged: (v) => setState(() { _dialect = v; _touched = true; }),
+                )),
               ],
             ),
-            const SizedBox(height: AppSpacing.s2),
-            Wrap(
-              spacing: AppSpacing.s2,
-              runSpacing: AppSpacing.s2,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                if (transport.needsDialect)
-                  Tooltip(
-                    message: '模型族',
-                    waitDuration: const Duration(milliseconds: 400),
-                    child: PillSegments<DashScopeDialect>(
-                      value: _dialect,
-                      segments: [
-                        for (final d in DashScopeDialect.values)
-                          (value: d, label: d.label, icon: null),
-                      ],
-                      onChanged: (v) => setState(() {
-                        _dialect = v;
-                        _touched = true;
-                      }),
-                    ),
-                  ),
-                add,
-              ],
-            ),
+            Align(alignment: Alignment.centerRight, child: add),
           ],
           if (error != null) ...[
             const SizedBox(height: 6),
@@ -446,131 +450,46 @@ class _ModelRow extends StatefulWidget {
 }
 
 class _ModelRowState extends State<_ModelRow> {
-  bool _hovered = false;
-  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
     final model = widget.model;
     final asr = model is AsrModelSpec ? model : null;
-    final caps = asr?.capabilities;
-    final languages = asr?.languages;
-    // 行尾操作常驻占位、只切透明度：悬停时行宽不会抖。
-    final actionsVisible = _hovered || _focused || widget.open;
-
-    final head = MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: Focus(
-        canRequestFocus: false,
-        skipTraversal: true,
-        onFocusChange: (v) => setState(() => _focused = v),
-        child: AnimatedContainer(
-          duration: AppDuration.short,
-          constraints: const BoxConstraints(minHeight: 44),
-          padding: const EdgeInsets.fromLTRB(6, 6, AppSpacing.s2, 6),
-          color: _hovered
-              ? cs.onSurface.withValues(alpha: 0.06)
-              : cs.onSurface.withValues(alpha: 0),
-          child: Row(
-            children: [
-              IconActionButton(
-                icon: widget.open ? Symbols.expand_more : Symbols.chevron_right,
-                tooltip: widget.open ? '收起参数' : '展开参数',
-                size: 24,
-                iconSize: 18,
-                onPressed: widget.onToggle,
-              ),
-              const SizedBox(width: AppSpacing.s2),
-              Expanded(
-                child: Wrap(
-                  spacing: AppSpacing.s2,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      model.name,
-                      style: AppTextStyles.timecode.copyWith(
-                        color: cs.onSurface,
-                      ),
-                    ),
-                    if (widget.showDeclaration && asr != null) ...[
-                      _DeclarationTag(
-                        label: asr.transport.label,
-                        tooltip: _transportNote(asr.transport),
-                      ),
-                      if (asr.dialect case final dialect?)
-                        _DeclarationTag(
-                          label: dialect.label,
-                          tooltip: '模型族决定请求报文的写法',
-                        ),
-                    ],
-                    if (caps != null && caps.diarization)
-                      const _CapabilityChip(
-                        icon: Symbols.group,
-                        label: '说话人分离',
-                        tooltip: '能按说话人切开字幕',
-                      ),
-                    if (caps != null && caps.contextPrompt)
-                      const _CapabilityChip(
-                        icon: Symbols.edit_note,
-                        label: '提示词',
-                        tooltip: '接受上下文提示：词表与识别提示会发给它',
-                      ),
-                    if (languages != null)
-                      _CapabilityChip(
-                        icon: Symbols.language,
-                        label: '语种受限',
-                        tooltip: '只支持 ${languages.join(' · ')}',
-                      ),
-                  ],
-                ),
-              ),
-              if (widget.isDefault) ...[
-                const SizedBox(width: AppSpacing.s2),
-                const _DefaultMark(),
+    final head = Padding(
+      padding: const EdgeInsets.all(AppSpacing.s3),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8, runSpacing: 8, children: [
+          Text(_modelTitle(model), style: context.texts.titleSmall),
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            if (widget.isDefault) const _DefaultMark(),
+            const SizedBox(width: 8),
+            ControlButton(label: widget.open ? '收起' : '配置', dense: true, onPressed: widget.onToggle),
+            PopupMenuButton<String>(tooltip: '更多操作',
+              onSelected: (value) {
+                if (value == 'default') widget.onSetDefault?.call();
+                if (value == 'remove') widget.onRemove();
+                if (value == 'copy') Clipboard.setData(ClipboardData(text: model.name));
+              },
+              itemBuilder: (_) => [
+                if (widget.onSetDefault != null) const PopupMenuItem(value: 'default', child: Text('设为默认')),
+                const PopupMenuItem(value: 'copy', child: Text('复制模型 ID')),
+                const PopupMenuItem(value: 'remove', child: Text('移除模型')),
               ],
-              const SizedBox(width: AppSpacing.s2),
-              AnimatedOpacity(
-                opacity: actionsVisible ? 1 : 0,
-                duration: AppDuration.short,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.onSetDefault != null) ...[
-                      IconActionButton(
-                        icon: Symbols.vertical_align_top,
-                        tooltip: '设为默认',
-                        size: 28,
-                        iconSize: 18,
-                        onPressed: widget.onSetDefault,
-                      ),
-                      const SizedBox(width: 2),
-                    ],
-                    IconActionButton(
-                      icon: Symbols.tune,
-                      tooltip: '参数',
-                      size: 28,
-                      iconSize: 18,
-                      color: widget.open ? cs.primary : null,
-                      onPressed: widget.onToggle,
-                    ),
-                    const SizedBox(width: 2),
-                    IconActionButton(
-                      icon: Symbols.close,
-                      tooltip: '删除',
-                      size: 28,
-                      iconSize: 18,
-                      onPressed: widget.onRemove,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
+          ]),
+        ]),
+        const SizedBox(height: 4),
+        SelectableText(model.name, style: AppTextStyles.timecode.copyWith(color: cs.onSurfaceVariant)),
+        const SizedBox(height: 4),
+        Text(_modelSummary(model), style: context.texts.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+        if (widget.open && asr != null)
+          ExpansionTile(title: const Text('接入信息'), children: [
+            ListTile(title: Text(asr.transport.label), subtitle: Text(_transportNote(asr.transport))),
+            if (asr.dialect != null) ListTile(title: Text(asr.dialect!.label)),
+          ]),
+      ]),
     );
 
     return DecoratedBox(
@@ -603,85 +522,6 @@ class _ModelRowState extends State<_ModelRow> {
   };
 }
 
-/// 声明标签（接入方式、模型族）：描边、无底色。与能力 chip 的实底分开 ——
-/// 一个是「用户声明它怎么接」，一个是「于是它能做什么」。
-class _DeclarationTag extends StatelessWidget {
-  const _DeclarationTag({required this.label, required this.tooltip});
-
-  final String label;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = context.colors;
-    return Tooltip(
-      message: tooltip,
-      waitDuration: const Duration(milliseconds: 400),
-      child: Container(
-        height: 20,
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppRadius.xs),
-          border: Border.all(color: cs.outlineVariant),
-        ),
-        // 只在竖向居中、横向按文字收缩：带 alignment 的 Container 放进
-        // Wrap 里会撑满一整行。
-        child: Center(
-          widthFactor: 1,
-          child: Text(
-            label,
-            style: context.texts.labelSmall?.copyWith(
-              color: cs.onSurfaceVariant,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CapabilityChip extends StatelessWidget {
-  const _CapabilityChip({
-    required this.icon,
-    required this.label,
-    required this.tooltip,
-  });
-
-  final IconData icon;
-  final String label;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = context.colors;
-    return Tooltip(
-      message: tooltip,
-      waitDuration: const Duration(milliseconds: 400),
-      child: Container(
-        height: 20,
-        padding: const EdgeInsets.only(left: 4, right: 6),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainer,
-          borderRadius: BorderRadius.circular(AppRadius.xs),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, weight: 400, color: cs.onSurfaceVariant),
-            const SizedBox(width: 3),
-            Text(
-              label,
-              style: context.texts.labelSmall?.copyWith(
-                color: cs.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _DefaultMark extends StatelessWidget {
   const _DefaultMark();
 
@@ -695,7 +535,7 @@ class _DefaultMark extends StatelessWidget {
         height: 20,
         padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
-          color: cs.secondaryContainer,
+          color: cs.primaryContainer,
           borderRadius: BorderRadius.circular(AppRadius.xs),
         ),
         child: Center(
@@ -703,7 +543,7 @@ class _DefaultMark extends StatelessWidget {
           child: Text(
             '默认',
             style: context.texts.labelSmall?.copyWith(
-              color: cs.onSecondaryContainer,
+              color: cs.onPrimaryContainer,
             ),
           ),
         ),
@@ -1010,4 +850,25 @@ class _DecimalFieldState extends State<_DecimalField> {
       ),
     );
   }
+}
+
+// 展示名称只做精确映射，不参与运行时协议选择。
+String _modelTitle(ModelSpec model) => const {
+  'qwen-audio-3.1-asr-flash-filetrans': 'Qwen Audio 3.1 · 整文件转写',
+  'qwen-audio-3.1-asr-flash-message': 'Qwen Audio 3.1 · 流式文件转写',
+  'qwen-audio-3.0-asr-flash': 'Qwen Audio 3.0 · 逐段识别',
+  'qwen-audio-3.0-asr-flash-filetrans': 'Qwen Audio 3.0 · 整文件转写',
+  'qwen3-asr-flash': 'Qwen3 ASR · 逐段识别',
+  'qwen3-asr-flash-filetrans': 'Qwen3 ASR · 整文件转写',
+}[model.name] ?? model.name;
+
+String _modelSummary(ModelSpec model) {
+  if (model is! AsrModelSpec) return '字幕翻译';
+  return [model.transport.label,
+    if (model.capabilities.contextPrompt) '上下文提示',
+    if (model.transport == AsrTransport.dashscopeMessage ||
+        model.transport == AsrTransport.dashscopeFileTrans && model.dialect == DashScopeDialect.qwenAudio3) '即时热词',
+    if (model.capabilities.diarization) '说话人分离',
+    if (model.languages != null) '语种：${model.languages!.join('、')}',
+  ].join(' · ');
 }

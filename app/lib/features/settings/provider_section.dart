@@ -241,14 +241,7 @@ class ProviderSection extends StatelessWidget {
             },
           ),
         ),
-        SettingsRow(
-          label: '模型',
-          note: info is AsrProviderInfo && info.multiTransport
-              ? '第一个是默认，新建任务时从这里选。'
-                    '${info.vendor}的模型要标明接入方式与模型族。'
-              : '第一个是默认，新建任务时从这里选。',
-          stacked: stacked,
-          child: ModelListEditor(
+        ModelListEditor(
             // 换服务时重建：展开的行、添加行里打到一半的名字不带到另一家。
             key: ValueKey('${info.id}-models'),
             models: models,
@@ -295,7 +288,6 @@ class ProviderSection extends StatelessWidget {
               settings.setModelOption(info, model.name, key, value);
               onChanged();
             },
-          ),
         ),
         if (info.needsApiKey)
           SettingsRow(

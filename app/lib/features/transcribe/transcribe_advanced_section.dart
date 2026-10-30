@@ -59,16 +59,6 @@ class TranscribeAdvancedSection extends StatelessWidget {
         ],
       ),
     );
-    final prompt = LabeledField(
-      label: '识别提示词（可选）',
-      child: MultilineField(
-        value: o.asrPrompt,
-        minHeight: 56,
-        hint: '风格与说明；专有名词请用词表',
-        onChanged: (v) =>
-            form.update((o) => o.copyWith(asrPrompt: v), notify: false),
-      ),
-    );
     final lengths = twoColumn(
       LabeledField(
         label: '每行最大字符数 · 中日韩',
@@ -127,7 +117,6 @@ class TranscribeAdvancedSection extends StatelessWidget {
         children: [
           header,
           if (open) ...[
-            prompt,
             lengths,
             format,
             _OutputLocationRadios(form: form),
@@ -142,7 +131,6 @@ class TranscribeAdvancedSection extends StatelessWidget {
         header,
         if (open) ...[
           Container(height: 1, color: cs.outlineVariant),
-          prompt,
           lengths,
           format,
           LabeledField(
