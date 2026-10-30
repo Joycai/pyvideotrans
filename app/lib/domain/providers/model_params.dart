@@ -246,6 +246,7 @@ abstract final class ModelParams {
     AsrTransport.dashscopeSync =>
       dialect == DashScopeDialect.qwen3Asr ? const [enableItn] : const [],
     AsrTransport.dashscopeFileTrans => const [],
+    AsrTransport.dashscopeMessage => const [],
   };
 
   /// 翻译（对话）模型的参数。

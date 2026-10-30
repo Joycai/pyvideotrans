@@ -11,7 +11,10 @@ enum AsrTransport {
   dashscopeSync('同步逐段'),
 
   /// 百炼录音文件转写：上传 → 提交 → 轮询，返回句级与词级时间戳。
-  dashscopeFileTrans('异步整文件');
+  dashscopeFileTrans('异步整文件'),
+
+  /// Message 通过 WebSocket 双向发送音频与句级结果。
+  dashscopeMessage('流式文件转写');
 
   const AsrTransport(this.label);
 
@@ -28,7 +31,7 @@ enum AsrTransport {
 /// 另两族用 `file_urls` + `language_hints`。
 enum DashScopeDialect {
   qwen3Asr('Qwen3-ASR'),
-  qwenAudio3('Qwen-Audio 3.0'),
+  qwenAudio3('Qwen-Audio 3.x'),
   funAsr('Fun-ASR');
 
   const DashScopeDialect(this.label);
@@ -75,7 +78,7 @@ final class AsrCapabilities {
     timing: '切片时间码',
   );
 
-  // 录音文件转写没有提示位。分离：Qwen-Audio 3.0 实测可用，Fun-ASR 按文档
+  // Qwen-Audio 整文件支持上下文；Fun-ASR 与 Qwen3 保留各自能力。分离：Fun-ASR 按文档
   // 支持，Qwen3-ASR 按文档不支持。
   static const _fileQwen3 = AsrCapabilities(
     diarization: false,
@@ -96,9 +99,14 @@ final class AsrCapabilities {
     }
     final qwen3 = dialect == DashScopeDialect.qwen3Asr;
     return switch (transport) {
+      AsrTransport.dashscopeMessage => const AsrCapabilities(
+        diarization: false, contextPrompt: true, timing: '句级时间戳',
+      ),
       AsrTransport.openaiTranscription => _openai,
       AsrTransport.dashscopeSync => qwen3 ? _syncQwen3 : _syncOther,
-      AsrTransport.dashscopeFileTrans => qwen3 ? _fileQwen3 : _fileOther,
+      AsrTransport.dashscopeFileTrans => dialect == DashScopeDialect.qwenAudio3
+          ? const AsrCapabilities(diarization: true, contextPrompt: true, timing: '句级时间戳')
+          : qwen3 ? _fileQwen3 : _fileOther,
     };
   }
 }

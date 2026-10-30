@@ -111,7 +111,7 @@ void main() {
       });
     });
 
-    test('上下文提示只有 OpenAI 转写接口与百炼同步的 Qwen3-ASR 接受', () {
+    test('上下文提示覆盖 OpenAI、Qwen3 同步、Qwen-Audio 整文件及 Message', () {
       final able = {
         for (final transport in AsrTransport.values)
           for (final dialect in [
@@ -122,6 +122,9 @@ void main() {
       };
       expect(able, {
         (AsrTransport.openaiTranscription, null),
+        (AsrTransport.dashscopeFileTrans, DashScopeDialect.qwenAudio3),
+        for (final dialect in DashScopeDialect.values)
+          (AsrTransport.dashscopeMessage, dialect),
         (AsrTransport.dashscopeSync, DashScopeDialect.qwen3Asr),
       });
     });

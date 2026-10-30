@@ -17,6 +17,7 @@ abstract final class ProviderCatalog {
   static const asr = <AsrProviderInfo>[
     AsrProviderInfo(
       id: 'openai',
+      disabledReason: '暂时禁用，待充分测试',
       name: 'OpenAI',
       vendor: 'OpenAI',
       defaultBaseUrl: 'https://api.openai.com/v1',
@@ -28,6 +29,7 @@ abstract final class ProviderCatalog {
     ),
     AsrProviderInfo(
       id: 'groq',
+      disabledReason: '暂时禁用，待充分测试',
       name: 'Groq',
       vendor: 'Groq',
       defaultBaseUrl: 'https://api.groq.com/openai/v1',
@@ -38,6 +40,7 @@ abstract final class ProviderCatalog {
     ),
     AsrProviderInfo(
       id: 'siliconflow',
+      disabledReason: '暂时禁用，待充分测试',
       name: '硅基流动',
       vendor: '硅基流动',
       defaultBaseUrl: 'https://api.siliconflow.cn/v1',
@@ -75,12 +78,13 @@ abstract final class ProviderCatalog {
     // 任务轮询结果，不切片，一次拿回带时间戳（和说话人）的整份结果。
     AsrProviderInfo(
       id: 'dashscope_qwen_asr',
-      name: '阿里百炼 · Qwen3-ASR',
+      name: '阿里百炼 · Qwen ASR',
       vendor: '阿里百炼',
       defaultBaseUrl: 'https://dashscope.aliyuncs.com/api/v1',
       transports: {
         AsrTransport.dashscopeSync,
         AsrTransport.dashscopeFileTrans,
+        AsrTransport.dashscopeMessage,
       },
       presets: [
         AsrModelSpec(
@@ -107,6 +111,16 @@ abstract final class ProviderCatalog {
           name: 'qwen3-asr-flash-filetrans',
           transport: AsrTransport.dashscopeFileTrans,
           dialect: DashScopeDialect.qwen3Asr,
+        ),
+        AsrModelSpec(
+          name: 'qwen-audio-3.1-asr-flash-filetrans',
+          transport: AsrTransport.dashscopeFileTrans,
+          dialect: DashScopeDialect.qwenAudio3,
+        ),
+        AsrModelSpec(
+          name: 'qwen-audio-3.1-asr-flash-message',
+          transport: AsrTransport.dashscopeMessage,
+          dialect: DashScopeDialect.qwenAudio3,
         ),
       ],
     ),

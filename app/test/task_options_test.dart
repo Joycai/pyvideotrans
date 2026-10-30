@@ -20,7 +20,7 @@ import 'package:subtitle_studio/services/settings.dart';
 import 'helpers.dart';
 
 Future<AppSettings> freshSettings() async {
-  SharedPreferences.setMockInitialValues({});
+  SharedPreferences.setMockInitialValues({'asrProviderId': 'openai'});
   return AppSettings.load();
 }
 
@@ -315,7 +315,7 @@ void main() {
     });
 
     test('设置里存得住，并带进默认参数', () async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({'asrProviderId': 'openai'});
       final settings = await AppSettings.load();
       expect(settings.bilingual, BilingualLayout.targetOnly);
 

@@ -18,7 +18,8 @@ void main() {
   group('识别服务是否可用', () {
     test('没填密钥时拦住，并说清楚去哪儿填', () async {
       final s = await freshSettings();
-      final r = ProviderReadiness.asr('openai', s);
+      s.setConfig('asr_custom', const ProviderConfig(baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1'));
+      final r = ProviderReadiness.asr('asr_custom', s);
       expect(r.isBlocked, isTrue);
       expect(r.message, contains('未配置密钥'));
       expect(r.hint, contains('设置'));
@@ -26,8 +27,8 @@ void main() {
 
     test('填了密钥就放行', () async {
       final s = await freshSettings()
-        ..setConfig('openai', const ProviderConfig(apiKey: 'sk-test'));
-      expect(ProviderReadiness.asr('openai', s).isReady, isTrue);
+        ..setConfig('asr_custom', const ProviderConfig(apiKey: 'sk-test', baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1'));
+      expect(ProviderReadiness.asr('asr_custom', s).isReady, isTrue);
     });
 
     test('未实施的服务拦住，并说明是第二期', () async {
@@ -56,11 +57,12 @@ void main() {
     // 原实现在 is_allow_lang 里做同样的事：提示但不拦。
     test('小模型遇到没训过的语种时提示，但不拦着开始', () async {
       final s = await freshSettings()
-        ..setConfig('siliconflow', const ProviderConfig(apiKey: 'k'));
+        ..setConfig('asr_custom', const ProviderConfig(apiKey: 'k', baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1'));
       final r = ProviderReadiness.asr(
-        'siliconflow',
+        'asr_custom',
         s,
         language: Languages.byCode('fr'),
+        model: ProviderCatalog.asrInfo('siliconflow')!.presets.first,
       );
       expect(r.level, ReadinessLevel.advisory);
       expect(r.isBlocked, isFalse);
@@ -195,19 +197,19 @@ void main() {
 
     test('说话人分离：不支持的服务提示会被忽略', () async {
       final s = await freshSettings()
-        ..setConfig('openai', const ProviderConfig(apiKey: 'k'));
-      final r = ProviderReadiness.asr('openai', s, diarize: true);
+        ..setConfig('asr_custom', const ProviderConfig(apiKey: 'k', baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1'));
+      final r = ProviderReadiness.asr('asr_custom', s, diarize: true);
       expect(r.level, ReadinessLevel.advisory);
-      expect(r.message, 'OpenAI不支持说话人分离');
+      expect(r.message, '自定义（OpenAI 兼容）不支持说话人分离');
       // 改用哪家也从登记表里取：第一家有模型能分离的服务。
-      expect(r.hint, '这一项会被忽略；需要分离请改用阿里百炼 · Qwen3-ASR。');
+      expect(r.hint, '这一项会被忽略；需要分离请改用阿里百炼 · Qwen ASR。');
     });
 
     test('声明的接入方式这家服务没有：拦住，别等任务排到了才失败', () async {
       final s = await freshSettings()
-        ..setConfig('openai', const ProviderConfig(apiKey: 'k'));
+        ..setConfig('asr_custom', const ProviderConfig(apiKey: 'k', baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1'));
       final r = ProviderReadiness.asr(
-        'openai',
+        'asr_custom',
         s,
         model: const AsrModelSpec(
           name: 'qwen3-asr-flash',
@@ -224,9 +226,9 @@ void main() {
 
     test('语种限制跟着模型声明走', () async {
       final s = await freshSettings()
-        ..setConfig('openai', const ProviderConfig(apiKey: 'k'));
+        ..setConfig('asr_custom', const ProviderConfig(apiKey: 'k', baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1'));
       final r = ProviderReadiness.asr(
-        'openai',
+        'asr_custom',
         s,
         language: Languages.byCode('fr'),
         model: const AsrModelSpec(
@@ -241,9 +243,9 @@ void main() {
 
     test('支持的语种不提示', () async {
       final s = await freshSettings()
-        ..setConfig('siliconflow', const ProviderConfig(apiKey: 'k'));
+        ..setConfig('asr_custom', const ProviderConfig(apiKey: 'k', baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1'));
       final r = ProviderReadiness.asr(
-        'siliconflow',
+        'asr_custom',
         s,
         language: Languages.byCode('zh'),
       );
@@ -252,10 +254,10 @@ void main() {
 
     test('自动检测时不检查语种', () async {
       final s = await freshSettings()
-        ..setConfig('siliconflow', const ProviderConfig(apiKey: 'k'));
+        ..setConfig('asr_custom', const ProviderConfig(apiKey: 'k', baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1'));
       expect(
         ProviderReadiness.asr(
-          'siliconflow',
+          'asr_custom',
           s,
           language: Languages.auto,
         ).isReady,
@@ -265,10 +267,10 @@ void main() {
 
     test('whisper 系列不限语种', () async {
       final s = await freshSettings()
-        ..setConfig('openai', const ProviderConfig(apiKey: 'k'));
+        ..setConfig('asr_custom', const ProviderConfig(apiKey: 'k', baseUrl: 'https://example.test/v1', legacyModelText: 'whisper-1'));
       expect(
         ProviderReadiness.asr(
-          'openai',
+          'asr_custom',
           s,
           language: Languages.byCode('fr'),
         ).isReady,

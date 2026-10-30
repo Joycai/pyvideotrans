@@ -156,7 +156,9 @@ class ProviderSection extends StatelessWidget {
         defaultModel is AsrModelSpec &&
         !defaultModel.capabilities.contextPrompt;
 
-    final tag = !info.implemented
+    final tag = info.disabledReason != null
+        ? const StatusTag(label: '暂时禁用', tone: TagTone.muted)
+        : !info.implemented
         ? const StatusTag(label: '第一期未实施', tone: TagTone.muted)
         : configured
         ? const StatusTag(
@@ -176,7 +178,12 @@ class ProviderSection extends StatelessWidget {
       tag: tag,
       saved: saved,
       children: [
-        if (info.implemented && !configured)
+        if (info.disabledReason case final reason?)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.s3),
+            child: _WarningBanner(title: reason, body: '原有配置已保留，请选择已启用的识别服务。'),
+          ),
+        if (info.available && !configured)
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.s3),
             child: _WarningBanner(
@@ -190,7 +197,7 @@ class ProviderSection extends StatelessWidget {
         SettingsRow(
           label: '服务',
           note: infos
-              .where((i) => i.implemented)
+              .where((i) => i.available)
               .map((i) => i.name)
               .join(' · '),
           stacked: stacked,

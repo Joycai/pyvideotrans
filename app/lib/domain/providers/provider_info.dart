@@ -12,6 +12,7 @@ sealed class ProviderInfo {
     required this.vendor,
     this.runsLocally = false,
     this.implemented = true,
+    this.disabledReason,
     this.needsApiKey = true,
     this.defaultBaseUrl,
   });
@@ -28,6 +29,10 @@ sealed class ProviderInfo {
 
   /// 第一期是否已实施。未实施的在设置页里灰显并标注。
   final bool implemented;
+
+  /// 暂停接入时保留配置与存档，但阻止新请求。
+  final String? disabledReason;
+  bool get available => implemented && disabledReason == null;
 
   final bool needsApiKey;
   final String? defaultBaseUrl;
@@ -49,6 +54,7 @@ final class AsrProviderInfo extends ProviderInfo {
     required super.vendor,
     super.runsLocally,
     super.implemented,
+    super.disabledReason,
     super.needsApiKey,
     super.defaultBaseUrl,
     this.transports = const {AsrTransport.openaiTranscription},
@@ -110,6 +116,7 @@ final class ChatProviderInfo extends ProviderInfo {
     required super.vendor,
     super.runsLocally,
     super.implemented,
+    super.disabledReason,
     super.needsApiKey,
     super.defaultBaseUrl,
     this.presets = const [],

@@ -104,14 +104,14 @@ void main() {
 
   testWidgets('未配置：目录红点、标签「未配置」、横幅说明后果', (tester) async {
     settings
-      ..asrProviderId = 'groq'
+      ..asrProviderId = 'dashscope_qwen_asr'
       ..setConfig('deepseek', const ProviderConfig(apiKey: 'sk-x'));
     await pump(tester);
     expect(find.text('未配置'), findsOneWidget);
     expect(find.text('识别服务未配置完整，转写任务无法启动'), findsOneWidget);
-    expect(find.textContaining('Groq未配置密钥'), findsOneWidget);
+    expect(find.textContaining('阿里百炼 · Qwen ASR未配置密钥'), findsOneWidget);
 
-    settings.setConfig('groq', const ProviderConfig(apiKey: 'sk-x'));
+    settings.setConfig('dashscope_qwen_asr', const ProviderConfig(apiKey: 'sk-x'));
     await tester.pump();
     expect(find.text('未配置'), findsNothing);
     expect(find.text('识别服务未配置完整，转写任务无法启动'), findsNothing);

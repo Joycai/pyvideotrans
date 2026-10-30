@@ -249,6 +249,17 @@ void main() {
       expect(cp.asyncTaskId, isNull);
     });
 
+    test('Qwen 3.1 整文件沿用上传、轮询与说话人结果解析', () async {
+      final server = _Server(pendingRounds: 1);
+      final cues = await build(server.client,
+        model: 'qwen-audio-3.1-asr-flash-filetrans').transcribe(
+        audioPath: audio, language: 'zh', token: CancellationToken(),
+        onProgress: (_, _, {note}) {},
+      );
+      expect(cues.map((c) => c.speaker), [0, 1]);
+      expect(cues.map((c) => (c.startMs, c.endMs)), [(100, 3820), (3820, 6500)]);
+    });
+
     test('qwen3 族用 file_url 与 language；不开分离、自动检测时不带这些参数', () async {
       final server = _Server();
       await build(

@@ -596,6 +596,7 @@ class _ModelRowState extends State<_ModelRow> {
   }
 
   static String _transportNote(AsrTransport transport) => switch (transport) {
+    AsrTransport.dashscopeMessage => '通过流式连接发送文件音频，返回句级时间戳',
     AsrTransport.openaiTranscription => 'OpenAI 转写接口：整文件上传，分段时间戳',
     AsrTransport.dashscopeSync => '同步接口：本地按静音切片后逐段识别，时间码来自切片边界',
     AsrTransport.dashscopeFileTrans => '录音文件转写：整文件上传后异步转写，句级时间戳',
