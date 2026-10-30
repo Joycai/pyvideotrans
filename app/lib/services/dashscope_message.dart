@@ -27,9 +27,11 @@ class DashScopeMessageProvider implements AsrProvider {
 
   Uri get socketUri {
     final base = Uri.parse(endpoint.baseUrl);
+    final prefix = base.path.replaceFirst(RegExp(r'/+$'), '')
+        .replaceFirst(RegExp(r'/api/v1$'), '');
     return base.replace(
       scheme: base.scheme == 'http' || base.scheme == 'ws' ? 'ws' : 'wss',
-      path: '${base.path.replaceFirst(RegExp(r'/api/v1/?$'), '')}/api-ws/v1/inference',
+      path: '$prefix/api-ws/v1/inference',
       query: null,
       fragment: null,
     );
@@ -76,6 +78,7 @@ class DashScopeMessageProvider implements AsrProvider {
     // 提前安装错误监听，连接尚未建立时取消也不会产生未处理异常。
     final completion = done.future;
     unawaited(completion.catchError((Object _) {}));
+    // 只有服务端响应才重置超时；本地写入缓冲区不代表对端仍在处理。
     var lastActivity = DateTime.now();
     var started = false;
     var sent = false;
@@ -111,16 +114,17 @@ class DashScopeMessageProvider implements AsrProvider {
       final taskId = const Uuid().v4();
       Future<void> sendAudio() async {
         final audio = await file.open();
-        final total = await audio.length();
         var offset = 0;
         try {
+          final total = await audio.length();
           while (!done.isCompleted) {
             token.throwIfCancelled();
             final bytes = await audio.read(3200);
+            token.throwIfCancelled();
+            if (done.isCompleted) return;
             if (bytes.isEmpty) break;
             ws.add(bytes);
             offset += bytes.length;
-            lastActivity = DateTime.now();
             onProgress(offset, total, note: '流式识别音频');
             await Future<void>.delayed(const Duration(milliseconds: 100));
           }

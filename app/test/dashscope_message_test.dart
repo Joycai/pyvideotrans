@@ -109,6 +109,40 @@ void main() {
     await expectLater(run(), throwsA(isA<ActionableException>().having((e) => e.message, 'message', contains('超时'))));
   });
 
+  test('发送长文件时对端停止响应也会及时超时', () async {
+    audio.writeAsBytesSync(List.filled(320000, 0));
+    provider = DashScopeMessageProvider(info: info, endpoint: Endpoint(
+      baseUrl: 'http://127.0.0.1:${server.port}/api/v1', model: model,
+      apiKey: 'test', timeout: const Duration(milliseconds: 250)));
+    var bytes = 0;
+    var finished = false;
+    await serve((ws, raw) {
+      if (raw is List<int>) { bytes += raw.length; return; }
+      final header = (jsonDecode(raw as String) as Map)['header'] as Map;
+      if (header['action'] == 'run-task') {
+        event(ws, header['task_id'] as String, 'task-started');
+      } else {
+        finished = true;
+      }
+    });
+    await expectLater(run().timeout(const Duration(seconds: 2)),
+      throwsA(isA<ActionableException>().having((e) => e.message, 'message', contains('超时'))));
+    expect(bytes, greaterThan(0));
+    expect(bytes, lessThan(320000));
+    expect(finished, isFalse);
+  });
+
+  test('根地址和 API 地址的尾斜杠不会产生重复 WebSocket 路径', () {
+    for (final path in ['', '/', '/api/v1', '/api/v1/']) {
+      final p = DashScopeMessageProvider(info: info, endpoint: Endpoint(
+        baseUrl: 'https://example.com$path', model: model));
+      expect(p.socketUri.toString(), 'wss://example.com/api-ws/v1/inference');
+    }
+    final p = DashScopeMessageProvider(info: info, endpoint: const Endpoint(
+      baseUrl: 'http://example.com/proxy/api/v1/', model: model));
+    expect(p.socketUri.toString(), 'ws://example.com/proxy/api-ws/v1/inference');
+  });
+
   test('task-failed 不发布部分结果', () async {
     await serve((ws, raw) {
       final json = jsonDecode(raw as String) as Map;
