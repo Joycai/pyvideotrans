@@ -57,6 +57,9 @@ UI 由 Codex 按 [仓库设计系统](../docs/design-system.md) 持续维护：�
 
 ## 跑起来
 
+开发基线：Flutter **3.47.9 stable**（Dart **3.13.7**）。依赖版本由
+`pubspec.lock` 锁定，首次运行前执行 `flutter pub get`。
+
 ```bash
 cd app
 flutter run -d macos      # 或 -d windows / -d linux
