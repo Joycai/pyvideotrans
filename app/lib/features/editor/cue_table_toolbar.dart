@@ -235,7 +235,7 @@ class _SpeakerFilterChip extends StatelessWidget {
                   weight: 400,
                   color: cs.onSurfaceVariant,
                 ),
-                label: '管理说话人…',
+                label: '管理全部说话人…',
                 onTap: () {
                   close();
                   onManageSpeakers?.call();

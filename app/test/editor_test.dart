@@ -98,6 +98,44 @@ class _RecordingTranslator implements TranslationProvider {
 }
 
 void main() {
+  test('局部整理固定可见选区，拒绝只读；新编辑清空重做', () async {
+    final c = await _speakerController();
+    addTearDown(c.dispose);
+    c.selectWith(0);
+    c.selectWith(4, extend: true);
+    c.setSpeakerFilter({1});
+    final positions = [...c.selectedPositions];
+    expect(positions, [2, 4]);
+    final original = c.document;
+    expect(c.applySpeakerMapping(original, positions, {1: 0}), isTrue);
+    expect(c.document.cues[3].speaker, 2);
+    expect(c.document.cues[5].speaker, 1);
+    c.undo();
+    expect(c.canRedo, isTrue);
+    c.renameSpeaker(0, '新名字');
+    expect(c.canRedo, isFalse);
+    final task = (c.session as TaskSession).task;
+    task.status = TaskStatus.running;
+    expect(c.applySpeakerMapping(c.document, [0], {0: 1}), isFalse);
+  });
+
+  test('局部说话人合并保留区外身份并支持一次撤销重做', () async {
+    final c = await _speakerController();
+    addTearDown(c.dispose);
+    final original = c.document;
+    expect(c.applySpeakerMapping(original, [2, 3], {1: 3, 2: 3},
+      newSpeakers: {3: '李老师'}), isTrue);
+    expect(c.document.cues.map((c) => c.speaker), [0, 0, 3, 3, 1, 1]);
+    expect(c.document.speakers[1], '周老师');
+    final changed = c.document;
+    c.undo();
+    expect(c.document, same(original));
+    c.redo();
+    expect(c.document, same(changed));
+    expect(c.applySpeakerMapping(original, [0], {0: 1}), isFalse);
+    expect(c.document, same(changed));
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('过滤与计数', () {

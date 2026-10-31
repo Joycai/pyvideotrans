@@ -58,6 +58,7 @@ abstract final class EditorKeys {
 
   // —— 编辑器分区范围 ——
   static const save = AppShortcut(LogicalKeyboardKey.keyS, primary: true);
+  static const redo = AppShortcut(LogicalKeyboardKey.keyZ, primary: true, shift: true);
   static const undo = AppShortcut(
     LogicalKeyboardKey.keyZ,
     primary: true,

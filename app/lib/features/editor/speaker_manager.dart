@@ -53,7 +53,7 @@ class SpeakerManager extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       spacing: AppSpacing.s1,
                       children: [
-                        Text('说话人', style: context.texts.titleLarge),
+                        Text('全部说话人', style: context.texts.titleLarge),
                         Text(
                           '共 ${speakers.length} 位。名字只影响显示和导出时的标签，不会改动字幕文本。',
                           style: context.texts.bodyMedium?.copyWith(

@@ -3,10 +3,12 @@ import 'package:material_symbols_icons/symbols.dart';
 
 import '../../core/theme/app_extensions.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/indicators.dart';
 import 'editor_controller.dart';
 import 'editor_widgets.dart';
+import 'scoped_speaker_dialog.dart';
 import 'speaker_badge.dart';
 
 /// 说话人字段与它的下拉：先定应用范围，再选人。
@@ -54,7 +56,7 @@ class InspectorSpeakerField extends StatelessWidget {
                     Icon(Symbols.group, size: 16, weight: 400, color: cs.primary),
                     const SizedBox(width: AppSpacing.s1),
                     Text(
-                      '管理说话人',
+                      '管理全部说话人…',
                       style: context.texts.bodySmall?.copyWith(color: cs.primary),
                     ),
                   ],
@@ -113,6 +115,12 @@ class InspectorSpeakerField extends StatelessWidget {
           ),
           popover: (context, close) =>
               _SpeakerMenu(controller: controller, close: close),
+        ),
+        const SizedBox(height: AppSpacing.s2),
+        ControlButton(
+          label: '整理选区说话人…',
+          onPressed: controller.locked || controller.selectedPositions.isEmpty
+              ? null : () => showScopedSpeakerDialog(context, controller),
         ),
       ],
     );

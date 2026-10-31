@@ -427,6 +427,7 @@ void main() {
     Size size = const Size(1440, 900),
     List<int> review = const [],
     bool speakerManager = false,
+    bool scopedSpeakers = false,
     List<int> multi = const [],
   }) async {
     SharedPreferences.setMockInitialValues({});
@@ -483,6 +484,10 @@ void main() {
       pageKey.currentState!.manageSpeakers();
       await tester.pumpAndSettle();
     }
+    if (scopedSpeakers) {
+      await tester.tap(find.text('整理选区说话人…'));
+      await tester.pumpAndSettle();
+    }
     await expectLater(
       find.byType(MaterialApp),
       matchesGoldenFile('$file.png'),
@@ -530,6 +535,15 @@ void main() {
       multi: [2, 3, 4, 5, 8],
     );
   }, variant: _macOS);
+
+  for (final brightness in [Brightness.light, Brightness.dark]) {
+    testWidgets('编辑器 · 局部说话人整理 · ${brightness.name}', (tester) async {
+      await pumpLocal(tester, brightness: brightness,
+        file: 'editor_scoped_speakers_${brightness.name}',
+        multi: [2, 3, 4, 5, 8], scopedSpeakers: true,
+        size: const Size(1080, 760));
+    }, variant: _macOS);
+  }
 
   testWidgets('编辑器 · 只有原文', (tester) async {
     await pumpLocal(

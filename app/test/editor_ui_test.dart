@@ -17,8 +17,8 @@ import 'package:subtitle_studio/features/editor/editor_prompts.dart';
 import 'package:subtitle_studio/features/editor/editor_session.dart';
 import 'package:subtitle_studio/features/editor/editor_shortcuts.dart';
 import 'package:subtitle_studio/features/editor/editor_widgets.dart';
-import 'package:subtitle_studio/features/editor/inspector_selection_editor.dart';
 import 'package:subtitle_studio/features/editor/inspector_speaker_field.dart';
+import 'package:subtitle_studio/features/editor/selection_ranges.dart';
 import 'package:subtitle_studio/services/settings.dart';
 
 import 'editor_fixtures.dart';
@@ -59,6 +59,33 @@ Future<void> _pump(WidgetTester tester, EditorController controller) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('局部命名先预览再应用，取消不更改文档', (tester) async {
+    final c = await _controller();
+    addTearDown(c.dispose);
+    final original = c.document;
+    await _pump(tester, c);
+    await tester.tap(find.text('整理选区说话人…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('命名 / 替换…'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '输入新名字'), '李老师');
+    await tester.pump();
+    await tester.tap(find.text('使用新名字'));
+    await tester.pumpAndSettle();
+    expect(c.document, same(original));
+    await tester.tap(find.text('应用到 1 条字幕'));
+    await tester.pumpAndSettle();
+    expect(c.document.speakerName(c.document.cues.first.speaker!), '李老师');
+    expect(c.document.cues[1], same(original.cues[1]));
+    c.undo();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('整理选区说话人…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(c.document, same(original));
+  });
 
   group('本地会话的编辑页', () {
     testWidgets('说话人列：同一人连续只显示一次，未配对行写明没有原文', (tester) async {

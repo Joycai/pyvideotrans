@@ -41,6 +41,7 @@ String editorShortcutSheet() {
   final page = [
     (EditorKeys.save.label(), '保存到字幕文件'),
     (EditorKeys.undo.label(), '撤销'),
+    (EditorKeys.redo.label(), '重做'),
     (
       '${const AppShortcut(LogicalKeyboardKey.digit1, primary: true).label()}–9',
       '指派说话人',
@@ -159,6 +160,7 @@ class EditorShortcuts extends StatelessWidget {
       shortcuts: {
         EditorKeys.save.activator(): const _SaveIntent(),
         EditorKeys.undo.activator(): const _UndoIntent(),
+        EditorKeys.redo.activator(): const _RedoIntent(),
         // 只有 ⌘数字，没有 ⌘⇧数字：macOS 上 ⌘⇧3/4/5 是系统截屏键，应用收不到。
         // 按连续段指派用字幕表里的 Shift+数字。
         for (final (i, key) in EditorKeys.digits.indexed)
@@ -175,6 +177,10 @@ class EditorShortcuts extends StatelessWidget {
           ),
           // 编辑器级绑定比输入框自带的 ⌘Z 离焦点更近，会先拿到按键。打字时
           // 让出去：输入框里的 ⌘Z 撤销的是刚打的字，不是整份文档。
+          _RedoIntent: ShortcutAction<_RedoIntent>(
+            (_) => target()!.controller.redo(),
+            enabled: (_) => (target()?.controller.canRedo ?? false) && !isEditingText(),
+          ),
           _UndoIntent: ShortcutAction<_UndoIntent>(
             (_) => target()!.controller.undo(),
             enabled: (_) => target() != null && !isEditingText(),
@@ -251,4 +257,8 @@ class _UndoIntent extends Intent {
 
 class _BackToTableIntent extends Intent {
   const _BackToTableIntent();
+}
+
+class _RedoIntent extends Intent {
+  const _RedoIntent();
 }
