@@ -67,7 +67,7 @@ class CueTableHeader extends StatelessWidget {
                 const SizedBox(width: AppSpacing.s1),
                 if (onManageSpeakers != null)
                   Tooltip(
-                    message: '管理说话人',
+                    message: '管理全部说话人…',
                     child: InkWell(
                       onTap: onManageSpeakers,
                       borderRadius: BorderRadius.circular(AppRadius.xs),

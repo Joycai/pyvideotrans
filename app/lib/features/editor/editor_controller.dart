@@ -10,6 +10,7 @@ import '../../domain/language.dart';
 import '../../domain/line_wrap.dart';
 import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
+import '../../domain/speaker_mapping.dart';
 import '../../domain/srt.dart';
 import '../../domain/task_kind.dart';
 import '../../domain/task_options.dart';
@@ -238,6 +239,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   final Set<int> translating = {};
 
   final List<SubtitleDocument> _undo = [];
+  final List<SubtitleDocument> _redo = [];
   static const _undoLimit = 50;
 
   /// 上次写进字幕文件的文档。文档不可变，比较引用就知道有没有改过。
@@ -272,6 +274,8 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   /// 任务排队或运行中：流水线随时会整份换掉文档，编辑器这时的修改要么
   /// 被下一批译文盖掉，要么把流水线的结果盖掉，所以只看不改。
   bool get locked => session.busy;
+
+  bool get canRedo => !locked && _redo.isNotEmpty;
 
   bool get canUndo => !locked && _undo.isNotEmpty;
 
@@ -560,6 +564,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
 
 
   void _push() {
+    _redo.clear();
     _undo.add(document);
     session.pendingEdits++;
     session.recordEdit();
@@ -616,10 +621,23 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   void undo() {
     if (!canUndo) return;
     final before = document.cues.length;
+    _redo.add(document);
     session.document = _undo.removeLast();
     if (session.pendingEdits > 0) session.pendingEdits--;
     _coalesceKey = null;
     _changed(resized: document.cues.length != before);
+  }
+
+  void redo() {
+    if (!canRedo) return;
+    final next = _redo.removeLast();
+    final before = document.cues.length;
+    _undo.add(document);
+    session.pendingEdits++;
+    session.recordEdit();
+    _coalesceKey = null;
+    session.document = next;
+    _changed(resized: next.cues.length != before);
   }
 
   /// 「撤销到上次写入」：换回上次写进字幕文件的版本。本身也能撤销。
@@ -693,6 +711,20 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   }
 
   bool get _isCjk => session.sourceLanguage.cjk;
+
+  /// 草稿绑定原文档，防止弹窗期间的数据变化使选区指向其他字幕。
+  bool applySpeakerMapping(
+    SubtitleDocument expected,
+    List<int> positions,
+    Map<int?, int?> mapping, {
+    Map<int, String> newSpeakers = const {},
+  }) {
+    if (locked || !identical(document, expected)) return false;
+    _commit(mapSelectedSpeakers(
+      expected, positions, mapping, newSpeakers: newSpeakers,
+    ));
+    return true;
+  }
 
   /// 改名。名字清空回到「说话人N」。
   void renameSpeaker(int id, String name) =>
@@ -1009,6 +1041,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     }
     _seen = document;
     _undo.clear();
+    _redo.clear();
     _coalesceKey = null;
     _saved = session.pendingEdits == 0 ? document : null;
     _baseline = document;
