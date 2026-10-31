@@ -5,6 +5,7 @@ import '../../core/theme/tokens.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/glass_panel.dart';
+import '../../domain/cue.dart';
 import '../../domain/speaker_hotkeys.dart';
 import 'editor_controller.dart';
 
@@ -111,6 +112,31 @@ class SpeakerHotkeyDialog extends StatefulWidget {
 }
 
 class _SpeakerHotkeyDialogState extends State<SpeakerHotkeyDialog> {
+  late final SubtitleDocument document;
+  bool stale = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 编号只在这份文档中代表同一个人；任务开跑后即使还没换文档也不能复用草稿。
+    document = widget.controller.document;
+    stale = widget.controller.locked;
+    widget.controller.addListener(_checkSource);
+  }
+
+  void _checkSource() {
+    if (!stale && (widget.controller.locked ||
+        !identical(document, widget.controller.document))) {
+      setState(() => stale = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_checkSource);
+    super.dispose();
+  }
+
   late final entries = widget.controller.speakerHotkeys.isEmpty
       ? <String, int?>{
           for (final key in ['a', 'b', 'c', 'd']) key: -2,
@@ -122,6 +148,7 @@ class _SpeakerHotkeyDialogState extends State<SpeakerHotkeyDialog> {
     title: '说话人快捷分配',
     children: [
       const Text('仅用于当前会话。选中字幕后按字母键；J/K 保留给上下条。'),
+      if (stale) const Text('字幕已变化或任务已启动，请关闭后重新配置快捷键。'),
       Flexible(
         child: SingleChildScrollView(
           child: Column(
@@ -209,7 +236,9 @@ class _SpeakerHotkeyDialogState extends State<SpeakerHotkeyDialog> {
           const SizedBox(width: AppSpacing.s2),
           PrimaryButton(
             label: '应用',
-            onPressed: () {
+            onPressed: stale ? null : () {
+              // 通知之后、下一帧禁用按钮之前，也可能收到已排队的点击。
+              if (stale) return;
               widget.controller.setSpeakerHotkeys({
                 for (final e in entries.entries)
                   if (e.value != -2) e.key: e.value,

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
+import 'package:subtitle_studio/core/widgets/buttons.dart';
 import 'package:subtitle_studio/domain/speaker_hotkeys.dart';
 import 'package:subtitle_studio/domain/task.dart';
 import 'package:subtitle_studio/features/editor/editor_controller.dart';
@@ -222,6 +223,57 @@ void main() {
     await tester.pumpAndSettle();
     expect(focus.hasFocus, isTrue);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('配置期间文档变化，旧草稿不能重新绑定复用的编号', (tester) async {
+    final c = await controller();
+    addTearDown(c.dispose);
+    final id = c.addSpeaker('旧人物');
+    c.setSpeakerHotkeys({'a': id});
+    await tester.pumpWidget(MaterialApp(
+      theme: lightTheme,
+      home: Scaffold(body: SpeakerHotkeyDialog(controller: c)),
+    ));
+    final apply = tester.widget<PrimaryButton>(find.byType(PrimaryButton)).onPressed!;
+    c.mergeSpeaker(id, 0);
+    expect(c.addSpeaker('新人物'), id);
+    apply();
+    await tester.pump();
+    expect(find.text('字幕已变化或任务已启动，请关闭后重新配置快捷键。'), findsOneWidget);
+    expect(tester.widget<PrimaryButton>(find.byType(PrimaryButton)).onPressed, isNull);
+    await tester.tap(find.text('应用'));
+    expect(c.speakerHotkeys, {'a': -1});
+    await tester.pumpWidget(const SizedBox.shrink());
+    c.renameSpeaker(id, '再次改名');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('任务短暂进入运行状态后，配置草稿仍保持失效', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final task = SubtitleTask(
+      id: 'restart', sourcePath: '/tmp/a.mp4', kind: TaskKind.transcribe,
+      options: testOptions(), document: localSession().document,
+      status: TaskStatus.done, speakerHotkeys: {'a': 1},
+    );
+    final follow = ChangeNotifier();
+    final c = EditorController(
+      session: TaskSession(task), settings: await AppSettings.load(), follow: follow,
+    );
+    addTearDown(follow.dispose);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(MaterialApp(
+      theme: lightTheme,
+      home: Scaffold(body: SpeakerHotkeyDialog(controller: c)),
+    ));
+    task.status = TaskStatus.queued;
+    task.speakerHotkeys = {'a': -1};
+    follow.notifyListeners();
+    task.status = TaskStatus.done;
+    follow.notifyListeners();
+    await tester.pump();
+    expect(tester.widget<PrimaryButton>(find.byType(PrimaryButton)).onPressed, isNull);
+    await tester.tap(find.text('应用'));
+    expect(c.speakerHotkeys, {'a': -1});
   });
 
   testWidgets('默认空槽可搜索配置；取消不写入，应用保存', (tester) async {
