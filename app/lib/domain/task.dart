@@ -5,6 +5,7 @@ import 'language.dart';
 import 'media_job.dart';
 import 'paths.dart';
 import 'recognition_checkpoint.dart';
+import 'speaker_hotkeys.dart';
 import 'task_kind.dart';
 import 'task_options.dart';
 
@@ -132,6 +133,7 @@ class SubtitleTask {
     this.outputsWrittenAt,
     this.unsyncedEdits = 0,
     this.editorEdits = 0,
+    this.speakerHotkeys = const {},
   }) : createdAt = createdAt ?? DateTime.now(),
        outputs = outputs ?? {},
        stages = stages ?? {for (final s in TaskStage.values) s: const StageRecord()},
@@ -190,6 +192,8 @@ class SubtitleTask {
   /// 会重建文档，续跑前拿它判断要不要提醒用户修改会被覆盖。
   int editorEdits;
 
+  Map<String, int?> speakerHotkeys;
+
   /// 同时兼容 POSIX 与 Windows 分隔符。
   String get fileName => media?.title ?? baseName(sourcePath);
 
@@ -234,6 +238,7 @@ class SubtitleTask {
       'outputsWrittenAt': outputsWrittenAt!.toIso8601String(),
     if (unsyncedEdits > 0) 'unsyncedEdits': unsyncedEdits,
     if (editorEdits > 0) 'editorEdits': editorEdits,
+    if (speakerHotkeys.isNotEmpty) 'speakerHotkeys': speakerHotkeys,
   };
 
   /// 从存档读回。参数缺项回落到 [fallbackOptions]；未知的阶段 / 状态名按
@@ -300,6 +305,7 @@ class SubtitleTask {
       ),
       unsyncedEdits: json['unsyncedEdits'] as int? ?? 0,
       editorEdits: json['editorEdits'] as int? ?? 0,
+      speakerHotkeys: readSpeakerHotkeys(json['speakerHotkeys']),
     );
     task.recognition = switch (map(json['recognition'])) {
       final m? => RecognitionCheckpoint.fromJson(m),

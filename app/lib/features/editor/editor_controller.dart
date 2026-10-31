@@ -10,6 +10,7 @@ import '../../domain/language.dart';
 import '../../domain/line_wrap.dart';
 import '../../domain/output_naming.dart';
 import '../../domain/paths.dart';
+import '../../domain/speaker_hotkeys.dart';
 import '../../domain/speaker_mapping.dart';
 import '../../domain/srt.dart';
 import '../../domain/task_kind.dart';
@@ -133,6 +134,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   }) : _saved = saved ?? (session.pendingEdits == 0 ? session.document : null),
        _clock = clock ?? DateTime.now,
        _follow = follow {
+    _invalidateSpeakerHotkeys();
     _baseline = _saved ?? session.document;
     _seen = session.document;
     _wasLocked = locked;
@@ -577,6 +579,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   /// 「刚写入」让位给新的修改，否则写完 2 秒内再改、再按 ⌘S 会被当成
   /// 没事可做。写入失败的红色保留到下一次写成。
   void _changed({bool resized = false}) {
+    _invalidateSpeakerHotkeys();
     // 条数变了（拆分、合并、删行、撤销这些）下标整体挪位，旧选区对不上号，
     // 回到单选并把焦点夹回范围内。看不看得见不用在这里管，见 [_effective]。
     if (resized) _focusOn(selected);
@@ -724,6 +727,40 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
       expected, positions, mapping, newSpeakers: newSpeakers,
     ));
     return true;
+  }
+
+  Map<String, int?> get speakerHotkeys => Map.unmodifiable(session.speakerHotkeys);
+
+  bool canAssignHotkey(String key) {
+    final map = session.speakerHotkeys;
+    return !locked && selectedPositions.isNotEmpty && map.containsKey(key) &&
+        (map[key] == null || document.speakerIds.contains(map[key]));
+  }
+
+  int assignHotkey(String key) {
+    if (!canAssignHotkey(key)) return 0;
+    final target = session.speakerHotkeys[key];
+    final count = selectedPositions.where((p) => document.cues[p].speaker != target).length;
+    assignSpeaker(target);
+    return count;
+  }
+
+  void setSpeakerHotkeys(Map<String, int?> value) {
+    if (locked) return;
+    session.speakerHotkeys = readSpeakerHotkeys(value);
+    _invalidateSpeakerHotkeys();
+    // 配置单独保存，不产生字幕修改数，也不进入文档撤销栈。
+    _draftDirty = true;
+    _scheduleDraft();
+    notifyListeners();
+  }
+
+  void _invalidateSpeakerHotkeys() {
+    final ids = document.speakerIds.toSet();
+    session.speakerHotkeys = {
+      for (final e in session.speakerHotkeys.entries)
+        e.key: e.value != null && !ids.contains(e.value) ? -1 : e.value,
+    };
   }
 
   /// 改名。名字清空回到「说话人N」。
@@ -1014,6 +1051,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
       document: _saved ?? document,
       draft: pending == 0 ? null : document,
       pendingEdits: pending,
+      speakerHotkeys: session.speakerHotkeys,
       stamps: s.trackedStamps,
     );
   }
@@ -1039,6 +1077,7 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
       if (wasLocked != locked || phase != _phase) notifyListeners();
       return;
     }
+    _invalidateSpeakerHotkeys();
     _seen = document;
     _undo.clear();
     _redo.clear();

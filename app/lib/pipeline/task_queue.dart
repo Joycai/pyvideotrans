@@ -261,6 +261,11 @@ class TaskQueue extends ChangeNotifier {
     // 从翻译之前的阶段续跑会重建整份文档，编辑器里的修改随之作废
     // （续跑前界面已经问过用户）。
     if (task.resumeStage.index < TaskStage.translate.index) {
+      // 编辑器未打开时也要作废映射，避免重识别复用旧身份编号。
+      task.speakerHotkeys = {
+        for (final e in task.speakerHotkeys.entries)
+          e.key: e.value == null ? null : -1,
+      };
       task.editorEdits = 0;
       task.unsyncedEdits = 0;
     }

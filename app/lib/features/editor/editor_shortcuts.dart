@@ -6,6 +6,7 @@ import '../../core/shortcuts/shortcut_action.dart';
 import '../../core/widgets/text_focus.dart';
 import 'editor_controller.dart';
 import 'editor_keys.dart';
+import 'speaker_hotkey_bar.dart';
 
 /// 页脚那一行提示。列表有焦点时列常用单键（用不上的不列），没焦点时说清
 /// 怎么让单键生效 —— 焦点在别处时单键本来就不响应，列出来反而像坏了。
@@ -15,6 +16,7 @@ String editorFooterHint(EditorController c, {required bool tableFocused}) {
   }
   return shortcutHints([
     ('J/K', '上下条'),
+    if (c.speakerHotkeys.isNotEmpty) ('字母', '快捷分配'),
     if (c.speakers.isNotEmpty) ('1–9', '说话人'),
     (EditorKeys.toggleReviewed.label(), '校对'),
     if (c.media.playback != null) (EditorKeys.playPause.label(), '播放'),
@@ -28,6 +30,7 @@ String editorShortcutSheet() {
   final table = [
     ('J / K、${both(EditorKeys.next[1], EditorKeys.previous[1])}', '下一条 / 上一条'),
     (both(EditorKeys.extendNext, EditorKeys.extendPrevious), '扩选到下一条 / 上一条'),
+    ('已配置字母', '分配选中字幕（见快捷分配栏）'),
     ('1–9', '指派第 N 位说话人'),
     (
       '${const AppShortcut(LogicalKeyboardKey.digit1, shift: true).label()}–9',
@@ -88,6 +91,8 @@ class CueTableShortcuts extends StatelessWidget {
             run: true,
           ),
         },
+        for (final key in c.speakerHotkeys.keys)
+          AppShortcut(LogicalKeyboardKey(key.codeUnitAt(0))).activator(): _HotkeyIntent(key),
         EditorKeys.toggleReviewed.activator(): const _ToggleReviewedIntent(),
         EditorKeys.playPause.activator(): const _PlayPauseIntent(),
         EditorKeys.back.activator(): const _NudgeIntent(-1),
@@ -100,6 +105,10 @@ class CueTableShortcuts extends StatelessWidget {
             (i) => i.extend ? c.extendStep(i.delta) : c.step(i.delta),
           ),
           _AssignIntent: _assignAction(c),
+          _HotkeyIntent: ShortcutAction<_HotkeyIntent>(
+            (i) => assignSpeakerHotkey(context, c, i.key),
+            enabled: (i) => c.canAssignHotkey(i.key),
+          ),
           _ToggleReviewedIntent: ShortcutAction<_ToggleReviewedIntent>(
             (_) => c.toggleReviewed(),
           ),
@@ -261,4 +270,9 @@ class _BackToTableIntent extends Intent {
 
 class _RedoIntent extends Intent {
   const _RedoIntent();
+}
+
+class _HotkeyIntent extends Intent {
+  const _HotkeyIntent(this.key);
+  final String key;
 }

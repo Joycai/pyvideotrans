@@ -13,6 +13,7 @@ import 'editor_controller.dart';
 import 'editor_session.dart';
 import 'editor_shortcuts.dart';
 import 'editor_widgets.dart';
+import 'speaker_hotkey_bar.dart';
 
 /// 列宽与设计稿一致。null 为弹性列。
 const _plainColumns = <double?>[52, 124, 124, null, null, 96];
@@ -74,6 +75,7 @@ class CueTable extends StatelessWidget {
             speakers: speakers,
             onManageSpeakers: onManageSpeakers,
           ),
+          SpeakerHotkeyBar(controller: controller, tableFocus: focusNode),
           CueTableHeader(
             columns: columns,
             speakers: speakers,

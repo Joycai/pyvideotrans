@@ -38,6 +38,7 @@ PageChrome editorChrome(
     actions: [
       EditorPageActions(
         controller: editor,
+        onOpenOther: workspace.openOther,
         onTranslateMissing: onTranslateMissing,
         onExport: onExport,
         onSave: onSave,

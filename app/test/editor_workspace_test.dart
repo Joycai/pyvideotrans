@@ -1,9 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/task.dart';
+import 'package:subtitle_studio/features/editor/editor_chrome.dart';
 import 'package:subtitle_studio/features/editor/editor_prompts.dart';
 import 'package:subtitle_studio/features/editor/editor_workspace.dart';
 import 'package:subtitle_studio/pipeline/task_queue.dart';
@@ -91,6 +94,44 @@ void main() {
 
     workspace.backToEditor();
     expect(workspace.editing, isTrue);
+  });
+
+  testWidgets('已打开项目时顶栏可打开其他项目，返回不丢编辑进度', (tester) async {
+    tester.view.physicalSize = const Size(1080, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.runAsync(() => workspace.openTask(_task('a')));
+    final first = workspace.current!..editSource('尚未写入的修改');
+    await tester.pumpWidget(MaterialApp(
+      theme: lightTheme,
+      home: Scaffold(body: ListenableBuilder(
+        listenable: workspace,
+        builder: (_, _) {
+          final chrome = editorChrome(workspace, onSave: () {},
+            onExport: () {}, onTranslateMissing: () {});
+          return Row(children: chrome.actions);
+        },
+      )),
+    ));
+    await tester.tap(find.text('打开…'));
+    await tester.pump();
+    expect(workspace.showOpen, isTrue);
+    expect(workspace.current, same(first));
+    expect(prompts.asked, isEmpty, reason: '浏览入口页不关闭当前项目');
+    await tester.tap(find.text('返回编辑器'));
+    await tester.pump();
+    expect(workspace.editing, isTrue);
+    expect(workspace.current!.current!.source, '尚未写入的修改');
+    await tester.tap(find.text('打开…'));
+    await tester.pump();
+    await tester.runAsync(() => workspace.openTask(_task('b')));
+    expect(prompts.asked, ['leave']);
+    expect(workspace.current, same(first), reason: '取消切换保留旧项目');
+    await tester.runAsync(() async {
+      await workspace.recentsSettled;
+      await first.media.locate();
+    });
+    expect(tester.takeException(), isNull);
   });
 
   test('最近打开里的任务已经删了：提示一句，不动当前会话', () async {

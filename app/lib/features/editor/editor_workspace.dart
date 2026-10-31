@@ -188,7 +188,8 @@ class EditorWorkspace extends ChangeNotifier {
       form.translation?.path,
     );
     final session = form.build(restored: state?.current)
-      ..pendingEdits = state?.pendingEdits ?? 0;
+      ..pendingEdits = state?.pendingEdits ?? 0
+      ..speakerHotkeys = state?.speakerHotkeys ?? const {};
     if (state != null && state.changedOutside) {
       // 草稿之后文件被别的程序改过：沿用草稿记下的时间戳，保存时才会
       // 发现冲突、问用户覆盖还是另存。

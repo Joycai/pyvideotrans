@@ -24,6 +24,9 @@ sealed class EditorSession {
   /// 翻译、换行、导出用的参数。
   TaskOptions get options;
 
+  Map<String, int?> get speakerHotkeys;
+  set speakerHotkeys(Map<String, int?> value);
+
   Language get sourceLanguage => options.sourceLanguage;
   Language get targetLanguage => options.targetLanguage;
 
@@ -128,6 +131,11 @@ final class TaskSession extends EditorSession {
   TaskSession(this.task);
 
   final SubtitleTask task;
+
+  @override
+  Map<String, int?> get speakerHotkeys => task.speakerHotkeys;
+  @override
+  set speakerHotkeys(Map<String, int?> value) => task.speakerHotkeys = value;
 
   @override
   SubtitleDocument get document => task.document;
@@ -335,6 +343,9 @@ final class FileSession extends EditorSession {
 
   @override
   int pendingEdits = 0;
+
+  @override
+  Map<String, int?> speakerHotkeys = const {};
 
   /// 挂载的文件上次读 / 写完时的大小与修改时间。打开时由 [captureStamps] 记，
   /// 每次保存后更新。

@@ -218,7 +218,7 @@ void main() {
       await _pump(tester, c);
       await click(tester, 0);
       expect(c.multiSelected, isFalse);
-      expect(find.textContaining('已选'), findsNothing);
+      expect(find.textContaining(RegExp(r'^已选 .*条字幕$')), findsNothing);
 
       await click(tester, 2, LogicalKeyboardKey.shiftLeft);
       expect(c.selectedPositions, [0, 1, 2]);
@@ -232,7 +232,7 @@ void main() {
       // 普通点击回到单选。
       await click(tester, 3);
       expect(c.selectedPositions, [3]);
-      expect(find.textContaining('已选'), findsNothing);
+      expect(find.textContaining(RegExp(r'^已选 .*条字幕$')), findsNothing);
     }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
     testWidgets('macOS 上 ⌘+点击切换，Ctrl+点击不算（留给系统右键）', (tester) async {
@@ -292,7 +292,7 @@ void main() {
       await tester.pump();
       expect(c.multiSelected, isFalse);
       expect(c.selected, 2);
-      expect(find.textContaining('已选'), findsNothing);
+      expect(find.textContaining(RegExp(r'^已选 .*条字幕$')), findsNothing);
     });
 
     testWidgets('单选时说话人菜单照旧：应用范围分段与单条清除', (tester) async {

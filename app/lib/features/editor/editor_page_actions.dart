@@ -19,12 +19,14 @@ class EditorPageActions extends StatelessWidget {
     required this.onTranslateMissing,
     required this.onExport,
     this.onSave,
+    this.onOpenOther,
   });
 
   final EditorController controller;
   final VoidCallback onTranslateMissing;
   final VoidCallback onExport;
   final VoidCallback? onSave;
+  final VoidCallback? onOpenOther;
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +36,17 @@ class EditorPageActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (onOpenOther != null) ...[
+          Tooltip(
+            message: '打开其他字幕或任务，当前编辑进度会保留',
+            child: ControlButton(
+              label: '打开…',
+              icon: Symbols.folder_open,
+              onPressed: onOpenOther,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.s3),
+        ],
         if (isCompactEditor(context))
           _ViewMenu(controller: controller)
         else
