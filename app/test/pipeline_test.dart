@@ -650,7 +650,9 @@ void main() {
       expect(task.status, TaskStatus.failed);
       queue.cancel(task.id);
 
+      task.speakerHotkeys = {'a': 1, 'b': null};
       queue.resumeAuto(task.id);
+      expect(task.speakerHotkeys, {'a': -1, 'b': null});
       expect(task.recognition?.autoRetry, isTrue);
       expect(task.log.any((l) => l.message.startsWith('自动重试：')), isTrue);
       queue.cancel(task.id);

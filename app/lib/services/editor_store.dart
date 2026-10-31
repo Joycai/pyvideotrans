@@ -3,6 +3,7 @@ import 'dart:io';
 
 import '../domain/cue.dart';
 import '../domain/file_stamp.dart';
+import '../domain/speaker_hotkeys.dart';
 import 'file_io.dart';
 
 /// 编辑器自己的存档，放在应用支持目录的 `editor/` 下：
@@ -38,6 +39,7 @@ class EditorStore {
     required SubtitleDocument document,
     SubtitleDocument? draft,
     int pendingEdits = 0,
+    Map<String, int?> speakerHotkeys = const {},
     Map<String, FileStamp>? stamps,
   }) async {
     await _writeJson(_stateFile(sourcePath, translationPath), {
@@ -49,6 +51,7 @@ class EditorStore {
           path: (stamps?[path] ?? await stampOf(path)).toJson(),
       },
       'document': document.toJson(),
+      'speakerHotkeys': speakerHotkeys,
       if (draft != null) ...{
         'draft': draft.toJson(),
         'pendingEdits': pendingEdits,
@@ -118,6 +121,7 @@ class EditorStore {
             ? SubtitleDocument.fromJson(draft.cast<String, Object?>())
             : null,
         pendingEdits: json['pendingEdits'] as int? ?? 0,
+        speakerHotkeys: readSpeakerHotkeys(json['speakerHotkeys']),
         draftAt: DateTime.tryParse(json['draftAt'] as String? ?? ''),
       );
     } on Object {
@@ -200,6 +204,7 @@ class FileState {
     required this.saved,
     this.draft,
     this.pendingEdits = 0,
+    this.speakerHotkeys = const {},
     this.draftAt,
   });
 
@@ -211,6 +216,8 @@ class FileState {
 
   /// [draft] 比 [saved] 多出的修改数。
   final int pendingEdits;
+
+  final Map<String, int?> speakerHotkeys;
 
   /// 编辑进度最后一次存下的时间。
   final DateTime? draftAt;

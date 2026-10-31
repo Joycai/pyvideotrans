@@ -355,6 +355,7 @@ core/       domain/ ←──── services/
 
 快捷键拆成：
 
+- `speaker_hotkey_bar.dart`：会话级字母键分配栏、配置弹窗与可搜索目标选择器；映射独立于字幕修改保存。
 - `editor_keys.dart`：`EditorKeys` 登记表，只有键位，不依赖控制器，控制器与各处文案也引用它。
 - `editor_shortcuts.dart`：两个作用范围。
   - `CueTableShortcuts`：单键，只包住列表区域，焦点在列表时才生效。
