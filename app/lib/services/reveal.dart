@@ -12,16 +12,19 @@ abstract final class Reveal {
 
   /// 选中 [path]。文件已不存在时退而打开它原本所在的目录。
   static Future<void> show(String path) async {
-    final file = File(path);
+    final file = File(
+      Platform.isWindows ? path.replaceAll('/', r'\') : path,
+    ).absolute;
     final dir = file.parent.path;
     try {
       if (!file.existsSync()) {
         await _open(dir);
       } else if (Platform.isMacOS) {
-        await Process.run('open', ['-R', path]);
+        await Process.run('open', ['-R', file.path]);
       } else if (Platform.isWindows) {
-        // explorer 要求 /select, 与路径连成一个参数。
-        await Process.run('explorer', ['/select,$path']);
+        // 路径单独传入，让 Process 为带空格的路径加引号；整串加引号会
+        // 让 Explorer 把 /select, 当作路径的一部分而回到默认目录。
+        await Process.run('explorer', windowsArguments(file.path, select: true));
       } else {
         await _open(dir);
       }
@@ -39,12 +42,18 @@ abstract final class Reveal {
     }
   }
 
+  /// Explorer 不接受输出路径中混用的正斜杠；文件与目录入口统一处理。
+  static List<String> windowsArguments(String path, {bool select = false}) => [
+    if (select) '/select,',
+    path.replaceAll('/', r'\'),
+  ];
+
   static Future<void> _open(String dir) => Process.run(
     Platform.isMacOS
         ? 'open'
         : Platform.isWindows
         ? 'explorer'
         : 'xdg-open',
-    [dir],
+    Platform.isWindows ? windowsArguments(dir) : [dir],
   );
 }

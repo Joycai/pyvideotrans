@@ -484,12 +484,15 @@ class _ActionsCell extends StatelessWidget {
       return Row(
         children: [
           Flexible(
-            child: ControlButton(
-              label: media ? Reveal.label : '打开编辑器',
-              icon: media ? Symbols.folder_open : Symbols.edit_note,
-              dense: true,
-              onPressed: () => onAction(
-                media ? TaskAction.reveal : TaskAction.openEditor,
+            child: Tooltip(
+              message: media ? Reveal.label : '打开编辑器',
+              child: ControlButton(
+                label: media ? '定位文件' : '打开编辑器',
+                icon: media ? Symbols.folder_open : Symbols.edit_note,
+                dense: true,
+                onPressed: () => onAction(
+                  media ? TaskAction.reveal : TaskAction.openEditor,
+                ),
               ),
             ),
           ),
