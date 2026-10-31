@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/domain/media_job.dart';
@@ -74,7 +75,11 @@ void main() {
     expect(find.text('interview_ep12_part1.merged.srt'), findsOneWidget);
     expect(find.text('字幕内嵌并旁挂'), findsOneWidget);
     expect(find.text('字幕作为软字幕轨写进视频，并在旁边另存一份 SRT（713 条）'), findsOneWidget);
-    await tester.tap(find.text(Reveal.label).first);
+    expect(find.byTooltip(Reveal.label), findsWidgets);
+    final label = find.text('定位文件');
+    final paragraph = tester.renderObject<RenderParagraph>(label);
+    expect(paragraph.didExceedMaxLines, isFalse);
+    await tester.tap(label);
     expect(actions.single.$2, TaskAction.reveal);
   });
 
