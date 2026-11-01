@@ -8,7 +8,7 @@ import 'editor_controller.dart';
 import 'editor_keys.dart';
 import 'editor_widgets.dart';
 
-/// 顶栏右侧：视图切换 + 翻译未译 + 保存 + 导出…。
+/// 顶栏右侧：视图与翻译、文件操作分组呈现。
 ///
 /// 两种会话都有「保存」：它写的是播放器读的那几份字幕文件，编辑进度本身
 /// 一直在自动存。「导出…」是另存到别处。
@@ -36,17 +36,6 @@ class EditorPageActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (onOpenOther != null) ...[
-          Tooltip(
-            message: '打开其他字幕或任务，当前编辑进度会保留',
-            child: ControlButton(
-              label: '打开…',
-              icon: Symbols.folder_open,
-              onPressed: onOpenOther,
-            ),
-          ),
-          const SizedBox(width: AppSpacing.s3),
-        ],
         if (isCompactEditor(context))
           _ViewMenu(controller: controller)
         else
@@ -67,6 +56,26 @@ class EditorPageActions extends StatelessWidget {
               : onTranslateMissing,
         ),
         const SizedBox(width: AppSpacing.s3),
+        SizedBox(
+          height: AppSpacing.s5,
+          child: VerticalDivider(
+            width: 1,
+            thickness: 1,
+            color: cs.outlineVariant,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.s3),
+        if (onOpenOther != null) ...[
+          Tooltip(
+            message: '打开其他字幕或任务，当前编辑进度会保留',
+            child: ControlButton(
+              label: '打开…',
+              icon: Symbols.folder_open,
+              onPressed: onOpenOther,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.s3),
+        ],
         // 没有修改时禁用而不是隐藏，位置不跳。
         _SaveButton(
           label: switch (sync) {
