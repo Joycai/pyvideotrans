@@ -550,7 +550,9 @@ class AppSettings extends ChangeNotifier {
     final config = configFor(info.id);
     final declared = config.models.whereType<T>().toList();
     if (declared.isNotEmpty) return declared;
-    return [for (final name in config.legacyModelNames) info.guess(name) as T];
+    return [for (final name in config.legacyModelNames)
+      (info is ChatProviderInfo
+          ? ProviderCatalog.legacyChatSpec(info.id, name) : info.guess(name)) as T];
   }
 
   /// 默认模型：列表里的第一个。一个都没有时是空名的占位。

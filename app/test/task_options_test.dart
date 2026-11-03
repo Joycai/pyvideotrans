@@ -443,7 +443,7 @@ void _jsonTests() {
         expect(o.translationModel, fallback.translationModel);
       });
 
-      test('同一家服务、别的名字：预置里有的用预置，没有的按名字推断', () {
+      test('旧名字：识别补预置声明，翻译保留原 Chat Completions 协议', () {
         final o = read({
           'asrProviderId': 'openai',
           'asrModel': 'gpt-4o-transcribe',
@@ -456,7 +456,7 @@ void _jsonTests() {
         );
         expect(
           o.translationModel,
-          same(ProviderCatalog.translationInfo('deepseek')!.presets[1]),
+          const ChatModelSpec(name: 'deepseek-reasoner'),
         );
 
         final custom = read({'asrModel': 'x', 'translationModel': 'y'});

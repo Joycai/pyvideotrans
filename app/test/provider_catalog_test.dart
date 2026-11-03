@@ -71,8 +71,8 @@ void main() {
             info.id: ProviderCatalog.defaultChatSpec(info.id).name,
         },
         {
-          'deepseek': 'deepseek-chat',
-          'openai_chat': 'gpt-4o-mini',
+          'deepseek': 'deepseek-flash',
+          'openai_chat': 'gpt-6.1-sol',
           'siliconflow_chat': 'Qwen/Qwen2.5-14B-Instruct',
           'openrouter': 'google/gemini-2.0-flash-001',
           'ollama': 'qwen2.5:14b',
@@ -110,8 +110,9 @@ void main() {
             'qwen-audio-3.1-asr-flash-filetrans',
             'qwen-audio-3.1-asr-flash-message',
           ],
-          'deepseek': ['deepseek-chat', 'deepseek-reasoner'],
-          'openai_chat': ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'],
+          'deepseek': ['deepseek-flash', 'deepseek-v4-pro'],
+          'openai_chat': ['gpt-6.1-sol', 'gpt-6.1-terra', 'gpt-6-astra',
+            'gpt-6-sol', 'gpt-6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
           'siliconflow_chat': ['Qwen/Qwen2.5-14B-Instruct'],
           'openrouter': ['google/gemini-2.0-flash-001'],
           'ollama': ['qwen2.5:14b'],
@@ -187,10 +188,10 @@ void main() {
       }
     });
 
-    test('预置模型：得到的就是预置声明', () {
+    test('旧识别模型恢复预置能力；旧翻译名字不升级协议', () {
       for (final info in ProviderCatalog.asr) {
         for (final preset in info.presets) {
-          // 用 same：翻译预置没有别的字段，按值比的话不查预置也相等。
+          // 识别需要保留预置能力。
           expect(
             ProviderCatalog.legacyAsrSpec(info.id, preset.name),
             same(preset),
@@ -201,7 +202,7 @@ void main() {
         for (final preset in info.presets) {
           expect(
             ProviderCatalog.legacyChatSpec(info.id, preset.name),
-            same(preset),
+            ChatModelSpec(name: preset.name),
           );
         }
       }

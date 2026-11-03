@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/media_job.dart';
 import 'package:subtitle_studio/domain/providers/asr_transport.dart';
+import 'package:subtitle_studio/domain/providers/chat_transport.dart';
+import 'package:subtitle_studio/domain/providers/model_spec.dart';
+import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
 import 'package:subtitle_studio/domain/recognition_checkpoint.dart';
 import 'package:subtitle_studio/domain/task.dart';
 
@@ -16,6 +19,43 @@ SubtitleTask _roundTrip(SubtitleTask task) => SubtitleTask.fromJson(
 );
 
 void main() {
+  test('任务往返保留 none、模型能力与上下文输出预算，不受默认值影响', () {
+    final model = ProviderCatalog.translationInfo('openai_chat')!.presets
+        .firstWhere((m) => m.name == 'gpt-6.1-terra')
+        .withOption('reasoningEffort', 'none')
+        .withOption('contextWindow', 64000)
+        .withOption('outputTokens', 8000);
+    final task = SubtitleTask(id: 'budget', sourcePath: '/v/a.srt',
+      kind: TaskKind.translate, options: testOptions().copyWith(translationModel: model));
+    final back = _roundTrip(task).options.translationModel;
+    expect(back, model);
+    expect(back.reasoningEffort, 'none');
+    expect(back.contextTokenLimit, 64000);
+    expect(back.outputTokenLimit, 8000);
+    expect(back.capabilities!.maxOutputTokens, 128000);
+  });
+
+  test('旧任务同名 GPT 模型不继承新默认的 Responses 声明', () {
+    final fallback = testOptions(mt: 'openai_chat');
+    final task = SubtitleTask.fromJson({
+      'id': 'legacy', 'sourcePath': '/v/a.srt', 'kind': 'translate',
+      'options': {'translationProviderId': 'openai_chat',
+        'translationModel': 'gpt-6.1-sol'},
+    }, fallbackOptions: fallback);
+    expect(task.options.translationModel,
+      const ChatModelSpec(name: 'gpt-6.1-sol'));
+  });
+
+  test('Responses 协议与思考参数随任务快照往返，不按模型名字重新推断', () {
+    final model = const ChatModelSpec(name: 'custom-route',
+      transport: ChatTransport.responses, dialect: ChatDialect.openaiReasoning)
+        .withOption('reasoningEffort', 'high');
+    final task = SubtitleTask(id: 'responses', sourcePath: '/v/a.srt',
+      kind: TaskKind.translate,
+      options: testOptions().copyWith(translationModel: model));
+    expect(_roundTrip(task).options.translationModel, model);
+  });
+
   test('任务来回一致：文档、阶段、日志、错误、识别检查点都不丢', () {
     final task = SubtitleTask(
       id: 'j1',
@@ -124,7 +164,7 @@ void main() {
     expect(asr.capabilities.diarization, isTrue);
     expect(old.options.diarize, isTrue);
     expect(old.options.translationModel, fallback.translationModel);
-    expect(old.options.translationModel.name, 'deepseek-chat');
+    expect(old.options.translationModel.name, 'deepseek-flash');
     expect(old.options.translationGuidance, '口语化');
     expect(old.options.glossary, isEmpty);
 
@@ -135,7 +175,7 @@ void main() {
       'transport': 'dashscopeFileTrans',
       'dialect': 'qwenAudio3',
     });
-    expect(json['translationModel'], {'kind': 'chat', 'name': 'deepseek-chat'});
+    expect(json['translationModel'], fallback.translationModel.toJson());
     expect(json['glossaryIds'], isEmpty);
     expect(json['glossary'], isEmpty);
     // 新形状再读一遍不变。

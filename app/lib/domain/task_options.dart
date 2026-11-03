@@ -3,6 +3,7 @@ import 'glossary.dart';
 import 'language.dart';
 import 'numbers.dart';
 import 'paths.dart';
+import 'providers/chat_transport.dart';
 import 'providers/model_spec.dart';
 import 'providers/provider_catalog.dart';
 import 'srt.dart';
@@ -356,7 +357,10 @@ class TaskOptions {
       return defaults?.chat(providerId) ??
           ProviderCatalog.defaultChatSpec(providerId);
     }
-    return sameProvider && name == fallback.translationModel.name
+    // 旧任务只有名字时不能继承后来预置新增的协议或厂商参数。
+    return sameProvider && name == fallback.translationModel.name &&
+        fallback.translationModel.transport == ChatTransport.completions &&
+        fallback.translationModel.dialect == ChatDialect.generic
         ? fallback.translationModel
         : ProviderCatalog.legacyChatSpec(providerId, name);
   }

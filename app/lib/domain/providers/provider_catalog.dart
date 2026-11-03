@@ -1,4 +1,6 @@
 import 'asr_transport.dart';
+import 'chat_capabilities.dart';
+import 'chat_transport.dart';
 import 'model_spec.dart';
 import 'provider_info.dart';
 
@@ -131,10 +133,12 @@ abstract final class ProviderCatalog {
       id: 'deepseek',
       name: 'DeepSeek',
       vendor: 'DeepSeek',
-      defaultBaseUrl: 'https://api.deepseek.com/v1',
+      defaultBaseUrl: 'https://api.deepseek.com',
       presets: [
-        ChatModelSpec(name: 'deepseek-chat'),
-        ChatModelSpec(name: 'deepseek-reasoner'),
+        ChatModelSpec(name: 'deepseek-flash', dialect: ChatDialect.deepseek,
+          capabilities: ChatCapabilities.deepseek),
+        ChatModelSpec(name: 'deepseek-v4-pro', dialect: ChatDialect.deepseek,
+          capabilities: ChatCapabilities.deepseek),
       ],
     ),
     ChatProviderInfo(
@@ -143,13 +147,27 @@ abstract final class ProviderCatalog {
       vendor: 'OpenAI',
       defaultBaseUrl: 'https://api.openai.com/v1',
       presets: [
-        ChatModelSpec(name: 'gpt-4o-mini'),
-        ChatModelSpec(name: 'gpt-4o'),
-        ChatModelSpec(name: 'gpt-4.1-mini'),
+        ChatModelSpec(name: 'gpt-6.1-sol', transport: ChatTransport.responses,
+          dialect: ChatDialect.openaiReasoning, capabilities: ChatCapabilities.openaiRequired),
+        ChatModelSpec(name: 'gpt-6.1-terra', transport: ChatTransport.responses,
+          dialect: ChatDialect.openaiReasoning, capabilities: ChatCapabilities.openai),
+        ChatModelSpec(name: 'gpt-6-astra', transport: ChatTransport.responses,
+          dialect: ChatDialect.openaiReasoning, capabilities: ChatCapabilities.openaiRequired),
+        ChatModelSpec(name: 'gpt-6-sol', transport: ChatTransport.responses,
+          dialect: ChatDialect.openaiReasoning, capabilities: ChatCapabilities.openai),
+        ChatModelSpec(name: 'gpt-6-luna', transport: ChatTransport.responses,
+          dialect: ChatDialect.openaiReasoning, capabilities: ChatCapabilities.openai),
+        ChatModelSpec(name: 'gpt-5.6-sol', transport: ChatTransport.responses,
+          dialect: ChatDialect.openaiReasoning, capabilities: ChatCapabilities.openai),
+        ChatModelSpec(name: 'gpt-5.6-terra', transport: ChatTransport.responses,
+          dialect: ChatDialect.openaiReasoning, capabilities: ChatCapabilities.openai),
+        ChatModelSpec(name: 'gpt-5.6-luna', transport: ChatTransport.responses,
+          dialect: ChatDialect.openaiReasoning, capabilities: ChatCapabilities.openai),
       ],
     ),
     ChatProviderInfo(
       id: 'siliconflow_chat',
+      disabledReason: '翻译服务暂时禁用，请选择其他后端',
       name: '硅基流动',
       vendor: '硅基流动',
       defaultBaseUrl: 'https://api.siliconflow.cn/v1',
@@ -212,7 +230,6 @@ abstract final class ProviderCatalog {
 
   /// 旧存档里只有模型名时补出一份翻译模型声明。
   static ChatModelSpec legacyChatSpec(String providerId, String name) =>
-      translationInfo(providerId)?.guess(name) ??
       ChatModelSpec(name: name.trim());
 
   /// 这家服务什么都没配时的默认模型；没有预置（或服务不认识）时是空名的占位。

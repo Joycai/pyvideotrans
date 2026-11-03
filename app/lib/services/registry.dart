@@ -131,10 +131,11 @@ abstract final class Registry {
     }
     return OpenAiCompatibleTranslationProvider(
       info: info,
+      model: model,
       endpoint: settings.endpointFor(info, model),
       extraGuidance: guidance,
       glossary: glossary,
-      temperature: model.options.number(ModelParams.chatTemperature),
+      temperature: model.temperature,
     );
   }
 

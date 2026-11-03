@@ -170,3 +170,13 @@ Codex 继续维护本应用的 UX/UI。本文从 Flutter 实现、现有页面�
 
 顶栏保持单行：视图切换、翻译在前，以主题描边色的竖线分隔后，依次显示打开、保存、导出。
 文件操作相邻，保留原有按钮样式、窄窗口视图下拉与各操作的启用条件。
+
+## 翻译模型协议配置（2026-11-03）
+
+翻译模型摘要标明 Chat Completions / Responses。添加自定义模型及现有模型的「配置」内，
+协议与参数兼容画像放在折叠的「高级接入配置」，使用现有 LabeledField / AppDropdown。
+思考强度沿用参数目录与分段控件，明确温度是否生效；设置变化只影响后续新建任务。
+浅色常规宽度与深色窄窗口参考 `translation_model_openai_chat.png`、`translation_model_deepseek.png`。
+
+上下文上限与每批输出预算位于独立折叠区，数字输入框容纳完整百万级数值；
+支持 none 的 GPT 提供「关闭」档位，深色窄窗口参考 `translation_model_openai_none.png`。

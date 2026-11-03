@@ -38,7 +38,7 @@ enum ProviderKind {
     note: '字幕翻译。走 OpenAI 兼容的对话接口，本机服务与在线服务共用同一条链路。',
     service: '翻译服务',
     task: '翻译',
-    modelExample: 'deepseek-chat',
+    modelExample: 'deepseek-flash',
     promptLabel: '翻译要求（风格与说明）',
     promptNote: '语气、人称、句式。会作为系统提示随每批发送。专有名词、人名请用「词表」。',
     promptHint: '例：人称用「你」；口语化，短句优先；不要添加原文没有的内容。',
@@ -227,7 +227,8 @@ class ProviderSection extends StatelessWidget {
         ),
         SettingsRow(
           label: '服务地址',
-          note: '填到 /v1 为止',
+          note: kind == ProviderKind.mt
+              ? '填写服务根地址，不含 /responses 或 /chat/completions' : '填到 /v1 为止',
           stacked: stacked,
           child: SettingsTextField(
             key: ValueKey('${info.id}-url'),
@@ -252,6 +253,15 @@ class ProviderSection extends StatelessWidget {
             transports: info is AsrProviderInfo
                 ? info.transports.toList()
                 : const [],
+            suggestChat: info is ChatProviderInfo ? info.guess : null,
+            onChatChanged: (updated) {
+              settings.setModels(info.id, [
+                for (final model in settings.ownModels(info))
+                  model is ChatModelSpec && model.name == updated.name
+                      ? model.withDeclaration(updated.transport, updated.dialect) : model,
+              ]);
+              onChanged();
+            },
             suggest: info is AsrProviderInfo && info.multiTransport
                 ? info.guess
                 : null,

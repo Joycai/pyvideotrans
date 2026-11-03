@@ -1,5 +1,7 @@
 import '../enum_by_name.dart';
 import 'asr_transport.dart';
+import 'chat_capabilities.dart';
+import 'chat_transport.dart';
 import 'model_params.dart';
 
 /// 一个模型的完整声明：叫什么、怎么接、参数取什么值。
@@ -226,9 +228,75 @@ final class AsrModelSpec extends ModelSpec {
       '${dialect == null ? '' : ', ${dialect!.name}'})';
 }
 
-/// 翻译（对话）模型的声明。所有翻译服务都说 OpenAI 对话协议，没有接入方式之分。
+/// 翻译模型的协议与参数画像随任务一起冻结。
 final class ChatModelSpec extends ModelSpec {
-  const ChatModelSpec({required super.name, super.options});
+  const ChatModelSpec({
+    required super.name,
+    this.transport = ChatTransport.completions,
+    this.dialect = ChatDialect.generic,
+    this.capabilities,
+    super.options,
+  });
+
+  final ChatTransport transport;
+  final ChatDialect dialect;
+  final ChatCapabilities? capabilities;
+
+  ChoiceModelParam? get reasoningParam {
+    final declared = capabilities;
+    if (declared != null) {
+      if (declared.efforts.isEmpty) return null;
+      return ChoiceModelParam(key: 'reasoningEffort', label: '思考强度',
+        hint: '按所选模型支持的档位发送；关闭思考时温度才生效。',
+        options: [for (final effort in declared.efforts)
+          (effort, const {'none': '关闭', 'off': '关闭', 'low': '低', 'medium': '中',
+            'high': '高', 'xhigh': '更高', 'max': '最高'}[effort]!)],
+        defaultOption: declared.defaultEffort!);
+    }
+    // 没有能力字段的旧声明保持原参数，不按今天的目录升级。
+    return switch (dialect) {
+    ChatDialect.generic => null,
+    ChatDialect.openaiReasoning => ModelParams.openaiReasoning,
+    ChatDialect.deepseek => ModelParams.deepseekReasoning,
+    };
+  }
+
+  String? get reasoningEffort => reasoningParam == null
+      ? null : options.choice(reasoningParam!);
+
+  double? get temperature => dialect == ChatDialect.generic ||
+      reasoningEffort == 'off' || reasoningEffort == 'none'
+      ? options.number(ModelParams.chatTemperature) : null;
+
+  ChatModelSpec withDeclaration(ChatTransport transport, ChatDialect dialect) =>
+      ChatModelSpec(name: name, transport: transport, dialect: dialect,
+        capabilities: dialect == this.dialect ? capabilities : null).withOptions(options);
+
+  NumberModelParam get contextParam => NumberModelParam(
+    key: 'contextWindow', label: '上下文上限（token）',
+    hint: '本地估算用，可按网关限制调低；未设置时仅依赖服务端超窗检查。',
+    min: 1024, max: (capabilities?.contextWindow ?? 10000000).toDouble(),
+    defaultNumber: capabilities?.contextWindow?.toDouble(),
+    step: 1024, fractionDigits: 0, optional: true, unsetLabel: '不预检');
+
+  NumberModelParam get outputParam => NumberModelParam(
+    key: 'outputTokens', label: '每批输出预算（token）',
+    hint: '包含推理与正文。高强度推理需要预留更多输出预算。',
+    min: 1, max: (capabilities?.maxOutputTokens ?? 1000000).toDouble(),
+    defaultNumber: capabilities?.defaultOutputTokens?.toDouble(),
+    step: 1024, fractionDigits: 0, optional: true);
+
+  int? get contextTokenLimit => options.number(contextParam)?.toInt();
+  int? get outputTokenLimit => options.number(outputParam)?.toInt();
+
+  @override
+  ChatModelSpec withOption(String key, Object? value) {
+    final param = reasoningParam;
+    if (key == 'reasoningEffort' && param != null && !param.accepts(value)) {
+      throw ArgumentError.value(value, key, '该模型不支持此思考档位');
+    }
+    return super.withOption(key, value) as ChatModelSpec;
+  }
 
   /// 还没选模型时的占位声明。
   static const unset = ChatModelSpec(name: '');
@@ -236,36 +304,59 @@ final class ChatModelSpec extends ModelSpec {
   static const kind = 'chat';
 
   @override
-  List<ModelParam> get params => ModelParams.chat;
+  List<ModelParam> get params => [
+    ?reasoningParam,
+    if (dialect != ChatDialect.openaiReasoning ||
+        capabilities?.efforts.contains('none') == true) ModelParams.chatTemperature,
+    contextParam,
+    outputParam,
+  ];
 
   @override
   ChatModelSpec withOptions(ModelOptions options) =>
-      ChatModelSpec(name: name, options: options.sanitize(params));
+      ChatModelSpec(name: name, transport: transport, dialect: dialect,
+          capabilities: capabilities, options: options.sanitize(params));
 
   @override
   Map<String, Object?> toJson() => {
     'kind': kind,
     'name': name,
+    'transport': transport.name,
+    'dialect': dialect.name,
+    if (capabilities != null) 'capabilities': capabilities!.toJson(),
     if (!options.isEmpty) 'options': options.toJson(),
   };
 
   static ChatModelSpec? fromJson(Map<Object?, Object?> json) {
     final name = json['name'];
     if (name is! String) return null;
-    return ChatModelSpec(
-      name: name.trim(),
-      options: ModelOptions.fromJson(
-        json['options'],
-      ).sanitize(ModelParams.chat),
-    );
+    // 缺字段是旧存档，沿用旧协议；未知声明不能静默换路由。
+    final transport = json.containsKey('transport')
+        ? ChatTransport.values.tryByName(json['transport'])
+        : ChatTransport.completions;
+    final dialect = json.containsKey('dialect')
+        ? ChatDialect.values.tryByName(json['dialect']) : ChatDialect.generic;
+    if (transport == null || dialect == null) return null;
+    final capabilities = ChatCapabilities.fromJson(json['capabilities']);
+    if (json.containsKey('capabilities') && capabilities == null) return null;
+    final allowed = switch (dialect) {
+      ChatDialect.generic => const <String>{},
+      ChatDialect.openaiReasoning => const {'none', 'low', 'medium', 'high', 'xhigh', 'max'},
+      ChatDialect.deepseek => const {'off', 'low', 'high', 'max'},
+    };
+    if (capabilities != null && capabilities.efforts.any((e) => !allowed.contains(e))) return null;
+    return ChatModelSpec(name: name.trim(), transport: transport, dialect: dialect,
+        capabilities: capabilities).withOptions(ModelOptions.fromJson(json['options']));
   }
 
   @override
   bool operator ==(Object other) =>
-      other is ChatModelSpec && other.name == name && other.options == options;
+      other is ChatModelSpec && other.name == name &&
+      other.transport == transport && other.dialect == dialect &&
+      other.capabilities == capabilities && other.options == options;
 
   @override
-  int get hashCode => Object.hash(name, options);
+  int get hashCode => Object.hash(name, transport, dialect, capabilities, options);
 
   @override
   String toString() => 'ChatModelSpec($name)';
