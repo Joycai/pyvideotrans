@@ -11,6 +11,7 @@ import '../../core/widgets/fields.dart';
 import '../../core/widgets/glass_dialog.dart';
 import '../../core/widgets/glass_panel.dart';
 import '../../domain/providers/asr_transport.dart';
+import '../../domain/providers/chat_transport.dart';
 import '../../domain/providers/model_params.dart';
 import '../../domain/providers/model_spec.dart';
 import 'settings_section.dart';
@@ -40,6 +41,8 @@ class ModelListEditor extends StatefulWidget {
     required this.onOptionChanged,
     this.transports = const [],
     this.suggest,
+    this.suggestChat,
+    this.onChatChanged,
   });
 
   /// 用户配的模型，第一个是默认。
@@ -62,6 +65,9 @@ class ModelListEditor extends StatefulWidget {
 
   /// 按名字给出接入方式与模型族的建议，用来预填添加行的两组分段。
   final AsrModelSpec Function(String name)? suggest;
+
+  final ChatModelSpec Function(String name)? suggestChat;
+  final ValueChanged<ChatModelSpec>? onChatChanged;
 
   /// 添加一个模型。[transport] 与 [dialect] 只在多接入方式的服务下给。
   final void Function(
@@ -132,6 +138,7 @@ class _ModelListEditorState extends State<ModelListEditor> {
           _ModelRow(
             key: ValueKey(model.name), model: model, isDefault: i == 0,
             showDeclaration: widget.transports.length > 1,
+            onChatChanged: widget.onChatChanged,
             open: _expanded == model.name,
             onToggle: () => setState(() => _expanded = _expanded == model.name ? null : model.name),
             onSetDefault: i == 0 ? null : () => widget.onSetDefault(model),
@@ -156,6 +163,7 @@ class _AddModelDialogState extends State<_AddModelDialog> {
 
   late AsrTransport? _transport = widget.editor.transports.firstOrNull;
   DashScopeDialect _dialect = DashScopeDialect.qwen3Asr;
+  ChatModelSpec _chat = ChatModelSpec.unset;
 
   /// 用户手动点过分段。点过之后不再按名字预填 —— 名字只是建议，
   /// 用户改过的选择不能被下一次键入冲掉。
@@ -189,6 +197,9 @@ class _AddModelDialogState extends State<_AddModelDialog> {
   String? get _error => _trimmed.isEmpty ? null : widget.editor.validate(_trimmed);
 
   void _prefill(String name) {
+    if (!_touched && widget.editor.suggestChat != null) {
+      _chat = widget.editor.suggestChat!(name);
+    }
     final suggest = widget.editor.suggest;
     if (!_multi || _touched || suggest == null) return;
     final spec = suggest(name);
@@ -210,6 +221,13 @@ class _AddModelDialogState extends State<_AddModelDialog> {
     final preset = widget.editor.presets.where((m) => m.name == name).firstOrNull;
     if (preset != null && !_touched) {
       widget.editor.onAddPreset(preset);
+      Navigator.pop(context);
+      return;
+    }
+    if (widget.editor.suggestChat != null) {
+      widget.editor.onAddPreset(ChatModelSpec(name: name,
+        transport: _chat.transport, dialect: _chat.dialect,
+        capabilities: _chat.capabilities, options: _chat.options));
       Navigator.pop(context);
       return;
     }
@@ -358,6 +376,13 @@ class _AddModelDialogState extends State<_AddModelDialog> {
             ),
             Align(alignment: Alignment.centerRight, child: add),
           ],
+          if (widget.editor.suggestChat != null)
+            ExpansionTile(title: const Text('高级接入配置'), children: [
+              _ChatDeclaration(model: _chat, onChanged: (model) => setState(() {
+                _chat = model;
+                _touched = true;
+              })),
+            ]),
           if (error != null) ...[
             const SizedBox(height: 6),
             InlineNote(
@@ -430,9 +455,11 @@ class _ModelRow extends StatefulWidget {
     required this.onSetDefault,
     required this.onRemove,
     required this.onOptionChanged,
+    this.onChatChanged,
   });
 
   final ModelSpec model;
+  final ValueChanged<ChatModelSpec>? onChatChanged;
   final bool isDefault;
 
   /// 显示接入方式与模型族两个标签（只在多接入方式的服务下）。
@@ -484,6 +511,10 @@ class _ModelRowState extends State<_ModelRow> {
         SelectableText(model.name, style: AppTextStyles.timecode.copyWith(color: cs.onSurfaceVariant)),
         const SizedBox(height: 4),
         Text(_modelSummary(model), style: context.texts.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+        if (widget.open && model is ChatModelSpec && widget.onChatChanged != null)
+          ExpansionTile(title: const Text('高级接入配置'), children: [
+            _ChatDeclaration(model: model, onChanged: widget.onChatChanged!),
+          ]),
         if (widget.open && asr != null)
           ExpansionTile(title: const Text('接入信息'), children: [
             ListTile(title: Text(asr.transport.label), subtitle: Text(_transportNote(asr.transport))),
@@ -563,7 +594,8 @@ class _ParamPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
-    final params = model.params;
+    final params = model.params.where((p) =>
+        p.key != 'contextWindow' && p.key != 'outputTokens').toList();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(
@@ -588,6 +620,7 @@ class _ParamPanel extends StatelessWidget {
                 onChanged: (v) => onChanged(param.key, v),
               ),
               NumberModelParam() => _NumberParam(
+                key: ValueKey(('modelParam', param.key)),
                 param: param,
                 value: model.options.number(param),
                 onChanged: (v) => onChanged(param.key, v),
@@ -606,6 +639,14 @@ class _ParamPanel extends StatelessWidget {
             },
             const SizedBox(height: AppSpacing.s3),
           ],
+          if (model case final ChatModelSpec chat)
+            Material(color: Colors.transparent, child: ExpansionTile(
+              title: const Text('上下文与输出预算'), children: [
+              for (final param in [chat.contextParam, chat.outputParam])
+                Padding(padding: const EdgeInsets.only(bottom: AppSpacing.s3),
+                  child: _NumberParam(key: ValueKey(('modelParam', param.key)), param: param, value: model.options.number(param),
+                    onChanged: (v) => onChanged(param.key, v))),
+            ])),
           InlineNote(
             text: params.isEmpty ? '该模型没有可调参数' : '参数随任务入队时定下，改动只影响之后新建的任务。',
           ),
@@ -684,6 +725,7 @@ class _BoolParam extends StatelessWidget {
 
 class _NumberParam extends StatelessWidget {
   const _NumberParam({
+    super.key,
     required this.param,
     required this.value,
     required this.onChanged,
@@ -737,7 +779,7 @@ class _NumberParam extends StatelessWidget {
                         : null,
                   ),
                   const SizedBox(width: 6),
-                  Text('不发送', style: context.texts.bodyMedium),
+                  Text(param.unsetLabel, style: context.texts.bodyMedium),
                 ],
               ),
             ),
@@ -816,9 +858,11 @@ class _DecimalFieldState extends State<_DecimalField> {
   Widget build(BuildContext context) {
     final cs = context.colors;
     final digits = widget.param.fractionDigits;
+    // token 预算可达百万，输入框必须完整显示上限。
+    final width = widget.param.max >= 100000 ? 120.0 : 88.0;
     if (widget.value == null) {
       return ControlSurface(
-        width: 88,
+        width: width,
         enabled: false,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
         child: Text(
@@ -832,7 +876,7 @@ class _DecimalFieldState extends State<_DecimalField> {
       );
     }
     return ControlSurface(
-      width: 88,
+      width: width,
       focused: _focus.hasFocus,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
       child: TextField(
@@ -863,7 +907,8 @@ String _modelTitle(ModelSpec model) => const {
 }[model.name] ?? model.name;
 
 String _modelSummary(ModelSpec model) {
-  if (model is! AsrModelSpec) return '字幕翻译';
+  if (model is ChatModelSpec) return '字幕翻译 · ${model.transport.label}';
+  model as AsrModelSpec;
   return [model.transport.label,
     if (model.capabilities.contextPrompt) '上下文提示',
     if (model.transport == AsrTransport.dashscopeMessage ||
@@ -871,4 +916,30 @@ String _modelSummary(ModelSpec model) {
     if (model.capabilities.diarization) '说话人分离',
     if (model.languages != null) '语种：${model.languages!.join('、')}',
   ].join(' · ');
+}
+
+/// 自定义线路需要显式选协议，避免名称相同却发到错误接口。
+class _ChatDeclaration extends StatelessWidget {
+  const _ChatDeclaration({required this.model, required this.onChanged});
+  final ChatModelSpec model;
+  final ValueChanged<ChatModelSpec> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(children: [
+    LabeledField(label: '接口协议', child: AppDropdown<ChatTransport>(
+      value: model.transport,
+      groups: [DropdownGroup(entries: [for (final t in ChatTransport.values)
+        DropdownEntry(value: t, label: t.label)])],
+      onChanged: (v) => onChanged(model.withDeclaration(v, model.dialect)),
+    )),
+    const SizedBox(height: AppSpacing.s2),
+    LabeledField(label: '参数兼容', child: AppDropdown<ChatDialect>(
+      value: model.dialect,
+      groups: [DropdownGroup(entries: [for (final d in ChatDialect.values)
+        DropdownEntry(value: d, label: d.label)])],
+      onChanged: (v) => onChanged(model.withDeclaration(model.transport, v)),
+    )),
+    const SizedBox(height: AppSpacing.s2),
+    const InlineNote(text: '按服务文档选择；中转服务不一定支持原厂参数。'),
+  ]);
 }

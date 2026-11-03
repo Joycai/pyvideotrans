@@ -7,6 +7,7 @@ import 'package:subtitle_studio/core/theme/app_theme.dart';
 import 'package:subtitle_studio/core/widgets/buttons.dart';
 import 'package:subtitle_studio/core/widgets/fields.dart';
 import 'package:subtitle_studio/domain/providers/asr_transport.dart';
+import 'package:subtitle_studio/domain/providers/chat_transport.dart';
 import 'package:subtitle_studio/domain/providers/model_params.dart';
 import 'package:subtitle_studio/domain/providers/model_spec.dart';
 import 'package:subtitle_studio/domain/providers/provider_catalog.dart';
@@ -115,6 +116,63 @@ void main() {
     await tester.tap(find.text(action));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('支持 none 的 GPT 保存关闭档位及输出预算，窄窗口可操作', (tester) async {
+    await load();
+    settings.translationProviderId = 'openai_chat';
+    final model = ProviderCatalog.translationInfo('openai_chat')!.presets
+        .firstWhere((m) => m.name == 'gpt-6.1-terra');
+    settings.setModels('openai_chat', [model]);
+    await pump(tester, ProviderKind.mt, width: 600, stacked: true);
+    await tester.tap(inRow(model.name, find.text('配置')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    expect(settings.defaultChatModelOf('openai_chat').reasoningEffort, 'none');
+    await tester.ensureVisible(find.text('上下文与输出预算'));
+    await tester.tap(find.text('上下文与输出预算'));
+    await tester.pumpAndSettle();
+    final budget = find.descendant(of: find.byKey(const ValueKey(('modelParam', 'outputTokens'))),
+      matching: find.byType(TextField));
+    await tester.ensureVisible(budget);
+    await tester.enterText(budget, '8192');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(settings.defaultChatModelOf('openai_chat').outputTokenLimit, 8192);
+    expect(settings.defaultChatModelOf('openai_chat').capabilities, model.capabilities);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('自定义翻译模型选择 Responses，保存后可修改协议且保留名字', (tester) async {
+    await load();
+    await pump(tester, ProviderKind.mt, width: 600, stacked: true);
+    await type(tester, 'my-responses');
+    await tester.tap(find.text('高级接入配置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(AppDropdown<ChatTransport>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Responses').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('添加'));
+    await tester.pumpAndSettle();
+    ChatModelSpec saved() => stored('deepseek').whereType<ChatModelSpec>()
+        .firstWhere((m) => m.name == 'my-responses');
+    expect(saved().transport, ChatTransport.responses);
+    expect(saved().dialect, ChatDialect.generic);
+    await tester.ensureVisible(inRow('my-responses', find.text('配置')));
+    await tester.tap(inRow('my-responses', find.text('配置')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(inRow('my-responses', find.text('高级接入配置')));
+    await tester.tap(inRow('my-responses', find.text('高级接入配置')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byType(AppDropdown<ChatTransport>));
+    await tester.tap(find.byType(AppDropdown<ChatTransport>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chat Completions').last);
+    await tester.pumpAndSettle();
+    expect(saved().transport, ChatTransport.completions);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('添加表单按需打开；取消不写入设置', (tester) async {
     await load();

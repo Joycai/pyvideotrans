@@ -54,6 +54,7 @@ final class NumberModelParam extends ModelParam {
     this.step = 0.1,
     this.fractionDigits = 1,
     this.optional = false,
+    this.unsetLabel = '不发送',
     super.hint,
   }) : assert(optional || defaultNumber != null, '不可省的参数必须有默认值');
 
@@ -70,6 +71,7 @@ final class NumberModelParam extends ModelParam {
   /// 可以「不发送」：有的模型根本不接受这个字段（推理模型的 temperature），
   /// 有的接口不带时由服务端自己决定。
   final bool optional;
+  final String unsetLabel;
 
   @override
   Object? get defaultValue => defaultNumber;
@@ -248,6 +250,21 @@ abstract final class ModelParams {
     AsrTransport.dashscopeFileTrans => const [],
     AsrTransport.dashscopeMessage => const [],
   };
+
+  static const openaiReasoning = ChoiceModelParam(
+    key: 'reasoningEffort', label: '思考强度',
+    hint: '使用各预置共同支持的档位；推理开启时不发送采样温度。',
+    options: [('low', '低'), ('medium', '中'), ('high', '高'),
+      ('xhigh', '更高'), ('max', '最高')],
+    defaultOption: 'low',
+  );
+
+  static const deepseekReasoning = ChoiceModelParam(
+    key: 'reasoningEffort', label: '思考强度',
+    hint: '仅关闭思考时采样温度生效。',
+    options: [('off', '关闭'), ('low', '低'), ('high', '高'), ('max', '最高')],
+    defaultOption: 'low',
+  );
 
   /// 翻译（对话）模型的参数。
   static const chat = <ModelParam>[chatTemperature];

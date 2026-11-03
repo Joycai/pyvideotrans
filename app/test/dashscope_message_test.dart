@@ -176,7 +176,7 @@ void main() {
     expect(count, lessThan(64000));
   });
 
-  test('三家暂停服务同时被就绪检查与工厂拦截；翻译仍可用', () async {
+  test('三家识别服务暂停；OpenAI 翻译可用、硅基流动翻译暂停', () async {
     TestWidgetsFlutterBinding.ensureInitialized();
     SharedPreferences.setMockInitialValues({});
     final settings = await AppSettings.load();
@@ -190,7 +190,7 @@ void main() {
       expect(settings.configFor(id).apiKey, 'test');
     }
     expect(ProviderCatalog.translationInfo('openai_chat')!.available, isTrue);
-    expect(ProviderCatalog.translationInfo('siliconflow_chat')!.available, isTrue);
+    expect(ProviderCatalog.translationInfo('siliconflow_chat')!.available, isFalse);
     final fileSpec = info.guess('qwen-audio-3.1-asr-flash-filetrans');
     final fileProvider = Registry.buildAsr(info.id, settings, model: fileSpec) as DashScopeFileTransProvider;
     expect(fileProvider.submitPayload('oss://test', 'zh')['input'], {'file_urls': ['oss://test']});

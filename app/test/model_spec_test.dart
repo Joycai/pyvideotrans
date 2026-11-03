@@ -501,6 +501,8 @@ void main() {
       expect(const ChatModelSpec(name: 'm').toJson(), {
         'kind': 'chat',
         'name': 'm',
+        'transport': 'completions',
+        'dialect': 'generic',
       });
     });
 
@@ -512,7 +514,7 @@ void main() {
       })!;
       expect(spec, isA<ChatModelSpec>());
       expect(spec.options.toJson(), {'temperature': 2.0});
-      expect(spec.params, ModelParams.chat);
+      expect(spec.params.map((p) => p.key), ['temperature', 'contextWindow', 'outputTokens']);
     });
 
     test('识别与翻译的声明即使同名也不相等', () {

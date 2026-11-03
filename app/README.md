@@ -153,6 +153,32 @@ Ollama 和 LM Studio 说的也是这套协议，所以**现在就能在本机跑
   预填一个建议、建任务页手填模型名（只有一种接入方式的服务才能手填，接法与名字无关，
   只会带上同名预置的语种限制）。任务跑起来之后只看声明。
 
+### 翻译接口与推理参数
+
+翻译模型声明包含 `ChatTransport`（Chat Completions / Responses）和 `ChatDialect`
+（通用兼容 / OpenAI 推理 / DeepSeek V4 系列）。预置 GPT 5.6、6、6.1 使用 Responses；
+DeepSeek 的 `deepseek-flash`（V4.1 Flash）与 `deepseek-v4-pro` 使用 Chat Completions，
+可在模型配置的高级接入配置中切换协议。自定义服务同样可选 Responses，服务地址不含接口路径；
+DeepSeek 官方根地址为 `https://api.deepseek.com`，OpenAI 为 `https://api.openai.com/v1`。
+
+旧声明与只有名字的旧配置保持 Chat Completions，不自动替换用户的模型；新型号从设置的
+「添加模型 → 内置模型」添加。硅基流动翻译暂时禁用，已有配置保留。
+
+每批请求沿用同一份字幕系统提示、术语表与补充要求；Responses 用 `instructions` / `input`，
+不关联服务器会话。只有 `completed` 的 assistant 正文可以进入行号校验，推理内容不作为译文。
+截断可以降批，失败与拒答不能作为部分成功。各预置分别声明允许的 effort：GPT 6.1 Sol
+与 GPT 6 Astra 不支持 none，其他 GPT 预置支持；应用默认 low，只有 none 时发送 temperature。
+DeepSeek 支持关闭和 low / high / max（应用默认 low），仅关闭思考时发送温度。
+
+「上下文与输出预算」可调整预置窗口与输出预算，默认每批最多输出 32768 token（含推理）。
+GPT 预置窗口 1050000、最大输出 128000；DeepSeek 窗口 1048576、最大输出 393216。
+发送前用 UTF-8 字节数与协议余量保守估算输入并预留输出空间，这不是精确 tokenizer。
+输入超预算或服务端明确返回超窗错误会降批；固定提示超预算需调整配置。普通 HTTP 400
+不会触发降批或协议降级。旧配置不自动附加能力声明与预算，可重新添加预置以使用新能力。
+
+实现依据与验证范围见 [接入记录](../docs/translation-responses-plan.md)。当前为非流式字幕翻译，
+不涉及工具调用、多轮思考回传或付费实测。
+
 ### 词表是数据，不是提示词里的一段话
 
 专有名词以前只能写进「识别提示」「翻译要求」两段自由文本，识别与翻译各写一遍。

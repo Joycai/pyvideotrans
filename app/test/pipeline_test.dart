@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:subtitle_studio/domain/cue.dart';
 import 'package:subtitle_studio/domain/glossary.dart';
@@ -234,6 +237,31 @@ void main() {
       final out = File('${work.path}/in.en.srt');
       expect(out.existsSync(), isTrue);
       expect(Srt.parse(out.readAsStringSync()).first.source, 'EN:第 1 句');
+    });
+
+    test('真实翻译适配器的超窗错误降批，已完成字幕不重复请求', () async {
+      final sizes = <int>[];
+      final provider = OpenAiCompatibleTranslationProvider(
+        info: _mtInfo,
+        endpoint: const Endpoint(baseUrl: 'https://test/v1', model: 'test'),
+        client: MockClient((request) async {
+          final body = jsonDecode(request.body) as Map;
+          final input = ((body['messages'] as List).last as Map)['content'] as String;
+          final lines = RegExp(r'§(\d+)§ ([^\n]+)').allMatches(input).toList();
+          sizes.add(lines.length);
+          if (lines.length > 2) {
+            return http.Response(jsonEncode({'error': {'code': 'context_length_exceeded'}}), 400);
+          }
+          return http.Response(jsonEncode({'choices': [{'finish_reason': 'stop',
+            'message': {'content': lines.map((m) => '§${m[1]}§ EN:${m[2]}').join('\n')}}]}),
+            200, headers: {'content-type': 'application/json; charset=utf-8'});
+        }));
+      final (task, runner, _) = await translateTask(translator: provider, batchSize: 5);
+      await runner.run(task, token: CancellationToken(), onChange: () {});
+      expect(task.status, TaskStatus.done);
+      expect(sizes, [5, 3, 2, 2, 1]);
+      expect(task.document.untranslatedCount, 0);
+      expect(task.document.cues.last.translation, 'EN:第 5 句');
     });
 
     test('条数对不上时把批量减半重试', () async {

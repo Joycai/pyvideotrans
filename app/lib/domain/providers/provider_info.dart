@@ -108,7 +108,7 @@ final class AsrProviderInfo extends ProviderInfo {
   }
 }
 
-/// 翻译服务。都说 OpenAI 对话协议。
+/// 翻译服务。具体协议由每个模型的声明决定。
 final class ChatProviderInfo extends ProviderInfo {
   const ChatProviderInfo({
     required super.id,

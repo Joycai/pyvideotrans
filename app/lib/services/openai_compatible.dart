@@ -6,9 +6,12 @@ import 'package:http/http.dart' as http;
 
 import '../domain/cue.dart';
 import '../domain/glossary.dart';
+import '../domain/providers/model_spec.dart';
 import '../domain/recognition_checkpoint.dart';
 import 'provider_api.dart';
+import 'translation_budget.dart';
 import 'translation_protocol.dart';
+import 'translation_wire.dart';
 
 /// OpenAI 兼容的语音识别：`POST {baseUrl}/audio/transcriptions`。
 ///
@@ -192,7 +195,7 @@ class OpenAiCompatibleAsrProvider implements AsrProvider {
   }
 }
 
-/// OpenAI 兼容的翻译：`POST {baseUrl}/chat/completions`。
+/// OpenAI 兼容翻译：按模型声明选择 Chat Completions 或 Responses。
 ///
 /// 覆盖 OpenAI、DeepSeek、SiliconFlow、OpenRouter，以及 Ollama / LM Studio
 /// 这类本地服务 —— 它们都说同一套协议，所以「本地」在客户端这里不是一条单独的代码路径。
@@ -200,6 +203,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
   OpenAiCompatibleTranslationProvider({
     required this.info,
     required this.endpoint,
+    this.model = ChatModelSpec.unset,
     this.extraGuidance,
     this.glossary = const [],
     this.temperature = 0.3,
@@ -210,6 +214,8 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
   final ProviderInfo info;
 
   final Endpoint endpoint;
+
+  final ChatModelSpec model;
 
   /// 用户填的额外要求（语气、风格）。
   final String? extraGuidance;
@@ -231,30 +237,26 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
     token.throwIfCancelled();
     if (lines.isEmpty) return const [];
 
-    final payload = jsonEncode({
-      'model': endpoint.model,
-      'temperature': ?temperature,
-      'messages': [
-        {
-          'role': 'system',
-          'content': TranslationProtocol.systemPrompt(
-            targetLanguageName: targetLanguage,
-            extraGuidance: extraGuidance,
-            glossary: glossary,
-          ),
-        },
-        {
-          'role': 'user',
-          'content': '<INPUT>\n${TranslationProtocol.encode(lines)}\n</INPUT>',
-        },
-      ],
-    });
+    final instructions = TranslationProtocol.systemPrompt(
+      targetLanguageName: targetLanguage,
+      extraGuidance: extraGuidance,
+      glossary: glossary,
+    );
+    final input = '<INPUT>\n${TranslationProtocol.encode(lines)}\n</INPUT>';
+    TranslationBudget.check(model, instructions, input);
+    final payload = jsonEncode(TranslationWire.request(
+      model: model,
+      modelName: endpoint.model,
+      temperature: model.reasoningParam == null ? temperature : model.temperature,
+      instructions: instructions,
+      input: input,
+    ));
 
     final http.Response response;
     try {
       response = await _client
           .post(
-            endpoint.resolve('/chat/completions'),
+            endpoint.resolve(model.transport.path),
             headers: {
               'Content-Type': 'application/json; charset=utf-8',
               ...endpoint.authHeaders,
@@ -281,6 +283,11 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
     token.throwIfCancelled();
 
     if (response.statusCode != 200) {
+      if (const {400, 413, 422}.contains(response.statusCode)) {
+        Object? error;
+        try { error = jsonDecode(_bodyText(response)); } on FormatException { /* 非 JSON 交给原错误提示。 */ }
+        if (TranslationBudget.isContextError(error)) TranslationBudget.contextExceeded();
+      }
       final body = response.body.length > 600
           ? '${response.body.substring(0, 600)}…'
           : response.body;
@@ -302,26 +309,7 @@ class OpenAiCompatibleTranslationProvider implements TranslationProvider {
       );
     }
 
-    final choices = body['choices'];
-    String? content;
-    if (choices is List && choices.isNotEmpty) {
-      final first = choices.first;
-      final message = first is Map ? first['message'] : null;
-      if (message is Map) {
-        final rawContent = message['content'];
-        if (rawContent is String) {
-          content = rawContent;
-        } else if (rawContent is List) {
-          // Some compatible APIs return multimodal content parts even for a
-          // text-only completion. Preserve all text parts in order.
-          content = rawContent
-              .whereType<Map>()
-              .map((part) => part['text'])
-              .whereType<String>()
-              .join();
-        }
-      }
-    }
+    final content = TranslationWire.content(body, model.transport);
 
     if (content == null || content.trim().isEmpty) {
       throw const ActionableException(

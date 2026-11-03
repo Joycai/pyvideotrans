@@ -548,7 +548,7 @@ void main() {
         expect(p.endpoint.model, 'deepseek-chat');
         expect(p.extraGuidance, '任务的要求');
         expect(p.glossary, glossary);
-        expect(p.endpoint.baseUrl, 'https://api.deepseek.com/v1');
+        expect(p.endpoint.baseUrl, 'https://api.deepseek.com');
         expect(p.endpoint.apiKey, 'sk-mt');
         expect(mt().extraGuidance, '');
         expect(mt().glossary, isEmpty);
@@ -626,7 +626,7 @@ void main() {
       final settings = await _settings();
       final info = ProviderCatalog.translationInfo('deepseek')!;
 
-      expect(_endpointOf(settings, info).model, 'deepseek-chat');
+      expect(_endpointOf(settings, info).model, 'deepseek-flash');
 
       settings.setConfig(
         'deepseek',
@@ -638,7 +638,7 @@ void main() {
       final endpoint = _endpointOf(settings, info);
       expect(endpoint.model, 'deepseek-reasoner');
       // 没填的字段仍然回落到默认值。
-      expect(endpoint.baseUrl, 'https://api.deepseek.com/v1');
+      expect(endpoint.baseUrl, 'https://api.deepseek.com');
     });
 
     test('模型框用逗号写多个：第一个是默认，其余进候选', () async {
