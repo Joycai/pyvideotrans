@@ -172,6 +172,60 @@ void main() {
       expect(c.current!.index, 3);
     });
 
+    test('隐藏的当前行按方向寻找邻近可见行，不跳回首条', () async {
+      final c = await _speakerController();
+      addTearDown(c.dispose);
+      c..setSpeakerFilter({1})..select(3)..step(1);
+      expect(c.selected, 4);
+      c..select(3)..step(-1);
+      expect(c.selected, 2);
+      c..select(0)..step(-1);
+      expect(c.selected, 0);
+      c..setSpeakerFilter({0})..select(5)..step(1);
+      expect(c.selected, 5);
+      c..setSpeakerFilter({1})..select(3)..extendStep(1);
+      expect(c.selectedPositions, [4]);
+    });
+
+    test('改说话人后接续可见行，末尾回退；撤销重做保留附近位置', () async {
+      final c = await _speakerController();
+      addTearDown(c.dispose);
+      c..setSpeakerFilter({1})..select(4)..assignSpeaker(0);
+      expect(c.selected, 5);
+      c.undo();
+      expect(c.document.cues[4].speaker, 1);
+      expect(c.selected, 5);
+      c.redo();
+      expect(c.document.cues[4].speaker, 0);
+      expect(c.selected, 5);
+      c.assignSpeaker(0);
+      expect(c.selected, 2);
+      c.assignSpeaker(0);
+      expect(c.visiblePositions, isEmpty);
+      expect(c.selectedPositions, isEmpty);
+      expect(c.selectionCount, 0);
+      expect(c.current, isNull);
+      final empty = c.document;
+      c..assignSpeaker(2)..editSource('不能改隐藏字幕')..toggleReviewed()
+        ..split()..mergeWithNext()..mergeWithPrevious()..step(1);
+      expect(c.document, same(empty));
+      c.undo();
+      expect(c.current?.speaker, 1);
+    });
+
+    test('多选分配只改原选区，焦点接续到附近；仍可见时保留选择', () async {
+      final c = await _speakerController();
+      addTearDown(c.dispose);
+      c..setSpeakerFilter({1})..selectWith(2)..selectWith(4, extend: true)
+        ..assignSpeaker(0);
+      expect(c.selectedPositions, [5]);
+      expect(c.document.cues[5].speaker, 1);
+      c..setSpeakerFilter({0, 1})..selectWith(2)
+        ..selectWith(4, extend: true)..assignSpeaker(1);
+      expect(c.selectedPositions, [2, 4]);
+      expect(c.selected, 4);
+    });
+
     test('到头不越界', () async {
       final c = await _controller()
         ..select(0);
@@ -525,11 +579,14 @@ void main() {
 
           final n = c.document.cues.length;
           expect(c.selected, inInclusiveRange(0, n - 1));
-          expect(c.selectedPositions, contains(c.selected));
+          if (c.visiblePositions.contains(c.selected)) {
+            expect(c.selectedPositions, contains(c.selected));
+          }
           if (c.multiSelected) {
             expect(c.visiblePositions, containsAll(c.selectedPositions));
           } else {
-            expect(c.selectedPositions, [c.selected]);
+            expect(c.selectedPositions,
+                c.visiblePositions.contains(c.selected) ? [c.selected] : isEmpty);
           }
         }
       }

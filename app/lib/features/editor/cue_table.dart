@@ -173,7 +173,9 @@ class _CueListState extends State<_CueList> {
   void didUpdateWidget(_CueList old) {
     super.didUpdateWidget(old);
     final selected = widget.controller.selected;
-    if (selected == _lastSelected) return;
+    if (selected == _lastSelected && identical(old.visible, widget.visible)) {
+      return;
+    }
     _lastSelected = selected;
     WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
   }

@@ -212,7 +212,11 @@ void main() {
       // 写入换了「已修改」的基准，两条都不算修改了，表里看不见。
       expect(c.visiblePositions, isEmpty);
       expect(c.multiSelected, isFalse);
-      expect(c.selectedPositions, [1]);
+      expect(c.selectedPositions, isEmpty);
+      expect(c.current, isNull);
+      final saved = c.document;
+      c.assignSpeaker(0);
+      expect(c.document, same(saved));
       c.dispose();
     });
 

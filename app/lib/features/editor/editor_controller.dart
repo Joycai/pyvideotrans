@@ -227,15 +227,17 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   @override
   bool get multiSelected => _effective.isMultiple;
 
-  int get selectionCount => _effective.length;
+  int get selectionCount => selectedPositions.length;
 
   /// 选中且看得见的各条，按文档顺序。批量操作只作用于它们。
-  List<int> get selectedPositions => [
-    // 焦点可能刚好越界：流水线整份换掉文档到选区跟上之间隔着一次队列
-    // 通知，这期间界面可能先重建一帧。
-    for (final p in _effective.positions)
-      if (p < document.cues.length) p,
-  ]..sort();
+  List<int> get selectedPositions {
+    // 保留隐藏行的导航锚点，但不能让它成为快捷分配的操作目标。
+    if (!visiblePositions.contains(selected)) return const [];
+    return [
+      for (final p in _effective.positions)
+        if (p < document.cues.length) p,
+    ]..sort();
+  }
 
   /// 正在重新翻译的条目下标，用来在界面上禁用按钮。
   final Set<int> translating = {};
@@ -415,7 +417,8 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   }
 
   @override
-  Cue? get current => selected >= 0 && selected < document.cues.length
+  Cue? get current => visiblePositions.isNotEmpty &&
+      selected >= 0 && selected < document.cues.length
       ? document.cues[selected]
       : null;
 
@@ -545,12 +548,17 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   void step(int delta) {
     final visible = visiblePositions;
     if (visible.isEmpty) return;
-    // 当前条被筛掉时 indexOf 为 -1：往下从第一条开始。
-    final position = (visible.indexOf(selected) + delta).clamp(
-      0,
-      visible.length - 1,
-    );
-    _focusOn(visible[position]);
+    final at = visible.indexOf(selected);
+    if (at >= 0) {
+      _focusOn(visible[(at + delta).clamp(0, visible.length - 1)]);
+    } else {
+      // 筛选或播放跟随可能把当前行藏起来，仍从原文档位置继续，不能跳回表头。
+      final target = delta > 0
+          ? visible.where((p) => p > selected).firstOrNull
+          : visible.reversed.where((p) => p < selected).firstOrNull;
+      if (target == null || delta == 0) return;
+      _focusOn(target);
+    }
     notifyListeners();
   }
   /// Shift+↑/↓：焦点在可见行里挪一格，选区从锚点扩到那一格。焦点被筛掉时
@@ -598,7 +606,16 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
     if (locked || identical(next, document)) return;
     _push();
     final resized = next.cues.length != document.cues.length;
+    final speakerChanged = !resized && selected < document.cues.length &&
+        document.cues[selected].speaker != next.cues[selected].speaker;
     session.document = next;
+    // 分配后当前行退出筛选时，接着整理附近的字幕；通知前完成，避免面板闪回旧行。
+    if (speakerChanged) {
+      final visible = visiblePositions;
+      if (visible.isNotEmpty && !visible.contains(selected)) {
+        _focusOn(visible.where((p) => p > selected).firstOrNull ?? visible.last);
+      }
+    }
     _changed(resized: resized);
   }
 
@@ -702,13 +719,13 @@ class EditorController extends ChangeNotifier implements PlaybackCues {
   }
 
   void mergeWithNext() {
-    if (selected >= document.cues.length - 1) return;
+    if (current == null || selected >= document.cues.length - 1) return;
     _commit(document.mergeWithNext(selected, cjk: _isCjk));
   }
 
   /// 并入上一条 —— 未配对的译文行最常用。
   void mergeWithPrevious() {
-    if (selected <= 0 || selected >= document.cues.length) return;
+    if (current == null || selected <= 0 || selected >= document.cues.length) return;
     _focusOn(selected - 1);
     mergeWithNext();
   }
