@@ -180,3 +180,8 @@ Codex 继续维护本应用的 UX/UI。本文从 Flutter 实现、现有页面�
 
 上下文上限与每批输出预算位于独立折叠区，数字输入框容纳完整百万级数值；
 支持 none 的 GPT 提供「关闭」档位，深色窄窗口参考 `translation_model_openai_none.png`。
+
+火山与百炼的五种线路沿用服务下拉，每条线路单独保存地址、密钥与模型。
+Qwen 参数画像只提供已接入的 Chat Completions；新模型默认关闭思考。
+浅色 Qwen 与深色窄窗口豆包配置参考 `translation_model_bailian_api.png`、
+`translation_model_volcengine_agent_plan.png`。

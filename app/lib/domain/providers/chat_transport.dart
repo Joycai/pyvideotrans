@@ -12,8 +12,14 @@ enum ChatTransport {
 enum ChatDialect {
   generic('通用兼容'),
   openaiReasoning('OpenAI 推理模型'),
-  deepseek('DeepSeek V4 / V4.1');
+  deepseek('DeepSeek V4 / V4.1'),
+  qwen('百炼 Qwen'),
+  doubao('火山 Doubao Seed');
 
   const ChatDialect(this.label);
   final String label;
+
+  // 百炼 Responses 使用另一条地址与报文约定，本画像仅声明已接入的 Chat 面。
+  List<ChatTransport> get transports => this == qwen
+      ? const [ChatTransport.completions] : ChatTransport.values;
 }

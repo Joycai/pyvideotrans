@@ -928,7 +928,7 @@ class _ChatDeclaration extends StatelessWidget {
   Widget build(BuildContext context) => Column(children: [
     LabeledField(label: '接口协议', child: AppDropdown<ChatTransport>(
       value: model.transport,
-      groups: [DropdownGroup(entries: [for (final t in ChatTransport.values)
+      groups: [DropdownGroup(entries: [for (final t in model.dialect.transports)
         DropdownEntry(value: t, label: t.label)])],
       onChanged: (v) => onChanged(model.withDeclaration(v, model.dialect)),
     )),

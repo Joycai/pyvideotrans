@@ -24,6 +24,8 @@ void main() {
     ('openai_chat', false, 880.0),
     ('deepseek', true, 600.0),
     ('openai_none', true, 600.0),
+    ('bailian_api', false, 880.0),
+    ('volcengine_agent_plan', true, 600.0),
   ]) {
     testWidgets('翻译模型高级配置 · $id', (tester) async {
       tester.view..physicalSize = Size(width, 1000)..devicePixelRatio = 1;

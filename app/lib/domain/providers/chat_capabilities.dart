@@ -30,6 +30,30 @@ final class ChatCapabilities {
     maxOutputTokens: 393216, defaultOutputTokens: 32768,
   );
 
+  static const qwen38 = ChatCapabilities(
+    efforts: ['off', 'low', 'medium', 'xhigh'], defaultEffort: 'off',
+    contextWindow: 1000000, maxOutputTokens: 131072, defaultOutputTokens: 32768,
+  );
+  static const qwen37 = ChatCapabilities(
+    efforts: ['off', 'on'], defaultEffort: 'off',
+    contextWindow: 1000000, maxOutputTokens: 131072, defaultOutputTokens: 32768,
+  );
+  static const doubao20 = ChatCapabilities(
+    efforts: ['off', 'low', 'medium', 'high'], defaultEffort: 'off',
+    contextWindow: 256000, maxOutputTokens: 128000, defaultOutputTokens: 32768,
+  );
+
+  // 2.1 的 0915 版与套餐 Pro / Lite 扩大窗口，Turbo 仍为 256k。
+  // 输出上限按官方 256k 的保守值设置，不把套餐别名等同于旧日期版。
+  static const doubao21 = ChatCapabilities(
+    efforts: ['off', 'low', 'medium', 'high'], defaultEffort: 'off',
+    contextWindow: 1024000, maxOutputTokens: 256000, defaultOutputTokens: 32768,
+  );
+  static const doubao21Turbo = ChatCapabilities(
+    efforts: ['off', 'low', 'medium', 'high'], defaultEffort: 'off',
+    contextWindow: 256000, maxOutputTokens: 256000, defaultOutputTokens: 32768,
+  );
+
   Map<String, Object?> toJson() => {
     'efforts': efforts,
     'defaultEffort': defaultEffort,
@@ -41,7 +65,7 @@ final class ChatCapabilities {
   static ChatCapabilities? fromJson(Object? raw) {
     if (raw is! Map || raw['efforts'] is! List) return null;
     final efforts = raw['efforts'] as List;
-    const allowed = {'none', 'off', 'low', 'medium', 'high', 'xhigh', 'max'};
+    const allowed = {'none', 'off', 'on', 'low', 'medium', 'high', 'xhigh', 'max'};
     if (efforts.any((e) => !allowed.contains(e)) ||
         efforts.toSet().length != efforts.length) {
       return null;

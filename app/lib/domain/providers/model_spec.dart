@@ -249,7 +249,7 @@ final class ChatModelSpec extends ModelSpec {
       return ChoiceModelParam(key: 'reasoningEffort', label: '思考强度',
         hint: '按所选模型支持的档位发送；关闭思考时温度才生效。',
         options: [for (final effort in declared.efforts)
-          (effort, const {'none': '关闭', 'off': '关闭', 'low': '低', 'medium': '中',
+          (effort, const {'none': '关闭', 'off': '关闭', 'on': '开启', 'low': '低', 'medium': '中',
             'high': '高', 'xhigh': '更高', 'max': '最高'}[effort]!)],
         defaultOption: declared.defaultEffort!);
     }
@@ -258,6 +258,8 @@ final class ChatModelSpec extends ModelSpec {
     ChatDialect.generic => null,
     ChatDialect.openaiReasoning => ModelParams.openaiReasoning,
     ChatDialect.deepseek => ModelParams.deepseekReasoning,
+    ChatDialect.qwen => ModelParams.qwenReasoning,
+    ChatDialect.doubao => ModelParams.doubaoReasoning,
     };
   }
 
@@ -269,7 +271,9 @@ final class ChatModelSpec extends ModelSpec {
       ? options.number(ModelParams.chatTemperature) : null;
 
   ChatModelSpec withDeclaration(ChatTransport transport, ChatDialect dialect) =>
-      ChatModelSpec(name: name, transport: transport, dialect: dialect,
+      ChatModelSpec(name: name,
+        transport: dialect.transports.contains(transport) ? transport : dialect.transports.first,
+        dialect: dialect,
         capabilities: dialect == this.dialect ? capabilities : null).withOptions(options);
 
   NumberModelParam get contextParam => NumberModelParam(
@@ -336,13 +340,15 @@ final class ChatModelSpec extends ModelSpec {
         : ChatTransport.completions;
     final dialect = json.containsKey('dialect')
         ? ChatDialect.values.tryByName(json['dialect']) : ChatDialect.generic;
-    if (transport == null || dialect == null) return null;
+    if (transport == null || dialect == null || !dialect.transports.contains(transport)) return null;
     final capabilities = ChatCapabilities.fromJson(json['capabilities']);
     if (json.containsKey('capabilities') && capabilities == null) return null;
     final allowed = switch (dialect) {
       ChatDialect.generic => const <String>{},
       ChatDialect.openaiReasoning => const {'none', 'low', 'medium', 'high', 'xhigh', 'max'},
       ChatDialect.deepseek => const {'off', 'low', 'high', 'max'},
+      ChatDialect.qwen => const {'off', 'on', 'low', 'medium', 'xhigh'},
+      ChatDialect.doubao => const {'off', 'low', 'medium', 'high'},
     };
     if (capabilities != null && capabilities.efforts.any((e) => !allowed.contains(e))) return null;
     return ChatModelSpec(name: name.trim(), transport: transport, dialect: dialect,
