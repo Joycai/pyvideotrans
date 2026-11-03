@@ -117,6 +117,28 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('百炼模型窄窗口可保存推理档位，协议菜单不提供错误线路', (tester) async {
+    await load();
+    settings.translationProviderId = 'bailian_plan';
+    final model = ProviderCatalog.defaultChatSpec('bailian_plan');
+    settings.setModels('bailian_plan', [model]);
+    await pump(tester, ProviderKind.mt, width: 600, stacked: true);
+    expect(find.text('千问百炼 · Plan'), findsOneWidget);
+    await tester.tap(inRow(model.name, find.text('配置')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('中'));
+    await tester.pumpAndSettle();
+    expect(settings.defaultChatModelOf('bailian_plan').reasoningEffort, 'medium');
+    await tester.ensureVisible(find.text('高级接入配置'));
+    await tester.tap(find.text('高级接入配置'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byType(AppDropdown<ChatTransport>));
+    await tester.tap(find.byType(AppDropdown<ChatTransport>));
+    await tester.pumpAndSettle();
+    expect(find.text('Responses'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('支持 none 的 GPT 保存关闭档位及输出预算，窄窗口可操作', (tester) async {
     await load();
     settings.translationProviderId = 'openai_chat';

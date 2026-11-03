@@ -128,6 +128,27 @@ abstract final class ProviderCatalog {
     ),
   ];
 
+  static const _qwenModels = <ChatModelSpec>[
+    ChatModelSpec(name: 'qwen3.8-flash', dialect: ChatDialect.qwen,
+      capabilities: ChatCapabilities.qwen38),
+    ChatModelSpec(name: 'qwen3.8-max', dialect: ChatDialect.qwen,
+      capabilities: ChatCapabilities.qwen38),
+    ChatModelSpec(name: 'qwen3.7-plus', dialect: ChatDialect.qwen,
+      capabilities: ChatCapabilities.qwen37),
+    ChatModelSpec(name: 'qwen3.7-max', dialect: ChatDialect.qwen,
+      capabilities: ChatCapabilities.qwen37),
+  ];
+
+  // 套餐使用滚动别名，不能混入按量 API 的日期 ID。
+  static const _doubaoPlanModels = <ChatModelSpec>[
+    ChatModelSpec(name: 'doubao-seed-2.0-mini', dialect: ChatDialect.doubao,
+      capabilities: ChatCapabilities.doubao20),
+    ChatModelSpec(name: 'doubao-seed-2.1-pro', dialect: ChatDialect.doubao,
+      capabilities: ChatCapabilities.doubao21),
+    ChatModelSpec(name: 'doubao-seed-2.1-lite', dialect: ChatDialect.doubao,
+      capabilities: ChatCapabilities.doubao21),
+  ];
+
   static const translation = <ChatProviderInfo>[
     ChatProviderInfo(
       id: 'deepseek',
@@ -164,6 +185,44 @@ abstract final class ProviderCatalog {
         ChatModelSpec(name: 'gpt-5.6-luna', transport: ChatTransport.responses,
           dialect: ChatDialect.openaiReasoning, capabilities: ChatCapabilities.openai),
       ],
+    ),
+    ChatProviderInfo(
+      id: 'volcengine_api', name: '字节火山 · API', vendor: '字节火山',
+      defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      presets: [
+        ChatModelSpec(name: 'doubao-seed-2-0-mini-260428', dialect: ChatDialect.doubao,
+          capabilities: ChatCapabilities.doubao20),
+        ChatModelSpec(name: 'doubao-seed-2-0-lite-260428', dialect: ChatDialect.doubao,
+          capabilities: ChatCapabilities.doubao20),
+        ChatModelSpec(name: 'doubao-seed-2-0-pro-260215', dialect: ChatDialect.doubao,
+          capabilities: ChatCapabilities.doubao20),
+        ChatModelSpec(name: 'doubao-seed-2-1-pro-260915', dialect: ChatDialect.doubao,
+          capabilities: ChatCapabilities.doubao21),
+        ChatModelSpec(name: 'doubao-seed-2-1-lite-260915', dialect: ChatDialect.doubao,
+          capabilities: ChatCapabilities.doubao21),
+        ChatModelSpec(name: 'doubao-seed-2-1-turbo-260628', dialect: ChatDialect.doubao,
+          capabilities: ChatCapabilities.doubao21Turbo),
+      ],
+    ),
+    ChatProviderInfo(
+      id: 'volcengine_coding_plan', name: '字节火山 · Coding Plan', vendor: '字节火山',
+      defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
+      presets: _doubaoPlanModels,
+    ),
+    ChatProviderInfo(
+      id: 'volcengine_agent_plan', name: '字节火山 · Agent Plan', vendor: '字节火山',
+      defaultBaseUrl: 'https://ark.cn-beijing.volces.com/api/plan/v3',
+      presets: _doubaoPlanModels,
+    ),
+    ChatProviderInfo(
+      id: 'bailian_api', name: '千问百炼 · API', vendor: '千问百炼',
+      defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      presets: _qwenModels,
+    ),
+    ChatProviderInfo(
+      id: 'bailian_plan', name: '千问百炼 · Plan', vendor: '千问百炼',
+      defaultBaseUrl: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+      presets: _qwenModels,
     ),
     ChatProviderInfo(
       id: 'siliconflow_chat',

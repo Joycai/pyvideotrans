@@ -12,6 +12,10 @@ abstract final class TranslationWire {
     required String input,
     required double? temperature,
   }) {
+    if (!model.dialect.transports.contains(model.transport)) {
+      throw const ActionableException('所选参数画像不支持此接口协议',
+        hint: '百炼 Qwen 请使用 Chat Completions，并核对服务地址。');
+    }
     final responses = model.transport == ChatTransport.responses;
     final effort = model.reasoningEffort;
     final outputLimit = model.outputTokenLimit;
@@ -28,16 +32,18 @@ abstract final class TranslationWire {
           'effort': effort == 'off' ? 'none' : effort,
         },
       } else ...{
-        (model.dialect == ChatDialect.openaiReasoning
+        ((model.dialect == ChatDialect.openaiReasoning ||
+            model.dialect == ChatDialect.qwen || model.dialect == ChatDialect.doubao)
             ? 'max_completion_tokens' : 'max_tokens'): ?outputLimit,
         'messages': [
           {'role': 'system', 'content': instructions},
           {'role': 'user', 'content': input},
         ],
-        if (model.dialect == ChatDialect.deepseek) 'thinking': {
+        if (model.dialect == ChatDialect.deepseek || model.dialect == ChatDialect.doubao) 'thinking': {
           'type': effort == 'off' ? 'disabled' : 'enabled',
         },
-        if (effort != null && effort != 'off') 'reasoning_effort': effort,
+        if (model.dialect == ChatDialect.qwen) 'enable_thinking': effort != 'off',
+        if (effort != null && effort != 'off' && effort != 'on') 'reasoning_effort': effort,
       },
     };
   }

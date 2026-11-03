@@ -156,10 +156,21 @@ Ollama 和 LM Studio 说的也是这套协议，所以**现在就能在本机跑
 ### 翻译接口与推理参数
 
 翻译模型声明包含 `ChatTransport`（Chat Completions / Responses）和 `ChatDialect`
-（通用兼容 / OpenAI 推理 / DeepSeek V4 系列）。预置 GPT 5.6、6、6.1 使用 Responses；
+（通用兼容 / OpenAI 推理 / DeepSeek V4 系列 / 百炼 Qwen / 火山 Doubao）。预置 GPT 5.6、6、6.1 使用 Responses；
 DeepSeek 的 `deepseek-flash`（V4.1 Flash）与 `deepseek-v4-pro` 使用 Chat Completions，
 可在模型配置的高级接入配置中切换协议。自定义服务同样可选 Responses，服务地址不含接口路径；
 DeepSeek 官方根地址为 `https://api.deepseek.com`，OpenAI 为 `https://api.openai.com/v1`。
+
+新增字节火山 API / Coding Plan / Agent Plan、千问百炼 API / Plan 五个独立翻译配置。
+百炼 Plan 指北京 Token Plan，API 默认北京公共域名；每条线路独立保存密钥、地址与模型。
+Qwen 3.8 预置 Flash / Max，3.7 预置 Plus / Max；豆包 API 预置 2.0 Mini / Lite 的
+260428 日期版和 Pro 260215（即将下线，不作默认），套餐预置 2.0 Mini 与 2.1 Pro / Lite 别名。
+豆包 2.1 API 预置 Pro / Lite 260915（上下文 1024000）和 Turbo 260628
+（上下文 256000），2.1 输出上限保守设为 256000，默认每批 32768。
+本次新增预置默认关闭思考；Qwen 3.8 支持 low / medium / xhigh，3.7 提供开关，
+豆包支持 low / medium / high。输出预算通过 max_completion_tokens 限制思维链与正文总量。
+百炼参数画像本次仅接入 Chat Completions，火山可切换 Responses。
+端点与模型证据见 [接入记录](../docs/volcengine-bailian-translation-plan.md)。
 
 旧声明与只有名字的旧配置保持 Chat Completions，不自动替换用户的模型；新型号从设置的
 「添加模型 → 内置模型」添加。硅基流动翻译暂时禁用，已有配置保留。

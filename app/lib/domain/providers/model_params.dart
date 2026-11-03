@@ -266,6 +266,19 @@ abstract final class ModelParams {
     defaultOption: 'low',
   );
 
+  static const qwenReasoning = ChoiceModelParam(
+    key: 'reasoningEffort', label: '思考模式',
+    hint: '开启后先思考再回复；可用的强度档位由模型决定。',
+    options: [('off', '关闭'), ('on', '开启')], defaultOption: 'off',
+  );
+
+  static const doubaoReasoning = ChoiceModelParam(
+    key: 'reasoningEffort', label: '思考强度',
+    hint: '关闭思考时直接翻译；开启后按所选强度思考。',
+    options: [('off', '关闭'), ('low', '低'), ('medium', '中'), ('high', '高')],
+    defaultOption: 'off',
+  );
+
   /// 翻译（对话）模型的参数。
   static const chat = <ModelParam>[chatTemperature];
 }
