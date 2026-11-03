@@ -125,6 +125,22 @@ void main() {
       expect(c.document.cues[0].reviewed, !reviewed);
     }, variant: mac);
 
+    testWidgets('过滤后连续 J/K 与说话人分配保留列表焦点', (tester) async {
+      final c = await pump(tester);
+      c..setSpeakerFilter({1})..select(4);
+      await press(tester, LogicalKeyboardKey.keyJ);
+      expect(c.selected, 5);
+      expect(tableHasFocus(), isTrue);
+      await press(tester, LogicalKeyboardKey.keyK);
+      expect(c.selected, 3);
+      await press(tester, LogicalKeyboardKey.digit1);
+      expect(c.document.cues[3].speaker, 0);
+      expect(c.selected, 5);
+      expect(tableHasFocus(), isTrue);
+      await press(tester, LogicalKeyboardKey.keyJ);
+      expect(c.selected, 7);
+    }, variant: mac);
+
     testWidgets('Shift+↓ 从锚点往下扩选，Shift+↑ 收回', (tester) async {
       final c = await pump(tester);
       c.select(1);
